@@ -31,7 +31,7 @@ git push                    # 5. share it
 
 That's it. Do this several times a day, not once a week.
 
-## The four rules
+## Important
 
 **1. Pull before you start, push when you stop.**
 Unpushed work is invisible to everyone else and gets harder to merge every hour
@@ -47,16 +47,16 @@ stage the specific paths instead:
 git add agent_code/dqn_agent/callbacks.py agent_code/dqn_agent/train.py
 ```
 
-**3. Work in your own agent directory.**
-Each model lives in its own `agent_code/<name>/`. If we edit different directories,
-our changes never collide. Avoid editing the framework files at the repo root
-(`settings.py`, `main.py`, `environment.py`, ...) — the tournament runs the *original*
-framework, so anything we change there won't exist in the real games anyway.
-
-**4. Don't commit every training checkpoint.**
+**3. Don't commit every training checkpoint.**
 Binary model files can't be merged by git — if two of us commit the same one, one
 version simply wins. Commit a model when it's a milestone worth sharing, not after
 every run.
+
+## Updating framework later
+```bash
+git fetch upstream && git merge upstream/master
+```
+No `--allow-unrelated-histories` needed
 
 ## When `git push` is rejected
 
@@ -85,9 +85,9 @@ is lost at this point — it's always recoverable.
 For a risky experiment you don't want on `main` yet, make a branch named after yourself:
 
 ```bash
-git switch -c benni/try-cnn-features
+git switch -c <name>/try-cnn-features
 # ...work, commit, push...
-git push -u origin benni/try-cnn-features
+git push -u origin <name>/try-cnn-features
 ```
 
 Bring it back when it works:
