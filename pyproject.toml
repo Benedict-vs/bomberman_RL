@@ -1,0 +1,22 @@
+[project]
+name = "bomberman-rl"
+version = "0.1.0"
+description = "RL agents for Bomberman — MLE final project"
+requires-python = ">=3.11"
+dependencies = [
+    # assumed by the framework / project spec
+    "numpy",
+    "scipy",
+    "scikit-learn",
+    # GUI and progress bars (spec-recommended)
+    "pygame",
+    "tqdm",
+]
+
+# Add training-only libraries as we need them, e.g.:
+#   uv add torch
+# and list anything beyond numpy/scipy/sklearn in the report + README
+# (submission requirement).
+
+[tool.uv]
+package = false
