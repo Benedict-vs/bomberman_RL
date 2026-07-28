@@ -11,6 +11,38 @@ cd bomberman_RL
 git config pull.rebase true      # keeps history readable instead of full of merge commits
 ```
 
+Install [uv](https://docs.astral.sh/uv/) if you don't have it, then create the environment:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh    # skip if uv is already installed
+uv sync                                            # creates .venv/ with the exact pinned packages
+```
+
+That's the whole Python setup — `uv sync` reads `pyproject.toml`/`uv.lock` and installs
+the right Python (3.12) and all packages. Re-run it whenever someone adds a dependency.
+
+To run anything, either prefix commands with `uv run`:
+
+```bash
+uv run python main.py play
+```
+
+or activate the venv once per terminal and use plain `python` as usual:
+
+```bash
+source .venv/bin/activate
+python main.py play
+```
+
+Adding a new package (e.g. pytorch):
+
+```bash
+uv add torch     # updates pyproject.toml + uv.lock — commit both
+```
+
+Anything beyond numpy/scipy/sklearn must also be listed in the README and the report
+(submission requirement).
+
 Tell git who you are, if you never have:
 
 ```bash
