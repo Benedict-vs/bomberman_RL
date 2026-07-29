@@ -14,6 +14,7 @@
 - each game has 400 steps with 0.5 seconds per step
 - agents need to decide within 0.5
 - settings.py may change up to 7 days bevor deadline
+- we can customize agent appearance in the GUI with avatar.png and bomb.png in agent directory
 
 # Tasks (not complete)
 - design, optimization and testing of agent in scientific way
