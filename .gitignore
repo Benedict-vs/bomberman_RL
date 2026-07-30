@@ -111,6 +111,7 @@ screenshots/*.webm
 replays/
 results/
 
-
+# LLMs
+AGENTS.md
 
 final_project.pdf
