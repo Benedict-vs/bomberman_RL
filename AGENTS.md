@@ -7,6 +7,9 @@ Source of truth: `final_project.pdf`.
 - **Never run `git commit`, `git push`, `git add`, or otherwise stage/commit changes.** The user
   commits, always. Edit files and report what changed; leave the working tree for them to review.
 - Same for `.gitignore` and any other git plumbing — propose the change, don't apply it silently.
+- Personal logbooks (`BENEDICT.md`, `MAXI.md`, `BEN.md`) are each member's diary: current state,
+  ideas, and the reasoning behind decisions. Read the relevant one to pick up where someone left
+  off; only append to a logbook when its owner asks, and never rewrite existing entries.
 
 ## Hard rules
 - **The solution must involve machine learning** — a purely rule-based agent is rejected.
