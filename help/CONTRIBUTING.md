@@ -9,7 +9,9 @@ no approvals. The rules below are what keep that from turning into a mess.
 git pull                    # 1. before you start: get everyone else's work
                             # 2. ...edit files, train, test...
 git status                  # 3. look at what you changed
-git add -A                  # 4. stage it
+git add -A                  # 4. stage everything
+# OR
+git add <filename>
 git commit -m "Add distance-to-coin reward shaping"
 git push                    # 5. share it
 ```
