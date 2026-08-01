@@ -1,79 +1,66 @@
+"""Modell A — tabellarisches Q-Learning.
+
+Immer geladen, auch im Turnier. Alles, was nur zum Trainieren gebraucht wird,
+steht in `train.py`.
+"""
+
 import os
 import pickle
 import random
+from collections import defaultdict
 
 import numpy as np
 
+from .features import ACTIONS, state_to_features
 
-ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+# Relativer Pfad — `agents.py:305` wechselt vor jedem Callback in das
+# Agentenverzeichnis, die Datei landet also neben diesem Modul. Absolute Pfade
+# sind laut AGENTS.md der klassische Abgabe-Crash.
+MODEL_FILE = "my-saved-model.pt"
+
+
+def new_q_row():
+    """Q-Werte eines noch nie besuchten Zustands.
+
+    Als benannte Funktion statt Lambda, damit `defaultdict` picklebar bleibt.
+    Null-Initialisierung ist bei negativer Schrittstrafe optimistisch: unbesuchte
+    Aktionen sehen besser aus als besuchte, das treibt die Exploration zusätzlich
+    zu epsilon.
+    """
+    return np.zeros(len(ACTIONS))
 
 
 def setup(self):
-    """
-    Setup your code. This is called once when loading each agent.
-    Make sure that you prepare everything such that act(...) can be called.
+    """Q-Tabelle laden oder leer anlegen. Einmal pro Agent, vor der ersten Runde."""
+    self.q_table = defaultdict(new_q_row)
 
-    When in training mode, the separate `setup_training` in train.py is called
-    after this method. This separation allows you to share your trained agent
-    with other students, without revealing your training code.
-
-    In this example, our model is a set of probabilities over actions
-    that are is independent of the game state.
-
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
-    """
-    if self.train or not os.path.isfile("my-saved-model.pt"):
-        self.logger.info("Setting up model from scratch.")
-        weights = np.random.rand(len(ACTIONS))
-        self.model = weights / weights.sum()
+    if os.path.isfile(MODEL_FILE):
+        with open(MODEL_FILE, "rb") as file:
+            self.q_table.update(pickle.load(file))
+        self.logger.info(f"Loaded Q-table with {len(self.q_table)} states.")
+    elif self.train:
+        self.logger.info("No model found — starting from an empty Q-table.")
     else:
-        self.logger.info("Loading model from saved state.")
-        with open("my-saved-model.pt", "rb") as file:
-            self.model = pickle.load(file)
+        # Kein Absturz, aber im Turnier wäre das ein Totalausfall.
+        self.logger.warning(f"No {MODEL_FILE} found and not training — acting at random.")
 
 
 def act(self, game_state: dict) -> str:
-    """
-    Your agent should parse the input, think, and take a decision.
-    When not in training mode, the maximum execution time for this method is 0.5s.
+    """epsilon-greedy über die Q-Tabelle; greedy sobald `self.train` falsch ist."""
+    features = state_to_features(game_state)
 
-    :param self: The same object that is passed to all of your callbacks.
-    :param game_state: The dictionary that describes everything on the board.
-    :return: The action to take as a string.
-    """
-    # todo Exploration vs exploitation
-    random_prob = .1
-    if self.train and random.random() < random_prob:
-        self.logger.debug("Choosing action purely at random.")
-        # 80%: walk in any direction. 10% wait. 10% bomb.
+    # `self.epsilon` existiert nur im Training (siehe train.setup_training),
+    # deshalb muss `self.train` zuerst geprüft werden.
+    if self.train and random.random() < self.epsilon:
+        self.logger.debug("Exploring.")
+        # 80 % laufen, 10 % warten, 10 % Bombe — Bomben sind selten sinnvoll,
+        # also sollen sie auch selten ausprobiert werden.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
 
-    self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.model)
-
-
-def state_to_features(game_state: dict) -> np.array:
-    """
-    *This is not a required function, but an idea to structure your code.*
-
-    Converts the game state to the input of your model, i.e.
-    a feature vector.
-
-    You can find out about the state of the game environment via game_state,
-    which is a dictionary. Consult 'get_state_for_agent' in environment.py to see
-    what it contains.
-
-    :param game_state:  A dictionary describing the current game board.
-    :return: np.array
-    """
-    # This is the dict before the game begins and after it ends
-    if game_state is None:
-        return None
-
-    # For example, you could construct several channels of equal shape, ...
-    channels = []
-    channels.append(...)
-    # concatenate them as a feature tensor (they must have the same shape), ...
-    stacked_channels = np.stack(channels)
-    # and return them as a vector
-    return stacked_channels.reshape(-1)
+    q_values = self.q_table[features]
+    # Gleichstand zufällig brechen, sonst gewinnt bei der 0-initialisierten
+    # Tabelle immer 'UP' und der Agent läuft in der ersten Runde gegen die Wand.
+    best = np.flatnonzero(q_values == q_values.max())
+    action = ACTIONS[np.random.choice(best)]
+    self.logger.debug(f"State {features} -> {action}")
+    return action
