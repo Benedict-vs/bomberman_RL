@@ -1,46 +1,44 @@
 #!/usr/bin/env python3
-"""Turn evaluation CSVs into numbers we can defend in the report.
+"""
 
-Two modes:
+Two options: summarize a single run, or compare two runs
 
 **Summary** -- mean and 95 % bootstrap confidence interval per agent::
 
     uv run python tools/analyze.py results/eval/q_v3.csv
 
-**Comparison** -- paired difference between two runs::
+**Comparison** -- paired difference between two runs:
 
     uv run python tools/analyze.py --compare results/eval/q_v2.csv \\
-        results/eval/q_v3.csv --agent schmaxi_coin_collector
+        results/eval/q_v3.csv --agent (agent name)
 
-**Ablation** -- one metric, many variants, all against the same baseline::
+**Ablation**  one metric, many variants, all against the same baseline, see if one component is responsible for the effect:
 
     uv run python tools/analyze.py --ablation results/eval/q_base.csv \\
         results/eval/q_no_shaping.csv results/eval/q_no_symmetry.csv \\
-        --metric score --plot
+        --metric (add metric name/s ) --plot
 
 Add ``--markdown`` for a table that pastes straight into the report, ``--plot``
 for a figure (bar chart with CIs for a summary, forest plot for a comparison or
 ablation). Figures land in ``results/figures/``.
 
-Why bootstrap, why paired
--------------------------
+bootsrap and paired comparison are used because the per-round score distribution is not normal.
+
 Per-round score in Bomberman is wildly skewed: many rounds near zero, a few
 large ones when kills happen. The normal approximation for a confidence interval
-assumes something this distribution does not satisfy, so we resample instead --
+assumes something this distribution does not satisfy, so we resample instead 
 no distributional assumption, and it behaves well on the tail.
 
-Paired comparison exploits the fact that ``evaluate.py`` gives both runs the
-*same* arenas (see the arena-matching note there). Instead of comparing two
-noisy means we take the difference round by round, which cancels "this arena was
-generous" and leaves the effect of the change. The CI on the paired difference
-is usually several times narrower than on either mean -- which is often the
-difference between "we measured an improvement" and "we cannot tell".
+Paired comparison uses the fact that ``evaluate.py`` gives both runs the
+same arenas #. Instead of comparing two
+noisy means we take the difference round by round, which cancels random arena differences 
+and leaves the effect of the change.
 
-What counts as a result
------------------------
-If the 95 % CI of the paired difference contains 0, the change is *not*
-demonstrated. Say so in the report -- a well-documented negative result is worth
-more marks than an unsupported claim of improvement.
+
+What counts as a result:
+
+If the 95 % CI of the paired difference contains 0, the change is not
+demonstrated. Does not mean it is not better, just that we cannot tell with this sample size.
 """
 
 from __future__ import annotations
@@ -76,8 +74,8 @@ METRICS = {
 
 DEFAULT_METRICS = ["score", "coins", "kills", "suicides", "survived", "invalid"]
 
-# Ready-made metric sets for the task ladder (--preset). Each stage keeps the
-# diagnostics of the one before it: `suicides` stops being the progress signal
+# presets for the task ladder each stage keeps the
+# diagnostics of the one before it; `suicides` stops being the progress signal
 # after stage 2 but stays in as a regression guard, because learning to hunt is
 # exactly when an agent starts forgetting to run from its own bomb.
 PRESETS = {
@@ -93,9 +91,7 @@ INT_COLUMNS = {"round", "seed", "slot", "survived", "round_steps",
                "died", "killed_by_opponent", "rank", "won"}
 
 
-# --------------------------------------------------------------------------
-# Loading
-# --------------------------------------------------------------------------
+#loading
 def load(path: Path) -> list[dict]:
     if not path.exists():
         raise SystemExit(f"No such file: {path}")
@@ -194,7 +190,7 @@ def paired_series(rows_a: list[dict], rows_b: list[dict], column: str
 
 
 def wilcoxon_p(differences: np.ndarray) -> float | None:
-    """Two-sided Wilcoxon signed-rank p-value, if scipy is installed."""
+    """Two-sided Wilcoxon signed-rank p-value"""
     try:
         from scipy.stats import wilcoxon
     except ImportError:
@@ -208,9 +204,9 @@ def wilcoxon_p(differences: np.ndarray) -> float | None:
         return None
 
 
-# --------------------------------------------------------------------------
+
 # Reporting
-# --------------------------------------------------------------------------
+
 def summarise(path: Path, metrics: list[str], markdown: bool, n_boot: int) -> None:
     rows = load(path)
     meta = load_meta(path)
@@ -332,10 +328,7 @@ def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
 
 def ablation(base: Path, variants: list[Path], metric: str, agent: str | None,
              n_boot: int, markdown: bool, plot: Path | None) -> None:
-    """One metric, many variants, all measured against the same baseline.
-
-    This is the figure an ablation study wants: every design decision on its own
-    row, and a glance tells you which ones actually cleared zero.
+    """one metric, many variants, all measured against the same baseline.
     """
     rows_base = rows_for(load(base), agent)
     entries = []
@@ -399,10 +392,6 @@ def _pyplot():
 
 def plot_forest(entries: list[dict], title: str, xlabel: str, out: Path) -> Path:
     """Forest plot: one row per entry, point estimate with 95 % CI, zero line.
-
-    Reading it: any interval that crosses the dashed zero line is a change we did
-    not demonstrate. That is the whole point of the figure -- the reader sees at
-    once which decisions are supported by the data and which are not.
     """
     plt = _pyplot()
 
@@ -480,7 +469,7 @@ def plot_summary(path: Path, metrics: list[str], agent: str | None,
         ax.set_title(label, fontsize=10)
         ax.grid(axis="y", alpha=0.3)
 
-    for index in range(n, plot_rows * cols):       # blank out unused panels
+    for index in range(n, plot_rows * cols):       #  blank out unused panels
         axes[index // cols][index % cols].axis("off")
 
     n_rounds = len({r["round"] for r in rows})
