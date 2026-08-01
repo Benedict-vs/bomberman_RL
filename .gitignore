@@ -112,3 +112,5 @@ replays/
 results/
 
 final_project.pdf
+# macOS
+.DS_Store

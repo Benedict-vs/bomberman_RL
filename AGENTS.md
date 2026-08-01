@@ -2,6 +2,7 @@
 
 Train an RL agent to play a 4-player Bomberman variant. Tournament + report.
 Source of truth: `final_project.pdf`.
+Approach, reasoning and milestones: `KONZEPT.md` (this file is the terse spec).
 
 ## Working agreement (for any AI agent on this repo)
 - **Never run `git commit`, `git push`, `git add`, or otherwise stage/commit changes.** The user
@@ -77,6 +78,56 @@ Useful flags: `--no-gui` (fast training), `--skip-frames`, `--seed` (fixes crate
 RNG), `--turn-based` (with `user_agent`), `--continue-without-training`.
 Logs land in `agent_code/<name>/logs/<name>.log`; levels in `settings.py`.
 
+## Models we are building
+- **Model A — tabular Q-learning on hand-built features.** Lecture technique, fast to converge,
+  interpretable. The baseline everything is measured against and the tournament fallback.
+- **Model B — DQN on the raw board** (7 channels × 17×17, small CNN). We have GPU access for
+  training; inference in the tournament is CPU-only. Historically the risky option — hard
+  go/no-go on **07.09.**: if it does not beat `rule_based_agent` by then, Model A is submitted.
+  Model B still goes into the report either way; a documented failure is a valid result.
+- Feature extraction, reward scheme, evaluation and training logs are **shared** between both.
+  Splitting the team per model is explicitly forbidden by the task description.
+
+## Measurement (`tools/`) — read before running experiments
+Details and rationale in `KONZEPT.md` §6. The short version:
+
+- **`tools/evaluate.py`** — per-round, per-agent statistics as CSV + `.meta.json`
+  (git commit, seed, a snapshot of `settings.py`). Drives `BombeRLeWorld` directly and
+  touches no framework file, so it survives the tournament reset.
+  `main.py --save-stats` is *not* enough: it only writes lifetime totals per agent and
+  per-round totals summed over all agents, so no per-agent confidence interval is possible.
+- **`tools/analyze.py`** — means with 95 % bootstrap CI; `--compare A B` does a **paired**
+  comparison; `--markdown` emits report-ready tables.
+- **`tools/trainlog.py`** — one row per episode for learning curves; import defensively in
+  `train.py` (`try: from tools.trainlog import TrainLogger / except ImportError: ...`),
+  since `tools/` is not part of the submission.
+
+Conventions we all follow, otherwise the numbers are not comparable:
+- **Never change `--seed`.** Default `20260731`. The harness reseeds the world RNG per round
+  (`base_seed + round_index`), which makes every run use *identical* arenas — that is what
+  makes comparisons paired and the CIs tight. `main.py --seed` alone does **not** achieve this:
+  the world draws from the same RNG every step, so arenas drift apart from round 2 onwards.
+- **300 rounds** for any number that gets reported, 100 for a quick check, 1000 for the final
+  measurement. Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
+- **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
+  "not demonstrated". Negative results stay in the report.
+- Primary metric `score`; watch `suicides` (the honest progress signal for task 2),
+  `invalid`, and `think_max_ms` (0.5 s tournament limit).
+
+```bash
+uv run python tools/evaluate.py --agents <ours> --opponents rule_based --n-rounds 300 --label <name>
+uv run python tools/analyze.py results/eval/<name>.csv
+uv run python tools/analyze.py --compare results/eval/<old>.csv results/eval/<new>.csv --markdown
+uv run python tools/trainlog.py results/train/*.csv --metric score
+```
+
+Opponent presets for `--opponents`: `none`, `random`, `peaceful`, `coin_collector`, `mixed`,
+`rule_based` (mapped to the task ladder below).
+
+**Open item:** `results/` is currently in `.gitignore`, so our measurements are not versioned.
+The CSVs are small and are the evidence for the report's most important chapter — team decision
+pending, see `KONZEPT.md` §6.7. Do not change `.gitignore` unilaterally.
+
 ## Task ladder (subsets of each other)
 1. `coin-heaven`, no crates/opponents → efficient navigation to revealed coins.
 2. `classic`, no opponents → use bombs to open crates, **escape own bombs**, keep navigating.
@@ -104,4 +155,8 @@ Logs land in `agent_code/<name>/logs/<name>.log`; levels in `settings.py`.
 - Our agents live in `agent_code/` alongside the provided ones (`tpl_agent` is the template;
   `rule_based_agent` is the strong reference opponent and a good source of training data —
   but our submitted agent must be *learned*, not rule-based).
+- `tools/` holds our measurement chain; it is **not** submitted, so nothing in
+  `agent_code/<name>/callbacks.py` may import from it.
+- `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
 - Restore original `settings.py` values before submitting if changed for training.
+  `tools/evaluate.py` records the active settings in its `.meta.json` so a mismatch is visible.
