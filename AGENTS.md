@@ -115,8 +115,18 @@ Conventions we all follow, otherwise the numbers are not comparable:
   measurement. Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
 - **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
   "not demonstrated". Negative results stay in the report.
-- Primary metric `score`; watch `suicides` (the honest progress signal for task 2),
-  `invalid`, and `think_max_ms` (0.5 s tournament limit).
+- Primary metric `score`. Per-rung metric sets via `analyze.py --preset task1…task4`:
+  task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
+  task 3 `score`/`kills`/**`suicides`**/`survived` ·
+  task 4 `score`/**`won`**/`kills`/`suicides`/`killed_by`/`think_ms`.
+- `suicides` changes role from task 3 on: progress signal on task 2 (must fall), regression
+  guard afterwards (must not creep back up — learning aggression is exactly when an agent
+  forgets to run from its own bomb).
+- On task 4 split the deaths: `suicides` (own bomb → escape logic broken) vs `killed_by`
+  (opponent's bomb → positioning/danger awareness). Different bugs, different fixes.
+- `won`/`rank` = standing within the round. On task 4 this matters more than mean score —
+  the tournament is decided against the other agents.
+- Always watch `think_max_ms` (0.5 s tournament limit).
 
 ```bash
 uv run python tools/evaluate.py --agents <ours> --opponents rule_based --n-rounds 300 --label <name>

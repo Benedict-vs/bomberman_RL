@@ -289,16 +289,50 @@ Seed variiert, kann seine Zahlen nicht mit unseren vergleichen.
 | Spalte | Bedeutung |
 |---|---|
 | `score` | **Primärmetrik** — Punkte der Runde (Münze 1, Kill 5) |
-| `coins`, `kills`, `suicides`, `crates`, `bombs` | Ereigniszähler |
-| `survived` | 1, wenn der Agent die Runde überlebt hat |
+| `won`, `rank` | Platzierung innerhalb der Runde (1 = bester Score) |
+| `coins`, `kills`, `crates`, `bombs` | Ereigniszähler |
+| `survived`, `died` | überlebt bzw. gestorben |
+| `suicides` | Tod durch **eigene** Bombe |
+| `killed_by_opponent` | Tod durch **gegnerische** Bombe (`= died − suicides`) |
 | `steps` | Schritte, die der Agent gelebt hat |
 | `moves`, `invalid` | Bewegungen bzw. ungültige Aktionen |
 | `think_mean_ms`, `think_max_ms`, `think_over_limit` | Rechenzeit gegen das 0,5-s-Limit |
 | `round`, `seed`, `slot`, `agent`, `code` | Zuordnung |
 
-Die Diagnosemetriken sind wichtiger, als sie aussehen. `suicides` ist der ehrlichste
-Fortschrittsindikator für Stufe 2; `invalid` verrät, ob der Agent gegen Wände läuft;
-`think_max_ms` ist unsere einzige Absicherung gegen einen Timeout im Turnier.
+Die Diagnosemetriken sind wichtiger, als sie aussehen. `invalid` verrät, ob der
+Agent gegen Wände läuft; `think_max_ms` ist unsere einzige Absicherung gegen einen
+Timeout im Turnier.
+
+### 6.3a Welche Metrik auf welcher Stufe
+
+`analyze.py --preset task1…task4` wählt den passenden Satz aus.
+
+| Stufe | Primär | Diagnose | Worauf ihr wirklich schaut |
+|---|---|---|---|
+| **1** | `coins` | `steps`, `invalid` | Sammelt er alle Münzen, und wie schnell? |
+| **2** | `score` | **`suicides`**, `crates`, `bombs`, `survived` | Suizidrate runter. Dazu `bombs` vs. `crates` — legt er nutzlose Bomben? |
+| **3** | `score` | `kills`, **`suicides`**, `survived` | Neue Fähigkeit `kills` hoch, `suicides` darf nicht zurückkommen |
+| **4** | `score`, `won` | `kills`, `suicides`, `killed_by`, `think_ms` | Schlägt er `rule_based`? Und *warum* stirbt er? |
+
+Drei Punkte, die dabei leicht untergehen:
+
+**`suicides` wechselt ab Stufe 3 die Rolle, es verschwindet nicht.** Auf Stufe 2 ist es
+das Fortschrittssignal und soll fallen. Ab Stufe 3 wird es zum Regressionswächter und
+darf nicht wieder steigen — genau beim Lernen von Aggression vergisst ein Agent, vor der
+eigenen Bombe wegzulaufen. Das ist der katastrophale-Vergessen-Fall aus §5, und ohne
+diese Metrik merkt ihr ihn erst im Turnier.
+
+**Auf Stufe 4 die Todesart aufschlüsseln.** Das Framework feuert `GOT_KILLED` bei jedem
+Tod und zusätzlich `KILLED_SELF`, wenn es die eigene Bombe war — die Differenz ist genau
+`killed_by_opponent`. Die beiden zeigen auf völlig verschiedene Baustellen: eigene Bombe
+→ `escape_dir`/`escape_after_bomb` sind fehlerhaft; fremde Bombe → Positionierung und
+Gefahrenwahrnehmung, der Agent stellt sich in fremde Explosionsradien. Ohne die Trennung
+seht ihr nur „stirbt oft" und wisst nicht, wo ihr ansetzen sollt.
+
+**`won` ist auf Stufe 4 fast wichtiger als `score`.** Das Turnier entscheidet sich gegen
+die anderen Agenten, nicht gegen eine absolute Punktzahl. Ein Agent mit 5,0 Punkten, der
+60 % der Runden anführt, ist turniertauglicher als einer mit 5,5, der zuverlässig
+Zweiter wird.
 
 Daneben schreibt `evaluate.py` eine `.meta.json` mit Git-Commit, Seed, Szenario und
 einem **Abzug der `settings.py`-Werte**. Letzteres, weil „ich kann deine Zahl nicht

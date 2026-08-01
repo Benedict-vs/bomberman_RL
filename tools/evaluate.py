@@ -210,6 +210,7 @@ def evaluate(
 
             # end_round() has run, so Agent.statistics holds this round's
             # counters and Agent.dead tells us who made it out.
+            round_records: list[dict] = []
             for slot, agent in enumerate(world.agents):
                 record = {
                     "round": round_index,
@@ -228,7 +229,32 @@ def evaluate(
                 record["think_max_ms"] = round(1000 * float(np.max(times)), 4) if times else 0.0
                 record["think_over_limit"] = int(sum(t > s.TIMEOUT for t in times))
 
-                records.append(record)
+                # How the agent died, split by cause. Both matter and they point
+                # at different bugs: own bomb -> the escape logic is broken;
+                # opponent's bomb -> positioning and danger awareness.
+                # The framework fires GOT_KILLED for every death and additionally
+                # KILLED_SELF when it was the agent's own bomb (environment.py,
+                # evaluate_explosions), so the difference is exactly the kills by
+                # others.
+                died = int(agent.dead)
+                suicides = record["suicides"]
+                record["died"] = died
+                record["killed_by_opponent"] = max(0, died - suicides)
+
+                round_records.append(record)
+
+            # Relative standing within the round. On task 4 this matters more
+            # than the mean score: the tournament is decided against the other
+            # agents, so an agent on 5.0 that leads 60 % of rounds beats one on
+            # 5.5 that is reliably second.
+            best = max(r["score"] for r in round_records)
+            for record in round_records:
+                # rank 1 = best; ties share the better rank
+                record["rank"] = 1 + sum(
+                    1 for other in round_records if other["score"] > record["score"]
+                )
+                record["won"] = int(record["score"] == best)
+            records.extend(round_records)
 
             if progress and (round_index + 1) % 25 == 0:
                 elapsed = time.time() - started

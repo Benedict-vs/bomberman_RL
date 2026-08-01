@@ -58,23 +58,39 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # metric -> (column, label, higher_is_better, format)
 METRICS = {
-    "score":    ("score",          "Score",          True,  "{:.3f}"),
-    "coins":    ("coins",          "Coins",          True,  "{:.3f}"),
-    "kills":    ("kills",          "Kills",          True,  "{:.3f}"),
-    "suicides": ("suicides",       "Suicides",       False, "{:.3f}"),
-    "crates":   ("crates",         "Crates",         True,  "{:.2f}"),
-    "bombs":    ("bombs",          "Bombs",          True,  "{:.2f}"),
-    "survived": ("survived",       "Survival rate",  True,  "{:.3f}"),
-    "steps":    ("steps",          "Steps alive",    True,  "{:.1f}"),
-    "invalid":  ("invalid",        "Invalid actions", False, "{:.2f}"),
-    "think_ms": ("think_max_ms",   "Think max (ms)", False, "{:.1f}"),
+    "score":     ("score",             "Score",            True,  "{:.3f}"),
+    "won":       ("won",               "Win rate",         True,  "{:.3f}"),
+    "rank":      ("rank",              "Rank (1 = best)",  False, "{:.2f}"),
+    "coins":     ("coins",             "Coins",            True,  "{:.3f}"),
+    "kills":     ("kills",             "Kills",            True,  "{:.3f}"),
+    "suicides":  ("suicides",          "Suicides",         False, "{:.3f}"),
+    "killed_by": ("killed_by_opponent", "Killed by opp.",  False, "{:.3f}"),
+    "died":      ("died",              "Death rate",       False, "{:.3f}"),
+    "crates":    ("crates",            "Crates",           True,  "{:.2f}"),
+    "bombs":     ("bombs",             "Bombs",            True,  "{:.2f}"),
+    "survived":  ("survived",          "Survival rate",    True,  "{:.3f}"),
+    "steps":     ("steps",             "Steps alive",      True,  "{:.1f}"),
+    "invalid":   ("invalid",           "Invalid actions",  False, "{:.2f}"),
+    "think_ms":  ("think_max_ms",      "Think max (ms)",   False, "{:.1f}"),
 }
 
 DEFAULT_METRICS = ["score", "coins", "kills", "suicides", "survived", "invalid"]
 
+# Ready-made metric sets for the task ladder (--preset). Each stage keeps the
+# diagnostics of the one before it: `suicides` stops being the progress signal
+# after stage 2 but stays in as a regression guard, because learning to hunt is
+# exactly when an agent starts forgetting to run from its own bomb.
+PRESETS = {
+    "task1": ["coins", "steps", "invalid"],
+    "task2": ["score", "suicides", "crates", "bombs", "survived"],
+    "task3": ["score", "kills", "suicides", "survived", "invalid"],
+    "task4": ["score", "won", "kills", "suicides", "killed_by", "think_ms"],
+}
+
 INT_COLUMNS = {"round", "seed", "slot", "survived", "round_steps",
                "score", "coins", "kills", "suicides", "crates", "bombs",
-               "moves", "invalid", "steps", "think_over_limit"}
+               "moves", "invalid", "steps", "think_over_limit",
+               "died", "killed_by_opponent", "rank", "won"}
 
 
 # --------------------------------------------------------------------------
@@ -93,7 +109,31 @@ def load(path: Path) -> list[dict]:
                 row[key] = int(value)
             elif key not in ("agent", "code"):
                 row[key] = float(value)
+    _backfill(rows)
     return rows
+
+
+def _backfill(rows: list[dict]) -> None:
+    """Derive the newer columns for CSVs written before they existed.
+
+    Keeps older result files usable instead of forcing a re-run of every
+    measurement whenever we add a metric.
+    """
+    if "died" not in rows[0] and "survived" in rows[0]:
+        for row in rows:
+            row["died"] = 1 - row["survived"]
+    if "killed_by_opponent" not in rows[0] and "died" in rows[0]:
+        for row in rows:
+            row["killed_by_opponent"] = max(0, row["died"] - row.get("suicides", 0))
+    if "rank" not in rows[0] and "score" in rows[0]:
+        by_round: dict[int, list[dict]] = defaultdict(list)
+        for row in rows:
+            by_round[row["round"]].append(row)
+        for group in by_round.values():
+            best = max(r["score"] for r in group)
+            for row in group:
+                row["rank"] = 1 + sum(1 for o in group if o["score"] > row["score"])
+                row["won"] = int(row["score"] == best)
 
 
 def load_meta(csv_path: Path) -> dict:
@@ -472,9 +512,12 @@ def main(argv=None) -> int:
                         help="The single metric used by --ablation.")
     parser.add_argument("--agent", default=None,
                         help="Which agent to analyse. Default: slot 0.")
-    parser.add_argument("--metrics", nargs="+", default=DEFAULT_METRICS,
+    parser.add_argument("--metrics", nargs="+", default=None,
                         choices=sorted(METRICS),
                         help=f"Default: {' '.join(DEFAULT_METRICS)}")
+    parser.add_argument("--preset", default=None, choices=sorted(PRESETS),
+                        help="Metric set for a rung of the task ladder: "
+                             + "; ".join(f"{k}={' '.join(v)}" for k, v in PRESETS.items()))
     parser.add_argument("--markdown", action="store_true",
                         help="Emit a Markdown table for the report.")
     parser.add_argument("--plot", nargs="?", const="auto", default=None,
@@ -486,6 +529,11 @@ def main(argv=None) -> int:
                         help="Bootstrap resamples (default 10000).")
 
     args = parser.parse_args(argv)
+
+    if args.metrics and args.preset:
+        parser.error("Use either --metrics or --preset, not both.")
+    args.metrics = args.metrics or (PRESETS[args.preset] if args.preset
+                                    else DEFAULT_METRICS)
 
     if not args.files and not args.compare and not args.ablation:
         parser.error("Give at least one CSV, or use --compare / --ablation.")
