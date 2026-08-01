@@ -100,8 +100,9 @@ uv run python tools/analyze.py <datei.csv> [weitere.csv ...] [zusätze]
 # Modus B: gepaarter Vergleich zweier Läufe        <- der Normalfall
 uv run python tools/analyze.py --compare <alt.csv> <neu.csv> [zusätze]
 
-# Modus C: Ablation, viele Varianten gegen eine Baseline, EINE Metrik
-uv run python tools/analyze.py --ablation <baseline.csv> <v1.csv> <v2.csv> ... \
+# Modus C: Ablation — VOLLER Agent zuerst, dann je eine Variante mit
+#           einer entfernten Komponente. EINE Metrik.
+uv run python tools/analyze.py --ablation <voll.csv> <ohne_x.csv> <ohne_y.csv> ... \
     --metric <metrik> [zusätze]
 ```
 
@@ -115,8 +116,61 @@ Zusätze, beliebig kombinierbar:
 | `--preset task1…task4` | fertiger Metriksatz für die Stufe (siehe unten) |
 | `--metrics <a> <b> ...` | Auswahl der Metriken von Hand (Modus A und B) |
 | `--metric <a>` | die *eine* Metrik für die Ablation (Modus C) |
+| `--ablation-mode removal` | Standard: Baseline = voller Agent, Varianten = je eine Komponente **weg** |
+| `--ablation-mode addition` | Baseline = minimaler Agent, Varianten = je eine Komponente **dazu** |
 | `--agent <name>` | falls nicht der Agent auf Platz 0 gemeint ist |
 | `--n-boot <zahl>` | Bootstrap-Ziehungen, Standard 10000 |
+
+## Wie die Abbildungen zu lesen sind
+
+**Übersicht** (Modus A) — ein Balken pro Agent je Metrik, Fehlerbalken = 95-%-KI.
+Der getestete Agent ist **grün**, die Gegner gedämpft blau. Ausgewählt wird der Agent
+auf Platz 0 (bei `--agents` zuerst genannt) oder der mit `--agent` gewählte.
+
+**Vergleich** (Modus B) — **ein eigenes Feld pro Metrik**, jedes mit eigener Achse.
+Bewusst keine gemeinsame Achse: Score in Punkten, Überlebensrate als Anteil und
+Rechenzeit in Millisekunden lassen sich nicht sinnvoll nebeneinanderlegen.
+
+Was dargestellt ist — der häufigste Lesefehler: **nicht** die Differenz der beiden
+Konfidenzintervalle, sondern das Konfidenzintervall *der* Differenz. Gerechnet wird
+
+```
+pro Runde i:   dᵢ = B(Runde i) − A(Runde i)      # beide spielen dieselbe Arena
+dargestellt:   Mittelwert aller dᵢ, plus Bootstrap-KI über diese Differenzen
+```
+
+Der Unterschied ist erheblich: Zöge man die beiden Einzel-KIs voneinander ab, wäre
+die Arena-Varianz wieder drin, die das Pairing gerade herauskürzt — das Intervall
+würde um ein Vielfaches breiter und wäre schlicht falsch.
+
+Pro Feld:
+
+- Punkt = Mittelwert der Rundendifferenzen, Balken = dessen 95-%-KI
+- gestrichelte Linie = keine Änderung
+- **grün hinterlegte Hälfte = die Richtung, die für *diese* Metrik besser ist**
+  (bei `suicides` ist das links, bei `score` rechts)
+- oben die Ausgangswerte `A … → B …`, unten Differenz, KI und Urteil
+
+Vorschlag für die Bildunterschrift im Bericht:
+
+> Gepaarter Vergleich über 300 Runden auf identischen Spielfeldern. Dargestellt ist
+> der Mittelwert der rundenweisen Differenz (B − A) mit 95-%-Bootstrap-Konfidenz-
+> intervall — nicht die Differenz der Einzelintervalle. Ein Intervall, das die Null
+> enthält, zeigt keinen nachgewiesenen Effekt.
+
+**Ablation** (Modus C) — eine Zeile pro Komponente auf *einer gemeinsamen* Achse,
+weil hier alle Zeilen dieselbe Metrik zeigen.
+
+Dargestellt ist der **Beitrag der jeweiligen Komponente**, nicht die Leistung des
+verkrüppelten Agenten. Positiv heißt immer „die Komponente hilft" — auch bei
+Metriken, bei denen weniger besser ist. Bei `suicides` bedeutet `+0.16` also:
+Die Komponente senkt die Suizidrate um 0,16.
+
+Urteile: `MATTERS` (Weglassen hat geschadet, die Komponente verdient ihren Platz),
+`HARMFUL` (der Agent war ohne sie besser), `no effect shown` (KI enthält die Null).
+Bei `--ablation-mode addition` stattdessen `BETTER`/`WORSE`.
+
+Punktfarbe: grün = gut, rot = schlecht, grau = nicht gezeigt.
 
 ## Verfügbare Metriken
 
@@ -185,10 +239,11 @@ uv run python tools/analyze.py --compare results/eval/maxi_q_v2__task4.csv \
                                          --markdown --plot
 
 # Welche Designentscheidungen haben tatsächlich etwas gebracht?
-uv run python tools/analyze.py --ablation results/eval/q_base__task2.csv \
+# ERSTE Datei = voller Agent, danach je eine Variante mit einer Komponente weniger.
+uv run python tools/analyze.py --ablation results/eval/q_full__task2.csv \
        results/eval/q_ohne_shaping__task2.csv \
        results/eval/q_ohne_symmetrie__task2.csv \
-       results/eval/q_kleine_features__task2.csv \
+       results/eval/q_ohne_escape_feature__task2.csv \
        --metric score --markdown --plot
 
 # Nur die Sicherheitsmetriken anschauen

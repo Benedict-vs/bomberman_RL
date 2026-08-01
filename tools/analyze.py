@@ -318,53 +318,109 @@ def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
         print()
 
     if plot is not None:
-        plot_forest(
-            entries=[{"name": line["label"], **line} for line in lines],
-            title=f"{name_b} vs {name_a}  ({n_paired} paired rounds)",
-            xlabel=f"paired difference  ({name_b} − {name_a})",
-            out=plot,
-        )
+        plot_compare(lines, name_a, name_b, n_paired, plot)
+
+
+def _as_contribution(effect: dict, metric: str) -> dict:
+    """Turn a raw ``variant − baseline`` difference into the *contribution of the
+    removed component*, oriented so that positive always means "it helped".
+
+    In a removal ablation the baseline is the **full** agent and each variant has
+    one component taken out. The raw difference then answers "how did the crippled
+    agent do", which reads backwards: dropping reward shaping lowers the score, so
+    the tool would print WORSE -- while what we mean is "shaping matters".
+
+    So we negate for metrics where more is better, and leave the sign alone for
+    metrics where less is better:
+
+        score:    removal lowers it   -> diff < 0 -> contribution = −diff > 0
+        suicides: removal raises them -> diff > 0 -> contribution = +diff > 0
+
+    Either way a positive number means the component improves the metric by that
+    much, and the verdict can talk about the component instead of the cripple.
+    """
+    higher_better = METRICS[metric][2]
+    sign = -1.0 if higher_better else 1.0
+
+    low, high = sorted([sign * effect["low"], sign * effect["high"]])
+    contribution = sign * effect["diff"]
+
+    if low <= 0 <= high:
+        verdict = "no effect shown"
+    elif contribution > 0:
+        verdict = "MATTERS"          # removing it made the agent worse
+    else:
+        verdict = "HARMFUL"          # removing it made the agent better
+
+    return {**effect, "diff": contribution, "low": low, "high": high,
+            "verdict": verdict}
 
 
 def ablation(base: Path, variants: list[Path], metric: str, agent: str | None,
-             n_boot: int, markdown: bool, plot: Path | None) -> None:
-    """one metric, many variants, all measured against the same baseline.
+             n_boot: int, markdown: bool, plot: Path | None,
+             mode: str = "removal") -> None:
+    """One metric, many variants, all measured against the same baseline.
+
+    ``mode="removal"`` -- the classic ablation. Baseline is the full agent, each
+    variant has exactly one component removed, and the figure shows what that
+    component contributes.
+
+    ``mode="addition"`` -- baseline is the minimal agent and each variant adds one
+    component. Raw differences are shown as-is.
     """
     rows_base = rows_for(load(base), agent)
     entries = []
     for path in variants:
         effect = paired_effect(rows_base, rows_for(load(path), agent), metric, n_boot)
+        if mode == "removal":
+            effect = _as_contribution(effect, metric)
         effect["name"] = path.stem
         entries.append(effect)
 
     label = METRICS[metric][1]
-    title = f"{label}: variants vs {base.stem}"
+    removal = mode == "removal"
+    title = (f"{label}: contribution of each component (removed from {base.stem})"
+             if removal else f"{label}: variants vs {base.stem}")
+    value_header = "Contribution (95 % CI)" if removal else "Difference vs baseline (95 % CI)"
+    column_header = "Component removed" if removal else "Variant"
+    axis = (f"contribution to {label}   (positive = component helps)"
+            if removal else f"paired difference in {label}")
 
     if markdown:
         print(f"\n**{title}** ({entries[0]['n']} paired rounds)\n")
-        print(f"| Variant | {label} | Difference vs baseline (95 % CI) | Verdict |")
+        print(f"| {column_header} | {label} without it | {value_header} | Verdict |"
+              if removal else
+              f"| {column_header} | {label} | {value_header} | Verdict |")
         print("|---|---|---|---|")
         for entry in entries:
             fmt = entry["fmt"]
             print(f"| `{entry['name']}` | {fmt.format(entry['b'])} | "
                   f"{entry['diff']:+.3f} [{entry['low']:+.3f}, {entry['high']:+.3f}] | "
                   f"{entry['verdict']} |")
-        print(f"\n<sub>Baseline `{base.stem}`: {entries[0]['fmt'].format(entries[0]['a'])}. "
-              f"Paired on identical arenas, 95 % bootstrap CI.</sub>")
+        note = (f"Full agent `{base.stem}`: {entries[0]['fmt'].format(entries[0]['a'])}. "
+                f"Positive contribution = removing the component made the agent worse, "
+                f"i.e. it earns its place. " if removal else
+                f"Baseline `{base.stem}`: {entries[0]['fmt'].format(entries[0]['a'])}. ")
+        print(f"\n<sub>{note}Paired on identical arenas, 95 % bootstrap CI.</sub>")
     else:
         print(f"\n{title}")
         print("=" * len(title))
-        print(f"  baseline {base.stem}: {entries[0]['fmt'].format(entries[0]['a'])}"
+        anchor = "full agent" if removal else "baseline"
+        print(f"  {anchor} {base.stem}: {entries[0]['fmt'].format(entries[0]['a'])}"
               f"   ({entries[0]['n']} paired rounds)\n")
         width = max(len(e["name"]) for e in entries) + 2
         for entry in entries:
             ci = f"[{entry['low']:+.3f}, {entry['high']:+.3f}]"
             print(f"  {entry['name']:<{width}}{entry['diff']:>+9.3f}{ci:>22}   "
                   f"{entry['verdict']}")
+        if removal:
+            print("\n  MATTERS = removing it made the agent worse, so it earns its place."
+                  "\n  HARMFUL = the agent was better without it.")
         print()
 
     if plot is not None:
-        plot_forest(entries, title, f"paired difference in {label}", plot)
+        plot_forest(entries, title, axis, plot,
+                    positive_is_better=True if removal else None)
 
 
 # --------------------------------------------------------------------------
@@ -374,6 +430,9 @@ VERDICT_COLOURS = {
     "BETTER": "tab:green",
     "WORSE": "tab:red",
     "no effect shown": "tab:gray",
+    # removal ablation: the verdict is about the component, not the crippled agent
+    "MATTERS": "tab:green",
+    "HARMFUL": "tab:red",
 }
 
 
@@ -390,8 +449,98 @@ def _pyplot():
     return plt
 
 
-def plot_forest(entries: list[dict], title: str, xlabel: str, out: Path) -> Path:
+def plot_compare(lines: list[dict], name_a: str, name_b: str, n_paired: int,
+                 out: Path) -> Path:
+    """One small panel per metric for a paired A/B comparison.
+
+    Deliberately *not* a single shared axis: the metrics have different units
+    (score in points, survival as a rate, think time in ms), so putting them on
+    one x-axis squashes everything small onto the zero line. Each panel gets its
+    own scale instead.
+
+    Reading a panel: the dot is the mean paired difference, the whiskers its
+    95 % CI, the dashed line is "no change". The green band marks the improving
+    direction -- which differs per metric, since fewer suicides is good but more
+    coins is good. Whiskers overlapping the dashed line = effect not shown.
+    """
+    plt = _pyplot()
+
+    n = len(lines)
+    cols = min(3, n)
+    rows = (n + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(4.6 * cols, 3.0 * rows + 0.8),
+                             squeeze=False)
+
+    for index, line in enumerate(lines):
+        ax = axes[index // cols][index % cols]
+        higher_better = METRICS[line["metric"]][2]
+        fmt = line["fmt"]
+        diff, low, high = line["diff"], line["low"], line["high"]
+
+        span = max(abs(low), abs(high), abs(diff), 1e-9)
+        left, right = min(low, 0) - 0.45 * span, max(high, 0) + 0.45 * span
+
+        # Shade the half of the axis that means "better" for THIS metric.
+        if higher_better:
+            ax.axvspan(0, right, color="tab:green", alpha=0.08, zorder=0)
+        else:
+            ax.axvspan(left, 0, color="tab:green", alpha=0.08, zorder=0)
+
+        ax.axvline(0, color="black", linestyle="--", linewidth=1.1, zorder=2)
+        colour = VERDICT_COLOURS[line["verdict"]]
+        ax.errorbar(diff, 0, xerr=[[diff - low], [high - diff]], fmt="o",
+                    color=colour, capsize=6, markersize=10, linewidth=2.4,
+                    zorder=3)
+
+        ax.set_xlim(left, right)
+        ax.set_ylim(-1, 1)
+        ax.set_yticks([])
+        ax.grid(axis="x", alpha=0.25)
+        ax.set_title(line["label"], fontsize=11, fontweight="bold")
+        ax.set_xlabel(
+            f"mean of per-round (B − A)   "
+            f"({'higher' if higher_better else 'lower'} is better)",
+            fontsize=8)
+
+        # The numbers behind the dot, so each panel stands on its own.
+        ax.text(0.5, 0.93,
+                f"A {fmt.format(line['a'])}   →   B {fmt.format(line['b'])}",
+                transform=ax.transAxes, ha="center", va="top", fontsize=9)
+        ax.text(0.5, 0.10,
+                f"{diff:+.3f}  [{low:+.3f}, {high:+.3f}]\n{line['verdict']}",
+                transform=ax.transAxes, ha="center", va="bottom", fontsize=8.5,
+                color=colour, fontweight="bold")
+
+    for index in range(n, rows * cols):
+        axes[index // cols][index % cols].axis("off")
+
+    # Two short lines only. What is plotted is a mean of per-round differences,
+    # not two CIs subtracted -- but that belongs in the report caption, not on
+    # every figure. Keeping the header readable matters more.
+    fig.text(0.5, 0.985, f"A: {name_a}    →    B: {name_b}",
+             ha="center", va="top", fontsize=12, fontweight="bold")
+    fig.text(0.5, 0.945,
+             f"{n_paired} paired rounds · mean per-round difference (B − A) "
+             f"with 95 % CI",
+             ha="center", va="top", fontsize=9, color="dimgray")
+
+    top = 0.93 if rows > 1 else 0.86
+    fig.tight_layout(rect=(0, 0, 1, top))
+
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    print(f"Wrote {out}")
+    return out
+
+
+def plot_forest(entries: list[dict], title: str, xlabel: str, out: Path,
+                positive_is_better: bool | None = None) -> Path:
     """Forest plot: one row per entry, point estimate with 95 % CI, zero line.
+
+    Only used for ablations, where every row shows the *same* metric -- the one
+    case where a shared x-axis is meaningful.
     """
     plt = _pyplot()
 
@@ -402,25 +551,60 @@ def plot_forest(entries: list[dict], title: str, xlabel: str, out: Path) -> Path
     upper = np.array([e["high"] for e in entries]) - diffs
     colours = [VERDICT_COLOURS[e["verdict"]] for e in entries]
 
-    height = max(2.2, 0.55 * len(entries) + 1.4)
-    fig, ax = plt.subplots(figsize=(7.5, height))
+    height = max(3.0, 0.62 * len(entries) + 2.2)
+    fig, ax = plt.subplots(figsize=(8.5, height))
 
-    ax.axvline(0, color="black", linestyle="--", linewidth=1, zorder=1)
+    # Shade the improving half. All rows share one metric here, so "better" is
+    # a single direction -- without this, green dots on both sides of zero are
+    # genuinely confusing for metrics where less is more (suicides, invalid).
+    if positive_is_better is None:
+        higher_better = METRICS[entries[0]["metric"]][2] if entries else True
+    else:
+        # Values are already oriented (removal ablation): positive = helps.
+        higher_better = positive_is_better
+    ax.axvline(0, color="black", linestyle="--", linewidth=1.1, zorder=2)
     for pos, diff, low, high, colour in zip(positions, diffs, lower, upper, colours):
         ax.errorbar(diff, pos, xerr=[[low], [high]], fmt="o", color=colour,
-                    capsize=4, markersize=7, linewidth=1.8, zorder=3)
+                    capsize=5, markersize=8, linewidth=2.0, zorder=3)
 
     ax.set_yticks(positions)
     ax.set_yticklabels([e["name"] for e in entries])
-    ax.set_xlabel(xlabel)
+    ax.set_xlabel(xlabel if positive_is_better is not None else
+                  f"{xlabel}   ({'higher' if higher_better else 'lower'} is better)")
     ax.set_title(title)
     ax.grid(axis="x", alpha=0.3)
     ax.set_ylim(-0.6, len(entries) - 0.4)
 
-    handles = [plt.Line2D([], [], color=colour, marker="o", linestyle="",
-                          label=verdict)
-               for verdict, colour in VERDICT_COLOURS.items()]
-    ax.legend(handles=handles, loc="best", fontsize=8, framealpha=0.9)
+    # Breathing room, so a point at the extreme does not sit on the frame.
+    lo = min(np.min(diffs - lower), 0.0)
+    hi = max(np.max(diffs + upper), 0.0)
+    pad = 0.18 * max(hi - lo, 1e-9)
+    left, right = lo - pad, hi + pad
+    ax.set_xlim(left, right)
+
+    if higher_better:
+        ax.axvspan(0, right, color="tab:green", alpha=0.07, zorder=0)
+    else:
+        ax.axvspan(left, 0, color="tab:green", alpha=0.07, zorder=0)
+    ax.set_xlim(left, right)
+
+    # Numbers directly above each point -- the figure should be readable on its
+    # own, without cross-referencing the table.
+    for pos, diff, low, high in zip(positions, diffs, lower, upper):
+        ax.annotate(f"{diff:+.2f} [{diff - low:+.2f}, {diff + high:+.2f}]",
+                    xy=(diff, pos), xytext=(0, 11), textcoords="offset points",
+                    ha="center", va="bottom", fontsize=7.5, color="dimgray")
+
+    # Only the verdicts this mode can produce -- showing BETTER/WORSE next to
+    # MATTERS/HARMFUL would just raise questions.
+    shown = (["MATTERS", "HARMFUL", "no effect shown"]
+             if positive_is_better is not None else
+             ["BETTER", "WORSE", "no effect shown"])
+    handles = [plt.Line2D([], [], color=VERDICT_COLOURS[v], marker="o",
+                          linestyle="", label=v) for v in shown]
+    # Legend outside the plotting area: with few rows there is no free corner.
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.22),
+              ncol=3, fontsize=8, frameon=False)
 
     fig.tight_layout()
     out = Path(out)
@@ -529,8 +713,16 @@ def main(argv=None) -> int:
                         help="Paired comparison: BASE against NEW.")
     parser.add_argument("--ablation", nargs="+", type=Path,
                         metavar=("BASE", "VARIANT"),
-                        help="One baseline plus any number of variants, all "
-                             "compared on a single metric (see --metric).")
+                        help="Ablation study on a single metric (see --metric). "
+                             "First file = the full agent, the rest = one "
+                             "component removed each.")
+    parser.add_argument("--ablation-mode", default="removal",
+                        choices=["removal", "addition"],
+                        help="removal (default): baseline is the FULL agent and "
+                             "each variant has one component taken out; the "
+                             "figure shows what that component contributes. "
+                             "addition: baseline is the minimal agent and each "
+                             "variant adds one component.")
     parser.add_argument("--metric", default="score", choices=sorted(METRICS),
                         help="The single metric used by --ablation.")
     parser.add_argument("--agent", default=None,
@@ -578,7 +770,8 @@ def main(argv=None) -> int:
     if args.ablation:
         base, *variants = args.ablation
         ablation(base, variants, args.metric, args.agent, args.n_boot,
-                 args.markdown, plot=figure_path(f"ablation_{args.metric}"))
+                 args.markdown, plot=figure_path(f"ablation_{args.metric}"),
+                 mode=args.ablation_mode)
 
     for path in args.files:
         summarise(path, args.metrics, args.markdown, args.n_boot)
