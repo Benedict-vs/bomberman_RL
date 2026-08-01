@@ -82,8 +82,8 @@ Logs land in `agent_code/<name>/logs/<name>.log`; levels in `settings.py`.
 - **Model A — tabular Q-learning on hand-built features.** Lecture technique, fast to converge,
   interpretable. The baseline everything is measured against and the tournament fallback.
 - **Model B — DQN on the raw board** (7 channels × 17×17, small CNN). We have GPU access for
-  training; inference in the tournament is CPU-only. Historically the risky option — hard
-  go/no-go on **07.09.**: if it does not beat `rule_based_agent` by then, Model A is submitted.
+  training; inference in the tournament is CPU-only. Historically the risky option — clear
+  go/no-go: if it does not beat `rule_based_agent` in time, Model A is submitted.
   Model B still goes into the report either way; a documented failure is a valid result.
 - Feature extraction, reward scheme, evaluation and training logs are **shared** between both.
   Splitting the team per model is explicitly forbidden by the task description.

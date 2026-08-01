@@ -61,8 +61,8 @@ statt sie von uns vorgegeben zu bekommen.
 Deep-RL-Ansätze in früheren Jahren wiederholt zum Turnier nicht konvergiert waren.
 Unser Gegenmittel: früh anfangen, Warmstart durch Verhaltensklonen (Abschnitt 5),
 Symmetrie-Augmentierung für den Faktor 8 in der Stichprobeneffizienz, und ein
-hartes Abbruchkriterium — **wenn Modell B am 07.09. den `rule_based_agent` nicht
-schlägt, geht Modell A ins Turnier.** Modell B bleibt trotzdem im Bericht; ein
+klares Abbruchkriterium — **schlägt Modell B den `rule_based_agent` bis kurz vor der
+Abgabe nicht, geht Modell A ins Turnier.** Modell B bleibt trotzdem im Bericht; ein
 dokumentierter Fehlschlag mit sauberer Analyse ist ein vollwertiges Ergebnis.
 
 *Inferenz auf der CPU:* Ein kleines CNN auf 17×17 braucht wenige Millisekunden pro
@@ -470,28 +470,30 @@ werden, also führt jede/r mit, was er oder sie beigetragen hat. Die Logbücher
 
 ---
 
-## 8. Meilensteine
+## 8. Zeitplanung
 
-Rund sieben Wochen bis zur Code-Abgabe.
+Wir planen nicht nach festen Wochenzielen, sondern nach Arbeitsstand — die
+Reihenfolge ergibt sich ohnehin aus der Task-Leiter (Abschnitt 3). Verbindlich
+sind nur die Termine aus der Aufgabenstellung:
 
-| Woche | Ziel | Fertig, wenn |
-|---|---|---|
-| **KW 32** (bis 09.08.) | Stufe 1 gelöst | Q-Agent sammelt in `coin-heaven` ≥ 90 % der Münzen, deutlich über `random_agent`, gepaart signifikant |
-| **KW 33–34** (bis 23.08.) | Stufe 2 gelöst — der schwierige Teil | Suizidrate < 0,05 bei 300 Runden `classic`; Kisten werden zuverlässig geöffnet |
-| **KW 35** (bis 30.08.) | Stufe 3 + Belohnungsablationen | schlägt `peaceful_agent` und `coin_collector_agent`; Ablationstabelle für ≥ 5 Shaping-Terme |
-| **KW 36–37** (bis 13.09.) | Stufe 4, Modell B, Self-Play | Modell A schlägt `rule_based_agent`; **Entscheidung am 07.09.**, ob Modell B turnierreif wird |
-| **KW 38** (bis 17.09.) | Hyperparameter, Abschlussmessung, Docker | 1000-Runden-Abschlussmessung; `docker build .` läuft; Testabgabe auf MaMPF hochgeladen |
-| **21.09.** | **Code-Abgabe** | `final-project-agent-code.zip` |
-| **KW 39** (bis 28.09.) | Bericht | ~12 000 Wörter, Abschnitte mit Autor markiert, Repo-URL drin |
+| Termin | Was |
+|---|---|
+| **17.09.2026, 21:00** | Testabgabe auf MaMPF (optional, aber sinnvoll — Docker-Lauf und Absturzcheck) |
+| **21.09.2026, 21:00** | Agent-Code, `final-project-agent-code.zip` |
+| **28.09.2026, 21:00** | Bericht als PDF, ~12 000 Wörter, Abschnitte mit Autor markiert, Repo-URL drin |
 
-Zwei Puffer sind bewusst eingebaut: die Testabgabe am 17.09. gibt ein Wochenende
-für Absturzkorrekturen, und die Entscheidung am 07.09. verhindert, dass wir bis
-zuletzt auf ein nicht konvergierendes Netz hoffen.
+Zwei Dinge, die unabhängig vom Tempo gelten:
 
-**Der Bericht beginnt nicht in KW 39.** Schreibt *Methods* und *Experiments*
-mit, während ihr die Experimente macht — im Nachhinein rekonstruiert niemand mehr,
-warum eine Entscheidung so gefallen ist. Dafür sind die Logbücher da, und dafür
-schreibt `analyze.py --markdown` fertige Tabellen.
+**Für Modell B (DQN) irgendwann bewusst entscheiden**, ob es turnierreif wird oder
+ob Modell A eingereicht wird. Die Aufgabenstellung warnt, dass Deep-RL-Ansätze in
+früheren Jahren zum Turnier nicht konvergiert waren — die Entscheidung sollte auf
+einer Messung beruhen und nicht auf Hoffnung. Modell B kommt so oder so in den
+Bericht; ein dokumentierter Fehlschlag ist ein vollwertiges Ergebnis.
+
+**Der Bericht beginnt nicht am Schluss.** Schreibt *Methods* und *Experiments* mit,
+während ihr die Experimente macht — im Nachhinein rekonstruiert niemand mehr, warum
+eine Entscheidung so gefallen ist. Dafür sind die Logbücher da, und dafür schreibt
+`analyze.py --markdown` fertige Tabellen.
 
 ---
 
