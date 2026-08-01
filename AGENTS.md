@@ -97,7 +97,11 @@ Details and rationale in `KONZEPT.md` §6. The short version:
   `main.py --save-stats` is *not* enough: it only writes lifetime totals per agent and
   per-round totals summed over all agents, so no per-agent confidence interval is possible.
 - **`tools/analyze.py`** — means with 95 % bootstrap CI; `--compare A B` does a **paired**
-  comparison; `--markdown` emits report-ready tables.
+  comparison; `--ablation BASE V1 V2 …` compares many variants against one baseline on a
+  single metric; `--markdown` emits report-ready tables; `--plot` writes figures to
+  `results/figures/` (bar chart with CIs for a summary, forest plot for comparison and
+  ablation). Plotting needs matplotlib: `uv add matplotlib` (analysis only — keep it out of
+  the submitted `requirements.txt`).
 - **`tools/trainlog.py`** — one row per episode for learning curves; import defensively in
   `train.py` (`try: from tools.trainlog import TrainLogger / except ImportError: ...`),
   since `tools/` is not part of the submission.
@@ -118,6 +122,8 @@ Conventions we all follow, otherwise the numbers are not comparable:
 uv run python tools/evaluate.py --agents <ours> --opponents rule_based --n-rounds 300 --label <name>
 uv run python tools/analyze.py results/eval/<name>.csv
 uv run python tools/analyze.py --compare results/eval/<old>.csv results/eval/<new>.csv --markdown
+uv run python tools/analyze.py --ablation results/eval/<base>.csv results/eval/<v1>.csv \
+    results/eval/<v2>.csv --metric score --plot
 uv run python tools/trainlog.py results/train/*.csv --metric score
 ```
 

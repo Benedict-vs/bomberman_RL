@@ -329,6 +329,37 @@ uv run python tools/analyze.py --compare results/eval/maxi_q_v1__task4.csv \
                                          results/eval/maxi_q_v2__task4.csv
 ```
 
+### 6.4a Abbildungen für den Bericht
+
+`--plot` schreibt nach `results/figures/`. Braucht matplotlib: `uv add matplotlib`
+(nur für die Analyse — **nicht** in die abgegebene `requirements.txt`).
+
+```bash
+# Balkendiagramm mit Fehlerbalken, ein Feld pro Metrik
+uv run python tools/analyze.py results/eval/maxi_q_v3__task4.csv --plot
+
+# Forest-Plot: eine Version gegen eine andere, alle Metriken
+uv run python tools/analyze.py --compare results/eval/maxi_q_v2__task4.csv \
+                                         results/eval/maxi_q_v3__task4.csv --plot
+
+# Ablationsstudie: viele Varianten gegen eine Baseline, eine Metrik
+uv run python tools/analyze.py --ablation results/eval/q_base__task2.csv \
+       results/eval/q_ohne_shaping__task2.csv \
+       results/eval/q_ohne_symmetrie__task2.csv \
+       results/eval/q_kleine_features__task2.csv \
+       --metric score --plot
+```
+
+Der **Forest-Plot der Ablation** ist die wichtigste Abbildung für das
+*Experiments*-Kapitel: eine Zeile pro Designentscheidung, Punktschätzer mit
+Konfidenzintervall, gestrichelte Null-Linie. Grün heißt besser, rot schlechter,
+grau heißt „Intervall kreuzt die Null, nicht gezeigt". Der Leser sieht auf einen
+Blick, welche unserer Entscheidungen durch Daten gedeckt sind — und genau das
+verlangt die Aufgabenstellung.
+
+`results/figures/` enthält nur generierte PNGs; die lassen sich jederzeit aus den
+CSVs neu erzeugen und müssen nicht versioniert werden.
+
 Dateinamen: `<person>_<modell>_<version>__<stufe>.csv`, z. B.
 `maxi_q_v3__task2.csv`, `benedict_dqn_v1__task4.csv`.
 
