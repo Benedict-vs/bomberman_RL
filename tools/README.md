@@ -111,6 +111,7 @@ Zusätze, beliebig kombinierbar:
 |---|---|
 | `--markdown` | Tabelle zum Kopieren in den Bericht |
 | `--plot` | Abbildung nach `results/figures/`; `--plot pfad.png` für eigenen Ort |
+| | Im Balkendiagramm ist der **getestete Agent grün**, die Gegner gedämpft blau. Das ist standardmäßig der Agent auf Platz 0 (`--agents` zuerst genannt) oder der mit `--agent` gewählte. |
 | `--preset task1…task4` | fertiger Metriksatz für die Stufe (siehe unten) |
 | `--metrics <a> <b> ...` | Auswahl der Metriken von Hand (Modus A und B) |
 | `--metric <a>` | die *eine* Metrik für die Ablation (Modus C) |

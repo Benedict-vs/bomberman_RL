@@ -431,18 +431,40 @@ def plot_forest(entries: list[dict], title: str, xlabel: str, out: Path) -> Path
     return out
 
 
+PRIMARY_COLOUR = "tab:green"      # the agent under test
+OTHER_COLOUR = "lightsteelblue"   # opponents, deliberately muted
+
+
+def primary_agent(rows: list[dict], agent: str | None) -> str | None:
+    """The agent the run is about: the explicit ``--agent``, else slot 0.
+
+    ``evaluate.py`` always puts ours in slot 0, so this picks it out without
+    anyone having to name it.
+    """
+    if agent:
+        return agent
+    return next((r["agent"] for r in rows if r["slot"] == 0), None)
+
+
 def plot_summary(path: Path, metrics: list[str], agent: str | None,
                  n_boot: int, out: Path) -> Path:
-    """Bar chart per metric, one bar per agent, error bars = 95 % bootstrap CI."""
+    """Bar chart per metric, one bar per agent, error bars = 95 % bootstrap CI.
+
+    The agent under test is green, everyone else muted blue -- so it is obvious
+    at a glance which bar the figure is actually about.
+    """
     plt = _pyplot()
 
     rows = load(path)
+    highlight = primary_agent(rows, agent)
     if agent:
         rows = [r for r in rows if r["agent"] == agent]
     by_agent: dict[str, list[dict]] = defaultdict(list)
     for row in rows:
         by_agent[row["agent"]].append(row)
     names = list(by_agent)
+    colours = [PRIMARY_COLOUR if name == highlight else OTHER_COLOUR
+               for name in names]
 
     n = len(metrics)
     cols = min(3, n)
@@ -463,14 +485,26 @@ def plot_summary(path: Path, metrics: list[str], agent: str | None,
             highs.append(high - mean)
 
         ax.bar(range(len(names)), means, yerr=[lows, highs], capsize=4,
-               color="tab:blue", alpha=0.85)
+               color=colours, alpha=0.9)
         ax.set_xticks(range(len(names)))
         ax.set_xticklabels(names, rotation=30, ha="right", fontsize=8)
+        # bold tick label too, so the highlight survives greyscale printing
+        for tick, name in zip(ax.get_xticklabels(), names):
+            if name == highlight:
+                tick.set_fontweight("bold")
         ax.set_title(label, fontsize=10)
         ax.grid(axis="y", alpha=0.3)
 
     for index in range(n, plot_rows * cols):       #  blank out unused panels
         axes[index // cols][index % cols].axis("off")
+
+    if highlight is not None and len(names) > 1:
+        handles = [
+            plt.Rectangle((0, 0), 1, 1, color=PRIMARY_COLOUR,
+                          label=f"{highlight} (tested)"),
+            plt.Rectangle((0, 0), 1, 1, color=OTHER_COLOUR, label="opponents"),
+        ]
+        axes[0][0].legend(handles=handles, fontsize=8, loc="best", framealpha=0.9)
 
     n_rounds = len({r["round"] for r in rows})
     fig.suptitle(f"{path.stem} — {n_rounds} rounds, mean with 95 % bootstrap CI",

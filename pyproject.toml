@@ -11,6 +11,7 @@ dependencies = [
     # GUI and progress bars (spec-recommended)
     "pygame",
     "tqdm",
+    "matplotlib>=3.11.1",
 ]
 
 # Add training-only libraries as we need them, e.g.:
