@@ -5,6 +5,11 @@ from typing import List
 
 import events as e
 from .callbacks import state_to_features
+try:
+    from tools.trainlog import TrainLogger
+except ImportError:          # tools/ ist nicht Teil der Abgabe
+    TrainLogger = None
+
 
 # This is only an example!
 Transition = namedtuple('Transition',
@@ -29,6 +34,19 @@ def setup_training(self):
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
+    def setup_training(self):
+    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
+
+    # loggin for visualization of training progress
+    self.trainlog = TrainLogger(
+        agent="schmaxi_coin_collector",
+        #----CHANGE EACH RUN TO A NEW NAME, OTHERWISE TRAINING DATA WILL BE OVERWRITTEN
+        run="q_v1_task1",      # saved in results/ folder
+        #----CHANGE EACH RUN TO A NEW NAME, OTHERWISE TRAINING DATA WILL BE OVERWRITTEN       
+        hyperparams={"alpha": 0.1, "gamma": 0.95, "eps_decay": 0.9995},
+    ) if TrainLogger else None
+    self.episode_events = []                 #collects events for the current episode
+    self.episode_reward = 0.0
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -57,6 +75,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # state_to_features is defined in callbacks.py
     self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
 
+    reward = reward_from_events(self, events) #documentation of rewards 
+    self.episode_events.extend(events)
+    self.episode_reward += reward
+
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -77,6 +99,23 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # Store the model
     with open("my-saved-model.pt", "wb") as file:
         pickle.dump(self.model, file)
+
+  #logging for trainlog.py -- visualization of training progress
+    if self.trainlog:
+        self.episode_events.extend(events)
+        self.episode_reward += reward_from_events(self, events)
+        self.trainlog.log_episode(
+            episode=last_game_state["round"],
+            score=last_game_state["self"][1],
+            steps=last_game_state["step"],
+            events=self.episode_events,
+            reward=self.episode_reward,
+            epsilon=self.epsilon,           
+        )
+    self.episode_events = []
+    self.episode_reward = 0.0
+
+    
 
 
 def reward_from_events(self, events: List[str]) -> int:
