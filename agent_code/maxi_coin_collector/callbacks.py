@@ -3,6 +3,7 @@ import pickle
 import random
 
 import numpy as np
+from .features import state_to_features
 
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -41,39 +42,30 @@ def act(self, game_state: dict) -> str:
     :param game_state: The dictionary that describes everything on the board.
     :return: The action to take as a string.
     """
-    # todo Exploration vs exploitation
-    random_prob = .1
-    if self.train and random.random() < random_prob:
-        self.logger.debug("Choosing action purely at random.")
-        # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+    features = state_to_features(game_state)
+
+    #epsilon value from train.py, if not training set to 0.0, so no exploration
+    epsilon = getattr(self, 'epsilon', 0.0) if self.train else 0.0
+    
+    #exploration 
+    if self.train and random.random() < epsilon:
+        self.logger.debug("Exploration: Choosing random action.")
+        return np.random.choice(ACTIONS)
+
+    #if first time seeing state, initialize Q-values for all actions to 0
+    if features not in self.model:
+        self.model[features] = np.zeros(len(ACTIONS))
+
+    #exploitation 
+    q_values = self.model[features]
+
+    #if tie between multiple actions, randomly choose one of the best actions
+    max_q = np.max(q_values)
+    best_actions = [i for i, q in enumerate(q_values) if q == max_q]
+    chosen_action_index = random.choice(best_actions)
+
 
     self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.model)
+    return ACTIONS[chosen_action_index]
 
 
-def state_to_features(game_state: dict) -> np.array:
-    """
-    *This is not a required function, but an idea to structure your code.*
-
-    Converts the game state to the input of your model, i.e.
-    a feature vector.
-
-    You can find out about the state of the game environment via game_state,
-    which is a dictionary. Consult 'get_state_for_agent' in environment.py to see
-    what it contains.
-
-    :param game_state:  A dictionary describing the current game board.
-    :return: np.array
-    """
-    # This is the dict before the game begins and after it ends
-    if game_state is None:
-        return None
-
-    # For example, you could construct several channels of equal shape, ...
-    channels = []
-    channels.append(...)
-    # concatenate them as a feature tensor (they must have the same shape), ...
-    stacked_channels = np.stack(channels)
-    # and return them as a vector
-    return stacked_channels.reshape(-1)
