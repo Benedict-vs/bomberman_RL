@@ -112,5 +112,9 @@ replays/
 results/
 
 final_project.pdf
+
+# scratchpad
+/scratchpad
+
 # macOS
 .DS_Store
