@@ -1,22 +1,20 @@
-from collections import namedtuple, deque
-
-import pickle
+import numpy as np
 from typing import List
-
 import events as e
-from .callbacks import state_to_features
+from .callbacks import state_to_features, ACTIONS, MODEL_FILE
 
-# This is only an example!
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
 
-# Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
+# # Hyper parameters -- DO modify
+# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
+# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
+# # Events
+# PLACEHOLDER_EVENT = "PLACEHOLDER"
 
+STEP_COST = -0.1  # cost of taking a step, to encourage shorter paths
+
+ALPHA = 0.1         # learning rate
+GAMMA = 0.9         # discount factor
 
 def setup_training(self):
     """
@@ -28,8 +26,10 @@ def setup_training(self):
     """
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
-    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
-
+    self.eps = 0.2
+    self.alpha = ALPHA
+    self.gamma = GAMMA
+    
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -48,15 +48,25 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param new_game_state: The state the agent is in now.
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
-    self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
+    # self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
 
-    # Idea: Add your own events to hand out rewards
-    if ...:
-        events.append(PLACEHOLDER_EVENT)
+    # # Idea: Add your own events to hand out rewards
+    # if ...:
+    #     events.append(PLACEHOLDER_EVENT)
 
-    # state_to_features is defined in callbacks.py
-    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
+    # # state_to_features is defined in callbacks.py
+    # self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
 
+    if old_game_state is None:
+        return
+    
+    s = state_to_features(old_game_state)
+    s_next = state_to_features(new_game_state)
+    a = ACTIONS.index(self_action)
+    reward = reward_from_events(self, events)
+    
+    td_target = reward + self.gamma * np.max(self.q[s_next])
+    self.q[s, a] += self.alpha * (td_target - self.q[s, a])
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -71,29 +81,33 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     :param self: The same object that is passed to all of your callbacks.
     """
-    self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
+    # self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
+    # self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
 
-    # Store the model
-    with open("my-saved-model.pt", "wb") as file:
-        pickle.dump(self.model, file)
+    # # Store the model
+    # with open("my-saved-model.pt", "wb") as file:
+    #     pickle.dump(self.model, file)
+    
+    s = state_to_features(last_game_state)
+    a = ACTIONS.index(last_action)
+    reward = reward_from_events(self, events)
+    
+    td_target = reward                  # no next state, so no future reward
+    self.q[s, a] += self.alpha * (td_target - self.q[s, a])
 
+    np.save(MODEL_FILE, self.q)
 
-def reward_from_events(self, events: List[str]) -> int:
+def reward_from_events(self, events: List[str]) -> float:
     """
     *This is not a required function, but an idea to structure your code.*
 
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    game_rewards = {
-        e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-        PLACEHOLDER_EVENT: -.1  # idea: the custom event is bad
+    
+    rewards = {
+        e.COIN_COLLECTED: 5,
+        e.INVALID_ACTION: -1,
+        e.WAITED: -0.1,
     }
-    reward_sum = 0
-    for event in events:
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
-    self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    return reward_sum
+    return sum(rewards.get(ev, 0.0) for ev in events) + STEP_COST
