@@ -30,7 +30,7 @@ REWARDS = {
 }
 
 # Change this per experiment: the training log is appended to, not overwritten.
-RUN_NAME = "q_v2_task1"
+RUN_NAME = "q_v4_task1"
 
 
 def setup_training(self):

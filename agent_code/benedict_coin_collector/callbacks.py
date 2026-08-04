@@ -7,7 +7,9 @@ MODEL_FILE = os.path.join(os.path.dirname(__file__), "q_table.npy")
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
-FEATURE_SIZES = (2, 2, 2, 2, 3, 3) # 4 wall bits + sgn(delta x), sgn(delta y)
+FEATURE_SIZES = (2, 2, 2, 2, 7, 7) # 4 wall bits + dx, dy clipped to [-3, 3]
+
+COIN_CLIP = 3
 
 N_STATES = int(np.prod(FEATURE_SIZES))
 
@@ -26,9 +28,10 @@ def state_to_features(game_state: dict) -> int | None:
     
     if coins:
         cx, cy = min(coins, key=lambda c: (abs(c[0] - x) + abs(c[1] - y)))  # Manhattan distance to closest coin
-        direction = (int(np.sign(cx - x)) + 1, int(np.sign(cy - y)) + 1)    # (0, 1, 2) for (-1, 0, 1)
+        direction = (int(np.clip(cx - x, -COIN_CLIP, COIN_CLIP)) + COIN_CLIP,  # shift to [0, 2*COIN_CLIP] for encoding
+                     int(np.clip(cy - y, -COIN_CLIP, COIN_CLIP)) + COIN_CLIP)
     else:
-        direction = (1, 1)  # no coins, so no direction
+        direction = (COIN_CLIP, COIN_CLIP)  # offset (0, 0)
     
     # free tiles are 0, stone is -1, crates are 1
     # != 0 means it works for task 2 when crates appear

@@ -21,6 +21,97 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E04 — Give the coin feature a sense of distance
+
+- **Question:** E03 removed every death, so the agent now has all 400 steps available —
+  and uses almost none of them. Replaying the trained policy shows it walking back and
+  forth between two tiles. Does the agent need to know *how far* the coin is, not just
+  which way?
+- **The observation that prompted this.** Rebuilding the greedy policy from the v3 table
+  and simulating 300 rounds (the `coin-heaven` field is deterministic, so only coin
+  placement varies):
+
+  | | |
+  |---|---|
+  | rounds entering an **absorbing** loop | **300 / 300** |
+  | median step at which the loop starts | **37** |
+  | coins collected before the loop | 18.4 |
+  | coins collected after it | **0** |
+  | simulated coins/round | 18.4 (measured 16.7 — the model reproduces reality) |
+
+  The agent is productive for roughly 40 of its 400 steps. The remaining 90 % of every
+  round is spent oscillating. That is a far larger effect than anything left in the
+  reward function.
+
+- **Why the loop is absorbing.** A deterministic memoryless policy has an eventually
+  periodic trajectory — that much is unavoidable. What makes it *permanent* is that the
+  loop passes over no coin, so the coin set never changes, so the state never changes.
+  And the two tiles are indistinguishable because **`sgn(Δ)` carries no distance
+  information**: it is scale-free, identical whether the coin is 2 tiles away or 12.
+  Neither cell of the 2-cycle knows it is the closer one.
+
+- **Change from E03:** exactly one. `sgn(Δx), sgn(Δy)` → **Δx, Δy clipped to [−3, +3]**,
+  i.e. 7 × 7 = 49 values instead of 9. `FEATURE_SIZES = (2,2,2,2,7,7)`, 784 rows.
+  Everything else identical: α = 0.1 · γ = 0.9 · ε = 0.2 · coin +5 · `KILLED_SELF` −5 ·
+  `INVALID_ACTION` −1 · `WAITED` −0.1 · step cost −0.1.
+
+  Why this encoding and not a BFS first step: the BFS direction would be the stronger fix,
+  but on `coin-heaven` it is essentially *the optimal policy*, and the task description
+  forbids a feature that returns the best action. The clipped offset hands the model the
+  information it needs to learn routing without handing it the answer. It also **subsumes**
+  the sign feature — outside the ±3 box it degrades to the same coarse direction — so it
+  cannot carry less information than what it replaces.
+
+- **Agent:** `benedict_coin_collector` v4 · commit `<to be filled in>`
+- **Training:** 10 000 rounds, `coin-heaven`, no opponents, `run = q_v4_task1`.
+  295 reachable rows × 6 = 1770 live cells; training episodes still end at ≈ 51 steps
+  (ε forces a bomb every ~30 steps even though the greedy policy never bombs), so the
+  sample rule gives 50 · 1770 / (51 · 0.2) ≈ 8700. Round up to 10 000.
+- **Measurement:** `results/eval/benedict_q_v4__task1.csv`, 300 rounds, seed 20260731,
+  paired against `benedict_q_v3__task1.csv`.
+
+### Prediction (written before the run)
+
+1. **Loops stop being universal.** Re-running the simulation on the v4 table: fewer than
+   100 of 300 rounds enter an absorbing loop, and the median entry step moves past 150.
+   This is the primary prediction — it is the mechanism the change targets, and it is
+   checkable without a 300-round evaluation.
+2. **`coins` between 25 and 35** (from 16.703). If loops largely disappear the agent has
+   ~10× the productive steps but faces the diminishing-return effect noted in E03: the
+   later the coin, the further away it is. I do not expect anything near 50.
+3. **295 of 784 rows occupied.** Counted in advance over all (tile, coin) pairs *including
+   a coin on the agent's own tile* — the case whose omission made the E02 count wrong.
+4. **Regression guards: `suicides` stays 0.000 and `steps` stays ≈ 400.** The feature
+   change touches nothing about bombs. If suicides return, the extra rows have diluted the
+   data enough that `BOMB` wins some row by noise again, which would mean 10 000 rounds is
+   still too few.
+5. **`invalid` stays around 0.08.**
+6. **Not predicted to be fixed: the training/evaluation mismatch.** Training episodes end
+   at ~51 steps, so the agent still learns almost exclusively from the opening of a round
+   and barely sees the late-round regime (few coins, all far away) in which it spends most
+   of its evaluation time. That is E05 (ε decay), deliberately not bundled here.
+
+### Result
+
+| Metric | v3 | v4 | Paired difference | 95 % CI | Verdict |
+|---|---|---|---|---|---|
+| `coins` | 16.703 | | | | |
+| `steps` | 399.1 | | | | |
+| `invalid` | 0.08 | | | | |
+| `suicides` | 0.000 | | | | |
+| rounds entering a loop (sim.) | 300/300 | | | | |
+| occupied rows | 66 / 67 | | | | |
+
+### Verdict
+
+*(filled in after the measurement)*
+
+### What I do next
+
+*(filled in after the measurement)*
+
+---
+
 ## E03 — Penalise `KILLED_SELF`
 
 - **Question:** E02 left the agent dead for 40 % of the round, 42.7 % of it by its own
