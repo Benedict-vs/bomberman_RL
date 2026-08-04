@@ -140,9 +140,12 @@ uv run python tools/trainlog.py results/train/*.csv --metric score
 Opponent presets for `--opponents`: `none`, `random`, `peaceful`, `coin_collector`, `mixed`,
 `rule_based` (mapped to the task ladder below).
 
-**Open item:** `results/` is currently in `.gitignore`, so our measurements are not versioned.
-The CSVs are small and are the evidence for the report's most important chapter — team decision
-pending, see `KONZEPT.md` §6.7. Do not change `.gitignore` unilaterally.
+**Measurements are versioned** (settled 2026-08-04, was the open item in `KONZEPT.md` §6.7).
+`.gitignore` now excludes only `results/figures/`; `results/eval/` and `results/train/` are
+committed. They are small text files and they are the evidence for the report's most important
+chapter. Training logs especially: `--seed` fixes the arenas but *not* the agent's exploration
+RNG, so a lost learning curve cannot be reproduced, only replaced by a different one. Figures
+stay ignored — they are pure functions of the CSVs.
 
 ## Task ladder (subsets of each other)
 1. `coin-heaven`, no crates/opponents → efficient navigation to revealed coins.
@@ -174,5 +177,10 @@ pending, see `KONZEPT.md` §6.7. Do not change `.gitignore` unilaterally.
 - `tools/` holds our measurement chain; it is **not** submitted, so nothing in
   `agent_code/<name>/callbacks.py` may import from it.
 - `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
+- `experiments/<person>.md` is the hand-written results ledger: one entry per experiment with
+  question, change, **prediction written before the run**, commit hash, numbers and verdict.
+  The CSVs are raw data; this is the narrative the report's Experiments chapter is built from,
+  and nothing in `tools/` can reconstruct it after the fact. Same ownership rule as the
+  logbooks — only append to your own.
 - Restore original `settings.py` values before submitting if changed for training.
   `tools/evaluate.py` records the active settings in its `.meta.json` so a mismatch is visible.
