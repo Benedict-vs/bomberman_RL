@@ -95,20 +95,102 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 | Metric | v3 | v4 | Paired difference | 95 % CI | Verdict |
 |---|---|---|---|---|---|
-| `coins` | 16.703 | | | | |
-| `steps` | 399.1 | | | | |
-| `invalid` | 0.08 | | | | |
-| `suicides` | 0.000 | | | | |
-| rounds entering a loop (sim.) | 300/300 | | | | |
-| occupied rows | 66 / 67 | | | | |
+| `coins` | 16.703 | **46.107** | +29.403 | [+27.627, +31.200] | BETTER |
+| `steps` | 399.1 | 176.5 | −222.620 | [−234.790, −209.647] | see below |
+| `invalid` | 0.08 | 0.12 | +0.040 | [−0.010, +0.090] | no effect shown |
+| `suicides` | 0.000 | 0.010 | +0.010 | [+0.000, +0.023] | no effect shown |
+| `survived` | 1.000 | 0.990 | −0.010 | [−0.023, +0.000] | no effect shown |
+| occupied rows | 66 / 67 | **295 / 295** | — | — | — |
+
+**46.1 of 50 coins.** Nearly triple E03, and the CI is nowhere near zero.
+
+### `steps` did not get worse — the metric inverts here
+
+`environment.py:289`: with one agent left, no crates, no collectable coins and no bombs,
+the round is wrapped up. On `coin-heaven` with a single agent that means **the round ends
+the moment the last coin is collected**. So `steps` is not survival time, it is completion
+time, and it fell because the agent now finishes the task instead of wandering to step 400.
+`analyze.py` labels it WORSE because the metric table declares "higher is better", which is
+correct on every other rung and wrong on this one.
+
+The breakdown makes it unambiguous:
+
+| | rounds | coins | steps |
+|---|---|---|---|
+| collected **all 50** | **242 / 300** | 50 | median **128** (106–154) |
+| did not finish | 58 / 300 | 29.9 | 379.6 |
+| died | 3 / 300 | 2–3 | 5 |
+
+81 % of rounds are a clean sweep in ~128 steps. The distribution is bimodal, not spread:
+the agent either solves the arena or gets stuck in the far field.
+
+### Predictions, scored
+
+1. **"Fewer than 100 of 300 loop, median entry past 150" — badly framed, not just wrong.**
+   Still 300/300, median entry step 129. But the median number of coins *remaining* at loop
+   entry is **0**: in most rounds the "loop" is the agent standing around after collecting
+   everything, which is not a failure. I picked a proxy metric without checking that it
+   measured what I cared about. The honest version of this prediction is "coins collected
+   before the loop", which went 18.4 → 46.8.
+2. **"`coins` 25–35" — wrong, too pessimistic.** 46.107. I assumed the diminishing-return
+   effect from E03 would bite much harder than it does. Simulation predicted 46.8 against
+   46.1 measured, so the simulator is trustworthy to ~1.5 %.
+3. **"295 of 784 rows occupied" — exactly right.** The counting method finally works,
+   including the coin-on-own-tile case that made E02's count wrong.
+4. **Regression guards — half held.** `suicides` 0.010 and `invalid` 0.12, neither
+   demonstrated as an effect. But one row *does* have `BOMB` as argmax, where I predicted
+   zero. See below; the caveat I attached to this prediction ("the extra rows have diluted
+   the data") was the right worry pointing at the wrong row.
+5. `invalid` unchanged — held.
+
+### The 3 deaths are the E02 collision coming due
+
+```
+row 171  walls(U,R,D,L)=(0,0,1,1)   offset(dx,dy)=(0,0)
+         q = [19.26 18.97 18.80 18.70 19.48 21.14]   argmax BOMB
+```
+
+Walls down and left = the bottom-left corner. Offset `(0,0)` is the ambiguous code flagged
+in E02: it means **either** "no coins left" **or** "a coin is on my own tile". A coin
+spawning under the agent at round start puts it in exactly this row, `BOMB` wins, and it
+dies at step 5 — which is precisely the three rounds that died with 2–3 coins after 5 steps.
+
+In E02 I wrote that the collision's "practical harm is small". It is small — 1 % of rounds —
+but it is no longer hypothetical, and it is the only remaining source of death.
+
+### Why the residual loops happen
+
+100 % of genuine loops (coins still on the board) occur with the nearest coin **further than
+the clip radius**: mean distance 5.0, median 4, against a clip of ±3. Beyond ±3 the feature
+saturates and degrades to exactly what v3 had — coarse direction, no distance. The v3
+failure mode was not removed, it was pushed into the far field, where it now costs 3.9
+coins instead of 30.
 
 ### Verdict
 
-*(filled in after the measurement)*
+**Task 1 is solved for practical purposes.** 46.1/50 coins, 81 % perfect rounds at a median
+of 128 steps, 99 % survival, 0.12 invalid actions per round, 0.1 ms per decision against a
+500 ms budget. The two remaining defects both have named causes rather than being noise.
 
 ### What I do next
 
-*(filled in after the measurement)*
+1. **Do not chase the last 3.9 coins.** The fix is known — non-linear binning
+   (`{0, ±1, ±2, ±3, ±(4–6), ±(7+)}`, 11 values per axis, 1936 rows) would give far-field
+   discrimination without a ±6 clip's 2704 rows. It goes in the report as the identified
+   next step. The effort belongs on task 2.
+2. **Fix the `(0,0)` collision** whenever φ is next touched: "no coins left" and "coin on my
+   own tile" need separate codes. Cheapest as a separate flag rather than an eighth offset
+   value.
+3. **E05: ε decay.** Unaffected by any of this and now the largest structural problem.
+   Training episodes end at ~51 steps because ε forces a bomb every ~30, while evaluation
+   runs 128–400. The agent learns almost entirely from the opening of a round. This will get
+   worse on task 2, where surviving longer *is* the task.
+4. **Then task 2 with a danger feature** — the case where E03's max-bootstrap argument
+   actually applies, because there the agent must bomb a crate and genuinely run away.
+5. **Measurement-chain note for the team:** `analyze.py` treats `steps` as
+   higher-is-better. On task 1 with a single agent that is backwards, because the round
+   ends on completion. Worth a footnote in `tools/README.md` rather than a code change —
+   the direction is right for rungs 2–4.
 
 ---
 

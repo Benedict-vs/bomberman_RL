@@ -1,0 +1,41 @@
+{
+  "agent": "benedict_coin_collector",
+  "columns": [
+    "episode",
+    "wall_clock_s",
+    "score",
+    "steps",
+    "reward",
+    "epsilon",
+    "COIN_COLLECTED",
+    "CRATE_DESTROYED",
+    "COIN_FOUND",
+    "KILLED_OPPONENT",
+    "KILLED_SELF",
+    "GOT_KILLED",
+    "SURVIVED_ROUND",
+    "INVALID_ACTION",
+    "BOMB_DROPPED",
+    "WAITED",
+    "td_error"
+  ],
+  "git_commit": "ddad2d7",
+  "history": [],
+  "hyperparams": {
+    "alpha": 0.1,
+    "eps": 0.2,
+    "features": "4 wall bits + 2 coin direction bits",
+    "gamma": 0.9,
+    "n_states": 784,
+    "rewards": {
+      "COIN_COLLECTED": 5,
+      "INVALID_ACTION": -1,
+      "KILLED_SELF": -5,
+      "WAITED": -0.1
+    },
+    "step_cost": -0.1
+  },
+  "python": "3.12.13",
+  "run": "q_v4_task1",
+  "started_utc": "2026-08-04T14:28:00+00:00"
+}
