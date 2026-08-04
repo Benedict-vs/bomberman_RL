@@ -109,7 +109,12 @@ screenshots/*.mp4
 screenshots/*.webm
 
 replays/
-results/
+
+# Measurements are the evidence for the report's Experiments chapter and are
+# small text files -- they stay versioned. Training logs in particular cannot be
+# reproduced: --seed fixes the arenas, not the agent's exploration RNG.
+# Figures are pure functions of the CSVs, so they are not worth versioning.
+results/figures/
 
 final_project.pdf
 
