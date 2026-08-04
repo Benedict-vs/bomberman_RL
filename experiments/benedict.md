@@ -21,6 +21,88 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E03 — Penalise `KILLED_SELF`
+
+- **Question:** E02 left the agent dead for 40 % of the round, 42.7 % of it by its own
+  bomb. Nothing in the reward function says dying is bad — the only pressure against
+  `BOMB` is structural (the episode ends, so the terminal update carries no bootstrap
+  term), and in the aliased row 93 that pressure was worth 0.02. Does saying it out loud
+  fix it?
+- **Change from E02:** exactly one entry, `e.KILLED_SELF: -5`. Everything else identical:
+  φ unchanged (144 rows), α = 0.1 · γ = 0.9 · ε = 0.2 · coin +5 · `INVALID_ACTION` −1 ·
+  `WAITED` −0.1 · step cost −0.1.
+  Magnitude chosen deliberately equal to one coin: dying should cost about what the agent
+  is chasing. Not tuned — if the sign of the effect is right and the size is not, that is
+  a separate, later question.
+- **Agent:** `benedict_coin_collector` v3 · commit `<to be filled in>`
+- **Training:** 5000 rounds, `coin-heaven`, no opponents, `run = q_v3_task1`.
+- **Measurement:** `results/eval/benedict_q_v3__task1.csv`, 300 rounds, seed 20260731,
+  paired against `benedict_q_v2__task1.csv`.
+
+### Prediction (written before the run)
+
+**I expect this to fail, and the reason is the point of the experiment.**
+
+The bomb kills four steps after it is dropped:
+`s0 --BOMB--> s1 --a1--> s2 --a2--> s3 --a3--> dead`.
+
+- The update for the `BOMB` action is `Q(s0,BOMB) <- r + γ·max_a Q(s1,a)`, where `r` is
+  only the step cost — `BOMB_DROPPED` is not in the reward table. And **φ contains no
+  bomb information**: `s1` is four wall bits plus a coin direction, indistinguishable from
+  a state with no bomb anywhere. So `max Q(s1,·)` stays around 9 and `Q(s0,BOMB)` stays
+  around 8. The new penalty never touches the action that caused the death.
+- The −5 lands on the terminal update instead, `Q(s3,a3) <- −5.1`, where `a3` is some
+  ordinary move. It does not propagate backwards, because Q-learning bootstraps with
+  **max**: only `a3` was depressed, the other five actions in `s3` are untouched, and `s3`
+  is aliased with safe states in which those actions really are good. So `max Q(s3,·)`
+  hardly moves.
+- Net: −5 smeared over whichever arbitrary state the agent happened to die in, once per
+  episode. That is close to a uniform downward offset on Q, and uniform offsets do not
+  change argmaxes.
+
+Concretely:
+
+1. **`suicides` stays high — I predict above 0.30**, against 0.427 in E02. A drop to near
+   zero would refute the whole argument above, and I would want to understand why before
+   trusting it.
+2. **`steps` and `coins` therefore change little.** If `coins` jumps to ~21 (the E02
+   extrapolation), the mechanism reasoning is wrong.
+3. **All Q-values shift downward roughly uniformly.** Visible by comparing row means
+   against the v2 table. That is the offset, not learning.
+4. **Row 93 stays flat.** Whether `BOMB` remains its argmax is a coin flip — its margin
+   was 0.02, i.e. noise. Either outcome is consistent with the prediction; what matters
+   is that the *spread* in that row stays small, because no information was added.
+5. `invalid` stays around 1.85 — untouched by this change.
+
+**If the prediction holds**, the conclusion for the report is the general one:
+*an agent cannot learn to avoid a hazard its state representation cannot see.* With
+optimistic max-bootstrapping, credit for a delayed death cannot flow back through states
+that look safe. That is an argument for a danger feature, not for a bigger penalty, and
+task 2 needs one regardless.
+
+**If it fails to hold**, the alternative deliberately not tried here is `BOMB_DROPPED: −X`,
+which lands directly on `(s, BOMB)` and needs no propagation at all — but which makes
+bombing unconditionally bad and would have to be undone from task 2 on.
+
+### Result
+
+| Metric | v2 | v3 | Paired difference | 95 % CI | Verdict |
+|---|---|---|---|---|---|
+| `suicides` | 0.427 | | | | |
+| `steps` | 241.9 | | | | |
+| `coins` | 12.823 | | | | |
+| `invalid` | 1.85 | | | | |
+
+### Verdict
+
+*(filled in after the measurement)*
+
+### What I do next
+
+*(filled in after the measurement)*
+
+---
+
 ## E02 — Münzrichtung im Zustand
 
 - **Frage:** E01 hat gezeigt, dass ein ortsblinder Agent 1,35 von 50 Münzen holt und in

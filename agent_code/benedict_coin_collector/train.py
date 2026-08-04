@@ -26,6 +26,7 @@ REWARDS = {
     e.COIN_COLLECTED: 5,
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
+    e.KILLED_SELF: -5,
 }
 
 # Change this per experiment: the training log is appended to, not overwritten.
