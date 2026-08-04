@@ -124,8 +124,11 @@ def git_commit() -> str:
             cwd=REPO_ROOT, capture_output=True, text=True, timeout=5,
         )
         head = out.stdout.strip() or "unknown"
+        # Exclude our own output directory: the CSV this run is about to write
+        # is untracked while the run happens, so counting it would stamp every
+        # single run "-dirty" and make the marker useless.
         dirty = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain", "--", ":(exclude)results"],
             cwd=REPO_ROOT, capture_output=True, text=True, timeout=5,
         ).stdout.strip()
         return f"{head}-dirty" if dirty else head
