@@ -30,7 +30,10 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
   `(2,2,2,2,3,3)`; die beiden neuen Ziffern sind `sgn(Δx)` und `sgn(Δy)` zur nächsten
   Münze, auf `{0,1,2}` verschoben. **Alles andere bleibt gleich:** α = 0,1 · γ = 0,9 ·
   ε = 0,2 · Münze +5 · `INVALID_ACTION` −1 · `WAITED` −0,1 · Schrittkosten −0,1.
-- **Agent:** `benedict_coin_collector` v2 · Commit `<wird nachgetragen>`
+- **Agent:** `benedict_coin_collector` v2 · Code-Commit `8ea6204`
+  (Der `.meta.json`-Stempel des Messlaufs lautet `8ea6204-dirty`: Das Training schreibt
+  `q_table.npy` neu, und die Datei ist versioniert. Ab E03 erst das trainierte Modell
+  committen, dann messen — sonst ist jeder Stempel nach einem Training „dirty".)
   - Q-Tabelle 144 × 6
   - „Nächste" Münze über **Manhattan-Distanz**, nicht über den tatsächlichen Weg.
     Bewusst so: Auf `coin-heaven` sind die einzigen Hindernisse die festen Säulen auf
@@ -94,22 +97,110 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
    wird sich auf eine Seite festlegen. Das ist genau das Argument für die BFS-Richtung
    als nächstes Experiment, und ich will es als Zahl sehen, bevor ich es behebe.
 
-### Ergebnis
+### Result
 
-| Metrik | v1 | v2 | Differenz (gepaart) | 95-%-KI |
-|---|---|---|---|---|
-| `coins` | 1,353 | | | |
-| `steps` | 400,0 | | | |
-| `invalid` | 0,00 | | | |
-| `moves` = 0 (Runden) | 70 | | | |
+*(From here on this ledger is written in English.)*
 
-### Urteil
+Paired over 300 identical arenas, `results/eval/benedict_q_v2__task1.csv`:
 
-*(wird nach der Messung ausgefüllt)*
+| Metric | v1 | v2 | Paired difference | 95 % CI | Verdict |
+|---|---|---|---|---|---|
+| `coins` | 1.353 | **12.823** | **+11.470** | [+10.280, +12.707] | BETTER |
+| `steps` | 400.0 | 241.9 | −158.060 | [−178.353, −137.620] | WORSE |
+| `invalid` | 0.00 | 1.85 | +1.853 | [+1.633, +2.077] | WORSE |
+| rounds with `moves` = 0 | 70 | **0** | −70 | — | — |
+| `suicides` | 0.000 | 0.427 | +0.427 | [0.373, 0.480] | WORSE |
+| occupied rows | 11 / 11 | 66 / 67 | — | — | — |
 
-### Was ich daraus mache
+**Coins up by a factor of 9.5, CI nowhere near zero.** On the primary task-1 metric the
+feature is a demonstrated improvement. The two WORSE rows are not a regression of
+something v1 did well — they are new failure modes that only became *possible* once the
+agent started moving. v1 scored 400 steps and 0 invalid actions by standing still or
+walking in a fixed cycle, which is a degenerate way to look perfect.
 
-*(wird nach der Messung ausgefüllt)*
+### Predictions, scored
+
+1. **The 70 zero-move rounds vanish — confirmed exactly, 70 → 0.** The `WAIT` trap was
+   a symptom of the missing feature, as argued, and it disappeared without being patched.
+   Deciding in advance *not* to fix it directly is what makes this a measurement.
+2. **`coins` 15–25 — nominally wrong (12.8), in substance right.** 12.823 coins in
+   241.9 steps is 0.053 coins/step; over a full 400-step round that is ≈ 21 coins, inside
+   the predicted band. The navigation estimate was fine. What I failed to predict is that
+   the agent would be dead for 40 % of the round. The prediction was not too optimistic
+   about steering — it was blind to a second failure mode.
+3. **`invalid` stays at 0.00 — wrong.** 1.85 per round. See the diagnosis below; the
+   cause is not undertraining, which is what I had assumed the risk was.
+4. **67 occupied rows — 66.** Row 13 (walls (0,0,0,1), direction (0,0)) was never entered
+   in 5000 training episodes. Everything visited was reachable; nothing unreachable was
+   visited. Off by one, and the one is explained.
+5. **`KILLED_SELF` ≈ 1.0 per training episode — held.**
+6. **Sign features under-specify at pillars — confirmed, and worse than predicted.**
+   I expected wasted steps. It causes deaths. See below.
+
+### Diagnosis: where the two WORSE columns come from
+
+**The 42.7 % suicide rate is one row.**
+
+```
+row 93  walls(U,R,D,L)=(1,0,1,0)  dir=(0,-1)   q = [8.42 8.63 8.85 8.30 9.13 9.15]
+                                                    UP  RIGHT DOWN LEFT WAIT BOMB
+```
+
+An east-west corridor with the coin straight overhead. The feature says "up", `UP` is a
+wall, and `sgn(dx) = 0` expresses no left/right preference — so the agent has literally
+no information about which way to go around. All six values lie inside a 0.85 band: the
+state is aliased, no action is reliably better, and `BOMB` won the tie by **0.02**. This
+is exactly prediction 6, but the consequence is death rather than a detour, because
+nothing in the reward function says that dying is bad. The only pressure against `BOMB`
+is structural — the episode ends, so the terminal update carries no bootstrap term.
+0.02 is all that structural pressure has left after the coin reward inflates the row.
+
+**The 1.85 invalid actions are the `(0,0)`-direction rows**, 85 and 112, both with `UP`
+as argmax while `UP` is blocked. Rarely visited, so noise decides — not undertraining in
+the sense I predicted, but a genuinely information-free state.
+
+**Correction to my own pre-run check.** In the prediction I recorded that direction
+`(0,0)` cannot occur with a non-empty coin list, and called that "verified, not assumed".
+The verification was circular: the enumeration filtered with `c != p`, which excludes the
+one case at issue — a coin sitting on the agent's own tile. Re-run without the filter, all
+11 `(0,0)` rows are reachable **both** via a real coin and via an empty coin list. So the
+digit pair `(1,1)` is a **collision**, not a free slot. Practical harm is small (both cases
+mean "no direction information") and the row count is unaffected (both routes reach the
+same rows, so 67 stands). But it is an ambiguity in the feature map, it is now documented,
+and it is a candidate cause if those rows keep misbehaving.
+Lesson worth keeping: a check that filters out the case it is meant to test always passes.
+
+### Verdict
+
+**BETTER on the primary metric, and the feature works as designed.** Coins ×9.5, the
+`WAIT` trap gone, the state space populated as counted. The agent navigates.
+
+Both regressions trace to states in which the sign feature carries no usable information,
+and they split cleanly into two independent causes:
+
+- **a reward problem** — nothing penalises `KILLED_SELF`, so in a flat row `BOMB` is only
+  0.02 away from winning;
+- **a feature problem** — `sgn(dx) = 0` with the wanted direction blocked is an
+  information-free state by construction.
+
+### What I do next
+
+1. **E03: penalise `KILLED_SELF`.** One constant, no feature change — the cheapest possible
+   controlled experiment, and it targets the larger of the two effects directly. Prediction
+   to write beforehand: `suicides` collapses toward 0, `steps` returns toward 400, and
+   `coins` lands near 21 (the extrapolation above). If `coins` does *not* reach ~21, my
+   model of what is limiting the agent is wrong.
+2. **E04: better direction encoding.** Only after E03, so the two causes stay separable.
+   The obvious candidate is a BFS first step, but that is close to "a feature that returns
+   the best action", which the task description forbids — on `coin-heaven` it would
+   essentially *be* the optimal policy. Better options to weigh: which of the four
+   neighbours reduces the BFS distance (4 bits, still a learned choice), or keeping the
+   sign feature and adding the tie-break information it is missing.
+3. **Watch row 13.** Reachable but never visited. Harmless now; worth rechecking after
+   E03 changes how long episodes last.
+4. **Still open from E01:** ablate `COIN_COLLECTED` +5 against the game's actual +1.
+   Now that there is behaviour for the reward to act on, this has become meaningful —
+   and after E03 there will be a second reward constant whose balance against it matters.
 
 ---
 
