@@ -88,18 +88,91 @@ bombing unconditionally bad and would have to be undone from task 2 on.
 
 | Metric | v2 | v3 | Paired difference | 95 % CI | Verdict |
 |---|---|---|---|---|---|
-| `suicides` | 0.427 | | | | |
-| `steps` | 241.9 | | | | |
-| `coins` | 12.823 | | | | |
-| `invalid` | 1.85 | | | | |
+| `coins` | 12.823 | **16.703** | +3.880 | [+2.457, +5.253] | BETTER |
+| `steps` | 241.9 | **399.1** | +157.163 | [+137.120, +177.540] | BETTER |
+| `invalid` | 1.85 | **0.08** | −1.770 | [−1.993, −1.550] | BETTER |
+| `suicides` | 0.427 | **0.000** | −0.427 | [−0.480, −0.373] | BETTER |
+| `survived` | 0.573 | **1.000** | +0.427 | [+0.373, +0.480] | BETTER |
+| rows with `BOMB` as argmax | 2 | **0** | — | — | — |
+
+**Every prediction I made was wrong.** One reward constant fixed all four problems at once.
+
+### Why the prediction failed
+
+The mechanism argument assumed the agent *walks away* after dropping a bomb, so that the
+death happens four steps later in a state aliased with safe ones, and the penalty cannot
+propagate back through a max-bootstrap. The agent does not walk away.
+
+In v2, `BOMB` was the argmax of row 93. Bombing does not change the wall bits and barely
+changes the coin direction, so the agent is still in row 93 on the next step — and picks
+`BOMB` again. It has no bomb left, so that is an `INVALID_ACTION`, which costs −1 but does
+not move it. It repeats this until its own blast arrives. The evidence is unambiguous:
+
+| | v2 |
+|---|---|
+| rounds that dropped a bomb | 128 of 300 |
+| of those, rounds that died | **128 of 128** |
+| mean `invalid` in those rounds | **4.11** ≈ `BOMB_TIMER` = 4 |
+| `bombs` per round | 0.427 = `suicides` per round, exactly |
+
+So the last action before death was `BOMB` itself, and `end_of_round` wrote the −5 straight
+into `Q(93, BOMB)`. Direct credit assignment — no propagation required. Row 93 went from
+a flat band of 0.85 to a spread of 3.04, `BOMB` fell 9.15 → 7.73, and `LEFT` took over at
+10.34. No row in the table has `BOMB` as its argmax any more, and the agent drops zero
+bombs in 300 evaluation rounds.
+
+Also wrong in detail:
+
+- **Prediction 3 (uniform offset).** The row-mean shift is −1.03 with a standard deviation
+  of 0.80. Not uniform — the change is structured, which is exactly why it worked.
+- **The 1.85 invalid actions in E02 were not mainly the `(0,0)`-direction rows.** They were
+  the repeated `BOMB` attempts: 4.11 per bombing round × 0.427 bombing rounds ≈ 1.76 of the
+  1.85. Rows 85 and 112 account for the 0.08 that remains in v3 — my E02 diagnosis had the
+  right rows but the wrong order of magnitude.
+- **`coins` reached 16.703, not the ~21 I extrapolated.** The extrapolation assumed a
+  constant collection rate. It is not constant: v2 managed 0.053 coins/step over 242 steps,
+  v3 only 0.042 over 399. The more coins are collected, the further away the next one is.
+  Linear extrapolation over a round is optimistic and I should stop using it.
+
+### What survives of the argument
+
+The general claim is still true, but it applies to a case this experiment did not contain:
+
+> With optimistic max-bootstrapping, credit for a *delayed* hazard cannot flow back through
+> states the feature map cannot distinguish from safe ones.
+
+A policy that stands still and repeats the fatal action turns a delayed hazard into an
+immediate one, and then a plain terminal penalty is enough. That is what happened here.
+**On task 2 it will not happen**, because there the agent must bomb a crate and then
+genuinely run away — at which point the death really is four steps and several tiles
+removed from its cause, the intervening states really are aliased with safe ones, and the
+propagation argument applies as written. So a danger feature is still required; E03 simply
+did not test it.
+
+Lesson worth keeping: I reasoned about the mechanism without checking what the policy
+actually does. `bombs` = `suicides` = 0.427 and `invalid` = 4.11 per bombing round were in
+the E02 CSV the whole time and would have refuted the prediction before the run.
 
 ### Verdict
 
-*(filled in after the measurement)*
+**BETTER on every metric, and the strongest single change so far.** Task 1 is effectively
+solved for this feature set: the agent survives all 300 rounds, wastes almost no actions
+(0.08 invalid), and collects 16.7 of 50 coins.
 
 ### What I do next
 
-*(filled in after the measurement)*
+1. **E04: the direction encoding.** With deaths gone, the only remaining limit on task 1 is
+   navigation quality — the aliased states where `sgn(Δx) = 0` and the wanted direction is
+   blocked. Candidate: four bits for "does this neighbour reduce the BFS distance to the
+   nearest coin". Still a learned choice rather than a returned action.
+2. **Re-check `steps` = 399.1, not 400.0.** With zero deaths it should be exactly 400.
+   Small, but E01 and E02 both had exactly-400 rounds, so the 0.9 wants an explanation
+   rather than a shrug.
+3. **The reward balance is now two constants, coin +5 against death −5.** The ablation
+   against the game's real +1 (open since E01) has become more interesting, not less:
+   the ratio is what matters, and neither number is tuned.
+4. **Task 2 needs the danger feature.** Noted above — do not read E03 as evidence that a
+   penalty alone is enough there.
 
 ---
 
