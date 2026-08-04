@@ -7,10 +7,7 @@ MODEL_FILE = os.path.join(os.path.dirname(__file__), "q_table.npy")
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
-# 4 bits for each of the 4 walls
-# each bit is 0 or 1, therefore size 2
-# in the same order as ACTIONS[0:4]
-FEATURE_SIZES = (2, 2, 2, 2)
+FEATURE_SIZES = (2, 2, 2, 2, 3, 3) # 4 wall bits + sgn(delta x), sgn(delta y)
 
 N_STATES = int(np.prod(FEATURE_SIZES))
 
@@ -25,12 +22,19 @@ def state_to_features(game_state: dict) -> int | None:
     
     field = game_state['field']     # indexing is field[x, y]
     x, y = game_state['self'][3]
+    coins = game_state['coins']
+    
+    if coins:
+        cx, cy = min(coins, key=lambda c: (abs(c[0] - x) + abs(c[1] - y)))  # Manhattan distance to closest coin
+        direction = (int(np.sign(cx - x)) + 1, int(np.sign(cy - y)) + 1)    # (0, 1, 2) for (-1, 0, 1)
+    else:
+        direction = (1, 1)  # no coins, so no direction
     
     # free tiles are 0, stone is -1, crates are 1
     # != 0 means it works for task 2 when crates appear
     blocked = tuple(int(field[x + dx, y + dy] != 0) for dx, dy in DELTAS)
     
-    return encode(blocked)
+    return encode(blocked + direction)
 
 def encode(features: tuple[int, ...]) -> int:
     """Flatten a feature tuple to a single Q-table row index (mixed radix).
@@ -38,18 +42,6 @@ def encode(features: tuple[int, ...]) -> int:
     Each feature is one digit whose base is its entry in FEATURE_SIZES, so
     distinct tuples always map to distinct rows in [0, N_STATES). Adding a
     feature only requires extending FEATURE_SIZES.
-
-    With the current layout (2, 2, 2, 2) the digits are the wall bits
-    (U, R, D, L) and the index is just their binary reading:
-
-        (0, 0, 0, 0)  ->   0    open crossing        36 tiles
-        (0, 1, 0, 1)  ->   5    N-S corridor         56 tiles
-        (1, 0, 0, 1)  ->   9    top-left corner       1 tile
-        (1, 0, 1, 0)  ->  10    E-W corridor         56 tiles
-        (1, 1, 1, 1)  ->  15    never occurs          0 tiles
-
-    Only 11 of the 16 rows are reachable in the arena: no tile is blocked
-    on three or four sides.
     """
     
     idx = 0
@@ -67,6 +59,15 @@ def setup(self):
     else:
         self.logger.info(f"Loading Q-table from disk.")
         self.q = np.load(MODEL_FILE)
+
+        # A table left over from an older FEATURE_SIZES would not fail here but
+        # deep inside act(), as an IndexError in the middle of a round.
+        expected = (N_STATES, len(ACTIONS))
+        if self.q.shape != expected:
+            raise ValueError(
+                f"Q-table on disk has shape {self.q.shape}, expected {expected}. "
+                "It was trained with a different feature layout -- retrain."
+            )
 
 
 def act(self, game_state: dict):

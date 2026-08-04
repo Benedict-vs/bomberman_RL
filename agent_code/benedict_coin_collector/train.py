@@ -29,7 +29,7 @@ REWARDS = {
 }
 
 # Change this per experiment: the training log is appended to, not overwritten.
-RUN_NAME = "q_v1_task1"
+RUN_NAME = "q_v2_task1"
 
 
 def setup_training(self):
@@ -54,7 +54,7 @@ def setup_training(self):
         hyperparams={"alpha": ALPHA, "gamma": GAMMA, "eps": EPS,
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
-                     "n_states": len(self.q), "features": "4 wall bits"},
+                     "n_states": len(self.q), "features": "4 wall bits + 2 coin direction bits"},
         extra_columns=["td_error"],
     ) if TrainLogger else None
     self.episode_events = []
