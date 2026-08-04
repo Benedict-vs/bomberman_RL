@@ -118,8 +118,14 @@ results/figures/
 
 final_project.pdf
 
-# scratchpad
-/scratchpad
+# scratchpad/<person>/ holds dev-only helper scripts (table dumps, policy replays).
+# Not part of the submission, but they produce numbers that end up in the report,
+# so they are versioned.
+#
+# Q-table snapshots are not: every trained table is already in the history as
+# agent_code/<agent>/q_table.npy at the commit that produced it. Recover one with
+#   git show <commit>:agent_code/<agent>/q_table.npy > scratchpad/<person>/models/q_vN.npy
+scratchpad/*/models/
 
 # macOS
 .DS_Store
