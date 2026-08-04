@@ -25,7 +25,7 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
   dessen Zustand *keine* Münzinformation enthält? Der Eintrag ist kein Versuch,
   gut zu spielen — er legt den Bezugspunkt fest, gegen den alles Weitere gemessen wird.
 - **Änderung ggü. vorher:** — (Ausgangspunkt)
-- **Agent:** `benedict_coin_collector` v1 · Commit `<wird nachgetragen>`
+- **Agent:** `benedict_coin_collector` v1 · Commit `ef030a8`
   - Merkmale: 4 Bits „Nachbarfeld blockiert?" (U/R/D/L) → Q-Tabelle 16 × 6,
     davon 11 Zeilen erreichbar
 - **Training:** 1000 Runden, `coin-heaven`, keine Gegner
@@ -68,6 +68,13 @@ Alle drei Vorhersagen bestätigt, und zwar exakt: die KIs von `steps` und `inval
 entartet, weil *jede einzelne* der 300 Runden 400 Schritte lief und *keine* ungültige
 Aktion enthielt. Die Q-Tabelle erfüllt in allen 10 erreichbaren Zeilen mit blockierten
 Richtungen das Kriterium „blockierte Richtung < jeder legale Zug".
+
+**Reproduzierbarkeit geprüft:** Der Lauf wurde zweimal ausgeführt (einmal auf schmutzigem
+Baum, einmal sauber unter `ef030a8`). Alle Spalten außer `time`, `think_mean_ms` und
+`think_max_ms` sind zeilenweise identisch — 0 von 300 Runden weichen ab. Bei ε = 0 ist die
+Politik das Argmax einer festen Tabelle, und der Seed legt die Arenen fest; nur die
+Laufzeitmessung streut. Ein Messlauf ist also aus Commit + Seed exakt wiederherstellbar.
+Für das *Training* gilt das ausdrücklich **nicht** — dessen RNG ist ungeseedet.
 
 ### Der eigentliche Befund: die Zugzahl ist bimodal
 
