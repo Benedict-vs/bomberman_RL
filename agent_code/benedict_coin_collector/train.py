@@ -65,8 +65,6 @@ def setup_training(self):
     self.episode_events = []
     self.episode_reward = 0.0
     self.episode_td = []
-    self.eps = max(EPS_END, self.eps * EPS_DECAY)  # decay exploration rate per episode
-
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -160,13 +158,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.episode_events = []
     self.episode_reward = 0.0
     self.episode_td = []
+    self.eps = max(EPS_END, self.eps * EPS_DECAY)  # decay exploration rate per episode
+
 
 def reward_from_events(self, events: List[str]) -> float:
-    """
-    *This is not a required function, but an idea to structure your code.*
-
-    Here you can modify the rewards your agent get so as to en/discourage
-    certain behavior.
-    """
-    
     return sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_COST
