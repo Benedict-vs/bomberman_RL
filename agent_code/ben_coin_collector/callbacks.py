@@ -1,79 +1,73 @@
+#Aktionsauswahl des tabellarischen Q-Learning-Agenten
+
 import os
 import pickle
 import random
 
+from collections import defaultdict
+from .features import ACTIONS, state_to_features
+
 import numpy as np
 
 
-ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+MODEL_FILE = "my-saved-model.pt"
+
+
+def new_q_row():
+    #Erzeugt Q-Werte für einen bisher unbekannten Zustand
+
+    return np.zeros(len(ACTIONS), dtype=float)
 
 
 def setup(self):
-    """
-    Setup your code. This is called once when loading each agent.
-    Make sure that you prepare everything such that act(...) can be called.
+    #Erstellt eine neue Q-Tabelle oder lädt eine gespeicherte Tabelle
 
-    When in training mode, the separate `setup_training` in train.py is called
-    after this method. This separation allows you to share your trained agent
-    with other students, without revealing your training code.
+    self.q_table = defaultdict(new_q_row)
 
-    In this example, our model is a set of probabilities over actions
-    that are is independent of the game state.
+    if os.path.isfile(MODEL_FILE):
+        with open(MODEL_FILE, "rb") as model_file:
+            saved_table = pickle.load(model_file)
 
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
-    """
-    if self.train or not os.path.isfile("my-saved-model.pt"):
-        self.logger.info("Setting up model from scratch.")
-        weights = np.random.rand(len(ACTIONS))
-        self.model = weights / weights.sum()
+        self.q_table.update(saved_table)
+
+        self.logger.info(
+            "Loaded Q-table with %d states.",
+            len(self.q_table),
+        )
+
+    elif self.train:
+        self.logger.info(
+            "No saved model found. Starting with an empty Q-table."
+        )
+
     else:
-        self.logger.info("Loading model from saved state.")
-        with open("my-saved-model.pt", "rb") as file:
-            self.model = pickle.load(file)
+        self.logger.warning(
+            "No saved model found. Actions are based on zero Q-values."
+        )
 
 
 def act(self, game_state: dict) -> str:
-    """
-    Your agent should parse the input, think, and take a decision.
-    When not in training mode, the maximum execution time for this method is 0.5s.
+    #Wählt während des Trainings epsilon-greedy eine Aktion aus
 
-    :param self: The same object that is passed to all of your callbacks.
-    :param game_state: The dictionary that describes everything on the board.
-    :return: The action to take as a string.
-    """
-    # todo Exploration vs exploitation
-    random_prob = .1
-    if self.train and random.random() < random_prob:
-        self.logger.debug("Choosing action purely at random.")
-        # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+    state = state_to_features(game_state)
 
-    self.logger.debug("Querying model for action.")
-    return np.random.choice(ACTIONS, p=self.model)
+    if self.train and random.random() < self.epsilon:
+        self.logger.debug("Exploring in state %s.", state)
+        return str(np.random.choice(ACTIONS))
 
+    q_values = self.q_table[state]
+    maximum = q_values.max()
 
-def state_to_features(game_state: dict) -> np.array:
-    """
-    *This is not a required function, but an idea to structure your code.*
+    best_indices = np.flatnonzero(q_values == maximum)
+    chosen_index = int(np.random.choice(best_indices))
 
-    Converts the game state to the input of your model, i.e.
-    a feature vector.
+    action = ACTIONS[chosen_index]
 
-    You can find out about the state of the game environment via game_state,
-    which is a dictionary. Consult 'get_state_for_agent' in environment.py to see
-    what it contains.
+    self.logger.debug(
+        "State %s, Q-values %s, action %s.",
+        state,
+        q_values,
+        action,
+    )
 
-    :param game_state:  A dictionary describing the current game board.
-    :return: np.array
-    """
-    # This is the dict before the game begins and after it ends
-    if game_state is None:
-        return None
-
-    # For example, you could construct several channels of equal shape, ...
-    channels = []
-    channels.append(...)
-    # concatenate them as a feature tensor (they must have the same shape), ...
-    stacked_channels = np.stack(channels)
-    # and return them as a vector
-    return stacked_channels.reshape(-1)
+    return action

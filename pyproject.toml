@@ -12,6 +12,7 @@ dependencies = [
     "pygame",
     "tqdm",
     "matplotlib>=3.11.1",
+    "torch>=2.13.0",
 ]
 
 # Add training-only libraries as we need them, e.g.:

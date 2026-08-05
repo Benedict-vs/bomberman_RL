@@ -158,6 +158,56 @@ def rows_for(rows: list[dict], agent: str | None) -> list[dict]:
 
 
 # --------------------------------------------------------------------------
+# LaTeX output
+# --------------------------------------------------------------------------
+# Emits complete booktabs tables to paste into the report. Deliberately uses
+# nothing beyond `booktabs`, which the report preamble already loads -- no
+# siunitx, no makecell, no threeparttable, so a copied table always compiles.
+#
+# Cells are written as  $3.060_{[2.700,\,3.400]}$: the estimate stays readable
+# at a glance and the interval rides along without doubling the column count.
+
+def tex_escape(text: str) -> str:
+    """Escape the characters that actually occur in agent and file names."""
+    for char in ("\\", "&", "%", "$", "#", "_", "{", "}"):
+        text = text.replace(char, "\\" + char)
+    return text
+
+
+def tex_code(text: str) -> str:
+    return r"\texttt{" + tex_escape(text) + "}"
+
+
+def tex_ci(fmt: str, mean: float, low: float, high: float, signed=False) -> str:
+    """`$mean_{[low, high]}$`, optionally with explicit + signs."""
+    if signed:
+        body = f"{mean:+.3f}_{{[{low:+.3f},\\,{high:+.3f}]}}"
+    else:
+        body = (f"{fmt.format(mean)}_{{[{fmt.format(low)},\\,"
+                f"{fmt.format(high)}]}}")
+    return f"${body}$"
+
+
+def tex_table(caption: str, label: str, column_spec: str,
+              header: list[str], rows: list[list[str]]) -> None:
+    print()
+    print(r"\begin{table}[t]")
+    print(r"  \centering")
+    print(f"  \\caption{{{caption}}}")
+    print(f"  \\label{{{label}}}")
+    print(f"  \\begin{{tabular}}{{{column_spec}}}")
+    print(r"    \toprule")
+    print("    " + " & ".join(header) + r" \\")
+    print(r"    \midrule")
+    for row in rows:
+        print("    " + " & ".join(row) + r" \\")
+    print(r"    \bottomrule")
+    print(r"  \end{tabular}")
+    print(r"\end{table}")
+    print()
+
+
+# --------------------------------------------------------------------------
 # Statistics
 # --------------------------------------------------------------------------
 def bootstrap_ci(values: np.ndarray, n_boot: int = 10_000, alpha: float = 0.05,
@@ -207,7 +257,8 @@ def wilcoxon_p(differences: np.ndarray) -> float | None:
 
 # Reporting
 
-def summarise(path: Path, metrics: list[str], markdown: bool, n_boot: int) -> None:
+def summarise(path: Path, metrics: list[str], markdown: bool, n_boot: int,
+              latex: bool = False) -> None:
     rows = load(path)
     meta = load_meta(path)
     by_agent: dict[str, list[dict]] = defaultdict(list)
@@ -220,7 +271,29 @@ def summarise(path: Path, metrics: list[str], markdown: bool, n_boot: int) -> No
         header += (f", scenario={meta.get('scenario')}, "
                    f"commit={meta.get('git_commit')}")
 
-    if markdown:
+    if latex:
+        table_rows = []
+        for agent, agent_rows in by_agent.items():
+            cells = [tex_code(agent)]
+            for metric in metrics:
+                column, _, _, fmt = METRICS[metric]
+                mean, low, high = bootstrap_ci(
+                    np.array([r[column] for r in agent_rows]), n_boot)
+                cells.append(tex_ci(fmt, mean, low, high))
+            table_rows.append(cells)
+        scenario = meta.get("scenario", "classic")
+        tex_table(
+            caption=(f"Performance over {n_rounds} rounds "
+                     f"(scenario \\texttt{{{tex_escape(scenario)}}}, "
+                     f"commit \\texttt{{{tex_escape(meta.get('git_commit','?'))}}}). "
+                     f"Each cell is the mean with its 95\\,\\% bootstrap "
+                     f"confidence interval in brackets."),
+            label=f"tab:summary-{path.stem.replace('_', '-')}",
+            column_spec="l" + "r" * len(metrics),
+            header=["Agent"] + [METRICS[m][1] for m in metrics],
+            rows=table_rows,
+        )
+    elif markdown:
         print(f"\n**{header}**\n")
         print("| Agent | " + " | ".join(METRICS[m][1] for m in metrics) + " |")
         print("|" + "---|" * (len(metrics) + 1))
@@ -274,7 +347,8 @@ def paired_effect(rows_a: list[dict], rows_b: list[dict], metric: str,
 
 
 def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
-            markdown: bool, n_boot: int, plot: Path | None = None) -> None:
+            markdown: bool, n_boot: int, plot: Path | None = None,
+            latex: bool = False) -> None:
     rows_a = rows_for(load(path_a), agent)
     rows_b = rows_for(load(path_b), agent)
     name_a, name_b = path_a.stem, path_b.stem
@@ -286,7 +360,28 @@ def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
     who = agent_a if agent_a == agent_b else f"{agent_a} -> {agent_b}"
     title = f"{name_b}  vs  {name_a}   (agent: {who}, {n_paired} paired rounds)"
 
-    if markdown:
+    if latex:
+        tex_table(
+            caption=(f"Paired comparison of \\texttt{{{tex_escape(name_b)}}} "
+                     f"against \\texttt{{{tex_escape(name_a)}}} over "
+                     f"{n_paired} rounds on identical arenas. The difference "
+                     f"column is the mean of the per-round difference "
+                     f"($B-A$) with its 95\\,\\% bootstrap confidence "
+                     f"interval; an interval containing zero means the effect "
+                     f"is not demonstrated at this sample size."),
+            label=f"tab:compare-{name_a.replace('_','-')}-{name_b.replace('_','-')}",
+            column_spec="lrrrl",
+            header=["Metric", f"A: {tex_code(name_a)}", f"B: {tex_code(name_b)}",
+                    "Difference (95\\,\\% CI)", "Verdict"],
+            rows=[[line["label"],
+                   f"${line['fmt'].format(line['a'])}$",
+                   f"${line['fmt'].format(line['b'])}$",
+                   tex_ci(line["fmt"], line["diff"], line["low"], line["high"],
+                          signed=True),
+                   tex_escape(line["verdict"])]
+                  for line in lines],
+        )
+    elif markdown:
         print(f"\n**{title}**\n")
         print("| Metric | " + f"{name_a} | {name_b} | Difference (95 % CI) | Verdict |")
         print("|---|---|---|---|---|")
@@ -358,7 +453,7 @@ def _as_contribution(effect: dict, metric: str) -> dict:
 
 def ablation(base: Path, variants: list[Path], metric: str, agent: str | None,
              n_boot: int, markdown: bool, plot: Path | None,
-             mode: str = "removal") -> None:
+             mode: str = "removal", latex: bool = False) -> None:
     """One metric, many variants, all measured against the same baseline.
 
     ``mode="removal"`` -- the classic ablation. Baseline is the full agent, each
@@ -386,7 +481,37 @@ def ablation(base: Path, variants: list[Path], metric: str, agent: str | None,
     axis = (f"contribution to {label}   (positive = component helps)"
             if removal else f"paired difference in {label}")
 
-    if markdown:
+    if latex:
+        anchor_value = entries[0]["fmt"].format(entries[0]["a"])
+        caption = (
+            (f"Ablation study on \\emph{{{label}}}: each row reports what one "
+             f"component contributes, measured by removing it from the full "
+             f"agent \\texttt{{{tex_escape(base.stem)}}} "
+             f"(${anchor_value}$). A positive value means removing the "
+             f"component made the agent worse, i.e.\\ it earns its place. "
+             if removal else
+             f"Variants against the baseline "
+             f"\\texttt{{{tex_escape(base.stem)}}} (${anchor_value}$) "
+             f"on \\emph{{{label}}}. ")
+            + f"Paired over {entries[0]['n']} rounds on identical arenas, "
+              f"95\\,\\% bootstrap confidence intervals."
+        )
+        tex_table(
+            caption=caption,
+            label=f"tab:ablation-{metric.replace('_','-')}",
+            column_spec="lrrl",
+            header=[column_header,
+                    f"{label} without it" if removal else label,
+                    value_header.replace("95 % CI", "95\\,\\% CI"),
+                    "Verdict"],
+            rows=[[tex_code(entry["name"]),
+                   f"${entry['fmt'].format(entry['b'])}$",
+                   tex_ci(entry["fmt"], entry["diff"], entry["low"],
+                          entry["high"], signed=True),
+                   tex_escape(entry["verdict"])]
+                  for entry in entries],
+        )
+    elif markdown:
         print(f"\n**{title}** ({entries[0]['n']} paired rounds)\n")
         print(f"| {column_header} | {label} without it | {value_header} | Verdict |"
               if removal else
@@ -734,7 +859,9 @@ def main(argv=None) -> int:
                         help="Metric set for a rung of the task ladder: "
                              + "; ".join(f"{k}={' '.join(v)}" for k, v in PRESETS.items()))
     parser.add_argument("--markdown", action="store_true",
-                        help="Emit a Markdown table for the report.")
+                        help="Emit a Markdown table.")
+    parser.add_argument("--latex", action="store_true",
+                        help="Emit a booktabs LaTeX table ready to paste into the report. Needs only the booktabs package.")
     parser.add_argument("--plot", nargs="?", const="auto", default=None,
                         metavar="PATH",
                         help="Also write a figure. Without a path it is placed "
@@ -765,16 +892,18 @@ def main(argv=None) -> int:
     if args.compare:
         base, new = args.compare
         compare(base, new, args.agent, args.metrics, args.markdown, args.n_boot,
-                plot=figure_path(f"compare_{base.stem}_vs_{new.stem}"))
+                plot=figure_path(f"compare_{base.stem}_vs_{new.stem}"),
+                latex=args.latex)
 
     if args.ablation:
         base, *variants = args.ablation
         ablation(base, variants, args.metric, args.agent, args.n_boot,
                  args.markdown, plot=figure_path(f"ablation_{args.metric}"),
-                 mode=args.ablation_mode)
+                 mode=args.ablation_mode, latex=args.latex)
 
     for path in args.files:
-        summarise(path, args.metrics, args.markdown, args.n_boot)
+        summarise(path, args.metrics, args.markdown, args.n_boot,
+                  latex=args.latex)
         target = figure_path(f"summary_{path.stem}")
         if target is not None:
             plot_summary(path, args.metrics, args.agent, args.n_boot, target)

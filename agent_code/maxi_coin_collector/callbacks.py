@@ -8,6 +8,13 @@ from .features import state_to_features
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
+# Stufe 1 (coin-heaven): keine Kisten, also hat eine Bombe keinen Nutzen -- und ohne
+# Gefahren-Feature ("liege ich im Explosionsradius?") ist Weglaufen gar nicht lernbar,
+# jede gelegte Bombe endet im Selbstmord. WAIT ist hier reiner Zeitverlust.
+# Die Q-Vektoren bleiben trotzdem 6 lang, damit ab Stufe 2 nur diese Liste wächst.
+ALLOWED_ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT']
+ALLOWED_IDX = [ACTIONS.index(a) for a in ALLOWED_ACTIONS]
+
 
 def setup(self):
     """
@@ -25,8 +32,8 @@ def setup(self):
     """
     if self.train or not os.path.isfile("my-saved-model.pt"):
         self.logger.info("Setting up model from scratch.")
-        weights = np.random.rand(len(ACTIONS))
-        self.model = weights / weights.sum()
+        # Q-Tabelle: feature-tuple -> np.array mit einem Q-Wert je Aktion
+        self.model = {}
     else:
         self.logger.info("Loading model from saved state.")
         with open("my-saved-model.pt", "rb") as file:
@@ -50,18 +57,18 @@ def act(self, game_state: dict) -> str:
     #exploration 
     if self.train and random.random() < epsilon:
         self.logger.debug("Exploration: Choosing random action.")
-        return np.random.choice(ACTIONS)
+        return random.choice(ALLOWED_ACTIONS)
 
     #if first time seeing state, initialize Q-values for all actions to 0
     if features not in self.model:
         self.model[features] = np.zeros(len(ACTIONS))
 
-    #exploitation 
+    #exploitation, nur über die auf dieser Stufe erlaubten Aktionen
     q_values = self.model[features]
 
     #if tie between multiple actions, randomly choose one of the best actions
-    max_q = np.max(q_values)
-    best_actions = [i for i, q in enumerate(q_values) if q == max_q]
+    max_q = max(q_values[i] for i in ALLOWED_IDX)
+    best_actions = [i for i in ALLOWED_IDX if q_values[i] == max_q]
     chosen_action_index = random.choice(best_actions)
 
 
