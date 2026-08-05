@@ -95,21 +95,96 @@ learn what comes after it.
 
 | Metric | v4 | v5 | Paired difference | 95 % CI | Verdict |
 |---|---|---|---|---|---|
-| `coins` | 46.107 | | | | |
-| `steps` | 176.5 | | | | |
-| `invalid` | 0.12 | | | | |
-| `suicides` | 0.010 | | | | |
-| training `steps`/episode (last 1000) | 61.0 | | | | |
-| training `KILLED_SELF` (last 1000) | 0.94 | | | | |
-| occupied rows | 295 | | | | |
+| `coins` | 46.107 | **49.930** | +3.823 | [+2.720, +4.993] | BETTER |
+| `steps` (completion time) | 176.5 | **130.4** | −46.100 | [−58.707, −34.327] | faster, see note |
+| `invalid` | 0.12 | 0.15 | +0.023 | [−0.020, +0.067] | no effect shown |
+| `suicides` | 0.010 | **0.000** | −0.010 | [−0.023, +0.000] | no effect shown |
+| `survived` | 0.990 | **1.000** | +0.010 | [+0.000, +0.023] | no effect shown |
+| rounds collecting all 50 | 242 / 300 | **299 / 300** | — | — | — |
+| occupied rows | 295 | 295 | — | — | — |
+| rows with `BOMB` as argmax | 1 | **0** | — | — | — |
+
+**49.93 of 50 coins. 299 of 300 rounds are a clean sweep**, median completion 129 steps
+(105–160). The single failure collected 29. `steps` falls because completion is faster, not
+because survival is worse — the inversion `AGENTS.md` now documents.
+
+Training dynamics, first vs last 1000 episodes:
+
+| | ε | steps | `KILLED_SELF` | `BOMB_DROPPED` | coins |
+|---|---|---|---|---|---|
+| first 1000 | 0.157 | 72.2 | 0.922 | 1.83 | 22.93 |
+| last 1000 | 0.020 | **119.3** | **0.193** | **0.52** | **45.48** |
+
+Total training steps 1 086 665 against v4's 610 208.
+
+### Predictions, scored
+
+1. **Training dynamics — held directionally, thresholds slightly optimistic.** `steps`
+   61.0 → 119.3 (predicted > 120, near enough), `KILLED_SELF` 0.94 → 0.193 (predicted
+   < 0.15, missed), `BOMB_DROPPED` 1.97 → 0.52 (predicted < 0.3, missed). The mechanism is
+   confirmed; my numbers were a little too generous.
+2. **`coins` 46–49, "quite possibly no effect shown" — wrong, and wrongly reasoned.**
+   49.930, +3.823 with a CI far from zero. See below; this is the important one.
+3. **`suicides` — better than predicted.** Exactly 0.000, and the `BOMB`-argmax row is gone
+   entirely. I had called the sign of this effect genuinely unclear.
+4. **Frozen rare rows — did not happen.** `invalid` unchanged, occupancy still 295, despite
+   ε sitting at the 0.02 floor for over half the run.
+5. **295 occupied rows — held exactly.**
+
+### This refutes E04's conclusion, not just this prediction
+
+E04 concluded that the 58 unfinished rounds were caused by the clipped offset saturating
+beyond ±3 — a *representational* limit — and I wrote that extra visits to far-field states
+would "add data, not information". That was wrong, and E05 is the counter-example: nothing
+about φ changed, and 57 of those 58 rounds now finish.
+
+Why the reasoning failed: a saturated state such as `(dx=+3, dy=+3)` means "the coin is at
+least 3 right and at least 3 down". That is not information-free — the *direction* is still
+there, only the distance is gone. Moving right or down is correct and perfectly learnable in
+such a state. The states were not unlearnable, they were **unvisited**: under constant
+ε = 0.2 the agent died at step 61 and the late-round regime never appeared in its training
+data at all.
+
+The general lesson, and it is the more useful one for the report: *before concluding that a
+feature is too coarse, check whether the states in question were ever visited.* Aliasing and
+undertraining look identical in a Q-table — both leave a row whose values do not separate —
+and I diagnosed one as the other. The check is cheap: the training log already carries
+episode length, and 61 versus 176 was visible in E04's own data.
+
+### The confound is now worth resolving
+
+Stated before the run: longer episodes mean more transitions, so v5 saw 1.8× the data at
+the same round count. The improvement could be *more* data rather than *better-distributed*
+data. E05 showed a clear effect, so by the rule I set myself the control is now due.
+
+**E05b:** v4 configuration (constant ε = 0.2), round count raised until total steps match —
+610 208 steps came from 10 000 rounds at 61 steps, so ≈ 17 800 rounds reaches 1.09 M.
+Prediction: **no improvement over v4, coins stays near 46.** Under constant ε the agent dies
+at step 61 no matter how many rounds are run, so the late-round states remain unvisited;
+more data cannot reach states the policy never enters. If v4b *does* improve, then volume
+was the driver and the distribution argument above is wrong.
 
 ### Verdict
 
-*(filled in after the measurement)*
+**BETTER, and task 1 is finished.** 49.93 of 50 coins, 299/300 perfect rounds, 100 %
+survival, zero suicides, 0.15 invalid actions per round, 0.1 ms per decision against a
+500 ms budget. There is no headroom left worth pursuing on this rung.
 
 ### What I do next
 
-*(filled in after the measurement)*
+1. **E05b, the matched-step control.** Cheap, and it decides whether the report claims
+   "training distribution" or only "more data".
+2. **Then task 2** (`classic`, no opponents): crates, bombs that must be used, and escape.
+   Everything above is a navigation agent that survives by never bombing — on task 2 it must
+   bomb deliberately and then run, which is the case where E03's max-bootstrap argument
+   genuinely applies and where a danger feature becomes mandatory.
+3. **Carry the ε schedule forward.** On task 2 it matters more, not less: dying early is the
+   thing to be learned rather than an exploration artefact, and an agent that never survives
+   its own bomb during training cannot learn what comes after it.
+4. **Still open and now cheap to settle:** the `COIN_COLLECTED` +5 vs the game's +1 ablation
+   (open since E01), and the `(0,0)` collision between "no coins left" and "coin on my own
+   tile". The latter no longer costs anything measurable, but it will confuse task 2, where
+   coins can genuinely be absent for long stretches.
 
 ---
 
