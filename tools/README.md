@@ -158,7 +158,7 @@ Vorschlag für die Bildunterschrift im Bericht:
 > intervall — nicht die Differenz der Einzelintervalle. Ein Intervall, das die Null
 > enthält, zeigt keinen nachgewiesenen Effekt.
 
-**Ablation** (Modus C) — eine Zeile pro Komponente auf *einer gemeinsamen* Achse,
+Probably useless, don use: **Ablation** (Modus C) — eine Zeile pro Komponente auf *einer gemeinsamen* Achse,
 weil hier alle Zeilen dieselbe Metrik zeigen.
 
 Dargestellt ist der **Beitrag der jeweiligen Komponente**, nicht die Leistung des
