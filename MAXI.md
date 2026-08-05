@@ -7,6 +7,63 @@ welche Ideen ich habe und warum ich mich so entschieden habe.
 
 ## Einträge
 
+### 2026-08-05 — Stufe 1 gelöst: 50/50 Münzen, schneller als die Referenz
+
+- **Stand:** `maxi_coin_collector` ist ein tabellarischer Q-Learner auf
+  `(coin_dir, up, right, down, left)` und schlägt auf `coin-heaven` den
+  `coin_collector_agent`. Stufe 1 ist abgehakt, Stufe 2 (Kisten) ist offen.
+- **Gemacht:**
+  - **Baselines gemessen** (E00), bevor irgendetwas trainiert wurde: die beiden
+    Referenzagenten holen in *jeder* Runde alle 50 Münzen in ~125 Schritten,
+    `random_agent` 1,8, `peaceful_agent` 18,7. → `results/eval/baselines/`
+  - **Drei Fehler im Agenten behoben,** die das erste Training sofort zum Absturz
+    gebracht haben: `self.model` war noch der Wahrscheinlichkeitsvektor aus der Vorlage
+    statt einer Q-Tabelle (`ValueError`, 5-Tupel gegen 6-Array), `numpy` in `train.py`
+    nie importiert, kein `None`-Schutz in `update_q_table`.
+  - **Drei Trainingsläufe + zwei Kontrollläufe,** je 1000 Runden, dazu je eine
+    300-Runden-Messung mit ε = 0. Protokoll in `experiments/maxi.md` (E00–E02).
+  - **Abbildungen** in `results/figures/`, Skript `tools/plot_task1_versions.py`.
+- **Entscheidung + Warum:**
+  - **`BOMB` und `WAIT` raus aus dem Aktionsraum für Stufe 1.** v1 endete in
+    **100 % der 1000 Episoden** mit `KILLED_SELF`: ohne Gefahren-Merkmal ist Weglaufen
+    nicht lernbar, und auf `coin-heaven` bringt eine Bombe ohnehin nichts. Kommen auf
+    Stufe 2 zurück, aber nur zusammen mit den Gefahren-Merkmalen.
+  - **ε-Zerfall 0,9995 → 0,997.** 0,9995^1000 = 0,61 — der erste Lauf hat die gelernte
+    Politik nie bei kleinem ε ausgeführt.
+  - **Zwei Änderungen auf einmal = zwei Kontrollläufe.** v1a nur Maske, v1b nur Zerfall.
+    Ergebnis: keine der beiden genügt allein (Maske behebt das Sterben, lässt aber
+    78 ungültige Aktionen; Zerfall allein lässt 62 % Selbstmorde). Kostet je 90 s, ist
+    aber der Unterschied zwischen „wirkt" und „wir wissen, was wirkt".
+  - **Schrittkosten −0,1 aktiviert** — die eigentliche Lösung.
+- **Der lehrreichste Fehler:** v2 sah im Training mit Abstand am besten aus
+  (48,2 Münzen/Episode) und war in der Messung mit ε = 0 der mit Abstand schlechteste
+  (**1,45**). Ursache: ohne Schrittkosten sättigen die Q-Werte auf einen gemeinsamen
+  Pegel, die Spreizung zwischen den Zügen verschwindet, und eine deterministische,
+  ortsblinde Politik läuft dann in absorbierende Zyklen — 119 von 300 Runden mit
+  **399 ungültigen Aktionen** (verklemmt in Schritt 1 gegen eine Wand), 156 Runden mit
+  exakt 0 (Pendeln zwischen zwei Feldern). Im Training verdeckt ε = 0,05 das komplett.
+  **Merksatz: eine Trainingskurve ist kein Ergebnis.** Steht jetzt in `AGENTS.md`.
+- **Zweiter Fund, der die Deutung korrigiert hat:** `steps` misst nur in
+  *abgeschlossenen* Runden die Weglänge — die Runde endet mit der letzten Münze.
+  Getrennt ausgewertet hat v1 seine 109 abgeschlossenen Runden in **124,1** Schritten
+  gelaufen, also schon so schnell wie die Referenz. Die Schrittkosten haben nicht den
+  Weg verkürzt, sondern die Zyklen beseitigt; die Navigation war die ganze Zeit in
+  Ordnung. Ohne die Abschlussquote danebenzustellen hätte ich das falsch in den
+  Bericht geschrieben.
+- **Ergebnis v3:** 50,00 Münzen [50,00; 50,00] in 300/300 Runden, **123,8 Schritte**
+  gegen 125,3 der Referenz (gepaart −1,45 [−2,48; −0,41], KI schließt die Null aus),
+  0,06 ungültige Aktionen. `argmax = coin_dir` in **100 %** der Zustände.
+- **Nächster Schritt / Ideen:**
+  1. Stufe 2 (`classic`, keine Gegner): Gefahren-Merkmale bauen — „liege ich im
+     Explosionsradius?", „habe ich einen Fluchtweg?" — **vor** `BOMB` im Aktionsraum.
+     Vorher Unittest für die Explosionsgeometrie (steht seit 31.07. offen).
+  2. Zustandsraum wächst deutlich; prüfen, ob die Tabelle noch trägt oder ob hier
+     Modell B (DQN) anfangen sollte.
+  3. γ und Höhe der Schrittkosten bewusst *nicht* weiter optimiert — die Weglänge liegt
+     schon unter der Referenz, das zahlt nicht aufs Turnier ein.
+  4. `results/eval/baselines/` als Unterordner: mit Benedict und Ben abstimmen, ob das
+     Namensschema aus `AGENTS.md` entsprechend angepasst wird.
+
 ### 2026-07-31 — Messkette steht, Konzept festgelegt
 
 - **Stand:** `tools/` ist gebaut und getestet, `KONZEPT.md` liegt vor. Mein Agent

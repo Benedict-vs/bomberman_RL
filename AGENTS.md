@@ -115,6 +115,18 @@ Conventions we all follow, otherwise the numbers are not comparable:
   measurement. Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
 - **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
   "not demonstrated". Negative results stay in the report.
+- **A training curve is not a result.** Nothing is claimed until it has been measured with
+  `tools/evaluate.py` at ε = 0. While training, ε-exploration and the still-changing table keep
+  breaking the policy out of cycles, so a broken agent can look healthy in the log. Measured
+  2026-08-05: 48.2 coins/episode at the end of training, **1.45** in the evaluation of the same
+  model (`experiments/maxi.md` E01).
+- **`steps` only measures path length in rounds that were completed.** The round ends the moment
+  the last coin is collected, so 400 means "never finished", not "slow", and a mean over both
+  kinds of round is meaningless. Always report the **completion rate** next to it, or restrict
+  `steps` to completed rounds (`tools/plot_task1_versions.py` does the latter). This is what
+  distinguishes "navigates badly" from "navigates fine but gets stuck".
+- **`analyze.py` assumes higher is better**, so it prints `WORSE` for a *falling* `steps`.
+  On task 1 (and anywhere else efficiency is the goal) read that row inverted.
 - Primary metric `score`. Per-rung metric sets via `analyze.py --preset task1…task4`:
   task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
   task 3 `score`/`kills`/**`suicides`**/`survived` ·
@@ -152,6 +164,13 @@ stay ignored — they are pure functions of the CSVs.
 2. `classic`, no opponents → use bombs to open crates, **escape own bombs**, keep navigating.
 3. Crates + `peaceful_agent` (easy) / `coin_collector_agent` (hard) → hunt and kill.
 4. Crates + `rule_based_agent` → must beat it to have a shot at the tournament.
+
+**Keep the action set in step with the features.** `BOMB` in the action space without a danger
+feature ("am I in a blast radius / do I have an escape?") is not survivable: ε-exploration drops
+a bomb, escaping is not learnable, and the agent dies. Measured on rung 1: **100 % `KILLED_SELF`
+over 1000 episodes**, gone the moment `BOMB` was masked out (`experiments/maxi.md` E01). On rung 1
+`BOMB`/`WAIT` are useless anyway (no crates); they come back on rung 2 **together with** the
+danger features, never before.
 
 ## Hints that matter for the grade
 - The **scientific method is the main grading criterion**: subgoals, controlled experiments,

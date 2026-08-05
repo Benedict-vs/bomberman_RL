@@ -148,14 +148,16 @@ Zwei Befunde aus der gespeicherten Q-Tabelle:
 
 | | Zustände | mittlerer Q-Pegel | mittlere Spreizung über die 4 Züge | argmax = `coin_dir` |
 |---|---|---|---|---|
-| v1 | 32 | 8,39 | 5,78 | **84 %** |
-| v2 | 39 | 9,07 | 3,05 | **59 %** |
+| v1 | 32 | 8,39 | 5,78 | **96 %** (27/28) |
+| v2 | 39 | 9,07 | 3,05 | **82 %** (23/28) |
+
+(Quote jeweils über die Zustände mit einer echten Münzrichtung, also ohne `coin_dir = NONE`.)
 
 1. **Ohne Schrittkosten flacht die Tabelle ab.** Münze +5, Laufen gratis: jeder Weg
    sammelt am Ende jede Münze, also haben alle vier Züge fast denselben Rückfluss.
    Die Differenz, die „geh Richtung Münze" kodiert, wird vom gemeinsamen Pegel
    überdeckt. v2 trainiert länger und in 400-Schritt-Episoden, sättigt dadurch
-   *stärker* — und verliert genau deshalb den `coin_dir`-Bezug (84 % → 59 %).
+   *stärker* — und verliert genau deshalb den `coin_dir`-Bezug (96 % → 82 %).
    **Mehr Training hat die eingefrorene Politik schlechter gemacht.**
 2. **Eine deterministische, ortsblinde Politik hat absorbierende Zyklen.** Die
    `invalid`-Verteilung von v2 ist nicht verrauscht, sondern zweigipflig: **119 von 300
@@ -177,7 +179,7 @@ Zwei Befunde aus der gespeicherten Q-Tabelle:
 
 ---
 
-## E02 — Schrittkosten −0,1 pro Schritt (geplant, Vorhersage vor dem Lauf)
+## E02 — Schrittkosten −0,1 pro Schritt
 
 - **Frage:** Stellt eine Schrittkosten-Komponente die Spreizung der Q-Werte wieder her,
   so dass die eingefrorene Politik der Münzrichtung folgt statt in Zyklen zu laufen?
@@ -186,7 +188,7 @@ Zwei Befunde aus der gespeicherten Q-Tabelle:
 
 ### Vorhersage
 
-1. `argmax = coin_dir` steigt deutlich über die 59 % von v2, Zielbereich > 90 %.
+1. `argmax = coin_dir` steigt deutlich über die 82 % von v2, Zielbereich > 90 %.
    Das ist die eigentliche Prüfgröße; alles andere folgt daraus.
 2. `invalid` fällt von 157,8 auf < 5. Insbesondere verschwindet der Gipfel bei 399:
    ein Zug gegen die Wand kostet dann −1 **und** −0,1, während jeder gültige Zug
@@ -202,4 +204,95 @@ Zwei Befunde aus der gespeicherten Q-Tabelle:
 
 ### Ergebnis
 
-*(nach der Messung ausfüllen)*
+- **Training:** `results/train/maxi_coin_collector__q_v3_stepcost.csv`, 1000 Runden,
+  Commit `cafe8a9`
+- **Messung:** `results/eval/maxi_q_v3__task1.csv`, 300 Runden, Seed `20260731`, ε = 0
+
+| Lauf | `coins` | 95-%-KI | `steps` | 95-%-KI | `invalid` |
+|---|---|---|---|---|---|
+| v2 (ohne Schrittkosten) | 1,45 | [1,29; 1,62] | 400,0 | [400,0; 400,0] | 157,76 |
+| **v3 (mit Schrittkosten)** | **50,00** | [50,00; 50,00] | **123,8** | [122,9; 124,8] | 0,06 |
+| Referenz `coin_collector_agent` | 50,00 | [50,00; 50,00] | 125,3 | [124,3; 126,3] | 0,00 |
+
+Gepaart v2 → v3: `coins` **+48,55 [+48,38; +48,71]**, `invalid` **−157,70 [−180,12; −135,22]**.
+Gepaart Referenz → v3: `steps` **−1,45 [−2,48; −0,41]**, `coins` ±0,00, `invalid` +0,06 [+0,03; +0,09].
+
+Q-Tabelle (vgl. E01):
+
+| | Zustände | Spreizung | argmax = `coin_dir` |
+|---|---|---|---|
+| v1 | 32 | 5,78 | 96 % (27/28) |
+| v2 | 39 | 3,05 | 82 % (23/28) |
+| **v3** | 39 | **5,34** | **100 % (28/28)** |
+
+**Urteil: BESSER**, und zwar in beide Richtungen: gegenüber v2 in `coins` und `invalid`,
+gegenüber der Referenz in `steps`. Stufe 1 ist damit gelöst — 50 von 50 Münzen in
+**jeder** der 300 Runden, und das **1,45 Schritte schneller als `coin_collector_agent`**
+(KI schließt die Null aus, also nach unserer Regel eine echte Verbesserung).
+
+**Achtung bei der Werkzeugausgabe:** `analyze.py` liest „mehr ist besser" und schreibt
+deshalb bei `steps` **WORSE**, obwohl auf Stufe 1 *weniger* Schritte das Ziel sind.
+Für den Bericht ist die Zeile eine Verbesserung.
+
+### Nachtrag: `steps` misst nicht das, was der Name suggeriert
+
+Beim Zeichnen der Versionsübersicht aufgefallen und wichtig für den Bericht:
+**die Runde endet, sobald alle 50 Münzen eingesammelt sind.** `steps` ist deshalb nur
+für *abgeschlossene* Runden ein Mass für die Weglänge. Bei v2 heisst 400 nicht
+„langsam", sondern „nie fertig geworden", und v1s 293,2 ist der Mittelwert aus zwei
+völlig verschiedenen Sorten von Runden. Nach Abschluss getrennt:
+
+| Lauf | Runden mit allen 50 Münzen | `steps` in diesen Runden | `steps` in den übrigen | Münzen in den übrigen |
+|---|---|---|---|---|
+| v1 | 109/300 (36 %) | **124,1** | 389,7 | 22,9 |
+| v2 | 0/300 | — | 400,0 | 1,5 |
+| v3 | **300/300 (100 %)** | **123,8** | — | — |
+| Referenz | 300/300 (100 %) | 125,3 | — | — |
+
+Das korrigiert die Deutung von E01: **v1 konnte navigieren.** In den 109 Runden, die es
+beendet hat, war es mit 124,1 Schritten schon so schnell wie die Referenz. Sein Problem
+war nie die Weglänge, sondern dass es in 64 % der Runden in einem Zyklus hängenblieb.
+Die Schrittkosten haben also nicht „den Weg verkürzt" — sie haben die Zyklen beseitigt.
+Die Weglänge war die ganze Zeit in Ordnung.
+
+Konsequenz für die Messung: `steps` allein ist auf Stufe 1 als Kennzahl irreführend.
+Es gehört immer die **Abschlussquote** daneben; erst zusammen ergeben die beiden ein
+Bild. Abbildung: `results/figures/maxi_task1_steps_by_version.png`
+(erzeugt mit `tools/plot_task1_versions.py`).
+
+### Vorhersagen gegen Ergebnis
+
+| # | Vorhersage | Ergebnis | |
+|---|---|---|---|
+| 1 | `argmax = coin_dir` > 90 % | 100 % | ✓ |
+| 2 | `invalid` < 5, Gipfel bei 399 verschwindet | 0,06 | ✓ |
+| 3 | `coins` > 45, aber noch nicht 50 | **50,00** | teilweise — die Richtung stimmt, die Zurückhaltung war unnötig |
+| 4 | `steps` bleibt deutlich über 125 | **123,8, unter der Referenz** | ✗ **falsch** |
+
+Vorhersage 4 war falsch, und der Grund ist lehrreich: ich hatte argumentiert, −0,1 pro
+Schritt drücke bei γ = 0,9 nur schwach auf Kürze. Das unterschätzt, dass die Schrittkosten
+nicht nur den Weg verteuern, sondern überhaupt erst die **Spreizung** der Q-Werte
+herstellen (3,05 → 5,34). Sobald `coin_dir` sauber durchschlägt, ist die Politik die
+Greedy-Suche zur nächsten Münze — also dieselbe Strategie wie die Referenz, nur ohne
+deren feste Tie-Break-Reihenfolge, was die 1,45 Schritte erklärt. Die Schrittkosten waren
+also nicht die Feinabstimmung der Weglänge, für die ich sie gehalten habe, sondern die
+Bedingung dafür, dass die Merkmale überhaupt wirken.
+
+Vorhersage 3 war zu vorsichtig: die 7 in v2 unbesuchten Zustände sind offenbar nie
+erreichbar, wenn die Politik der Münzrichtung folgt — die Tabelle hat weiterhin 39
+Einträge, sie werden nur nicht mehr betreten.
+
+Genau genommen war auch Vorhersage 4 aus dem falschen Grund falsch: ich habe die
+Weglänge für die offene Baustelle gehalten, dabei war sie nach dem Nachtrag oben nie
+das Problem — v1 lief seine abgeschlossenen Runden bereits in 124,1 Schritten.
+
+### Was ich daraus mache
+
+- Stufe 1 ist abgeschlossen. `maxi_q_v3__task1.csv` ist ab jetzt meine Vergleichsbasis.
+- Offen und bewusst *nicht* weiterverfolgt: γ und die Höhe der Schrittkosten. Die
+  Weglänge liegt bereits unter der Referenz, weitere Optimierung hier zahlt nicht auf
+  das Turnier ein.
+- Nächste Stufe: `classic` mit Kisten, ohne Gegner. Dafür müssen `BOMB` und `WAIT` zurück
+  in `ALLOWED_ACTIONS` — und zwar **zusammen** mit den Gefahren-Merkmalen
+  („liege ich im Explosionsradius?", „habe ich einen Fluchtweg?"). E01 hat gezeigt, was
+  passiert, wenn `BOMB` ohne diese Merkmale im Aktionsraum steht: 100 % Selbstmord.
