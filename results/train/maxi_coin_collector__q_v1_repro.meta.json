@@ -1,0 +1,33 @@
+{
+  "agent": "maxi_coin_collector",
+  "columns": [
+    "episode",
+    "wall_clock_s",
+    "score",
+    "steps",
+    "reward",
+    "epsilon",
+    "COIN_COLLECTED",
+    "CRATE_DESTROYED",
+    "COIN_FOUND",
+    "KILLED_OPPONENT",
+    "KILLED_SELF",
+    "GOT_KILLED",
+    "SURVIVED_ROUND",
+    "INVALID_ACTION",
+    "BOMB_DROPPED",
+    "WAITED",
+    "td_error",
+    "table_size"
+  ],
+  "git_commit": "157c181",
+  "history": [],
+  "hyperparams": {
+    "alpha": 0.1,
+    "eps_decay": 0.9995,
+    "gamma": 0.9
+  },
+  "python": "3.12.13",
+  "run": "q_v1_repro",
+  "started_utc": "2026-08-05T10:34:08+00:00"
+}
