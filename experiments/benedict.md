@@ -21,6 +21,98 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E05 — Decay ε so training sees the round the agent actually plays
+
+- **Question:** ε has been fixed at 0.2 since E01. With six actions that is a 3.3 % chance
+  of `BOMB` per step, so the training agent bombs itself roughly every 30 steps and never
+  survives long enough to see a whole round. Does closing the gap between the training and
+  evaluation distributions help — and if not, what does that tell me?
+
+- **The gap, measured on the v4 logs:**
+
+  | | training, ε = 0.2 | evaluation, ε = 0 |
+  |---|---|---|
+  | steps per episode | **61.0** | 176.5 (128 to completion) |
+  | coins per episode | 20.6 | **46.1** |
+  | bombs dropped | **1.97** | 0.00 |
+  | `KILLED_SELF` | **0.94** | 0.01 |
+
+  These are two different agents. The one that generates the training data drops two bombs
+  per episode and dies almost every time; the one that gets measured never bombs at all.
+  The numbers are flat across all 10 000 episodes, so this is not a warm-up effect — the
+  agent **never** experiences a round past step ~61, which is precisely the late-round
+  regime (few coins left, all of them far away) where the 58 unfinished evaluation rounds
+  break down.
+
+- **Change from E04:** exactly one — ε becomes a schedule instead of a constant.
+  `EPS_START = 0.2`, `EPS_END = 0.02`, exponential decay per episode
+  (`self.eps = max(EPS_END, self.eps * 0.99967)`), reaching the floor at ~70 % of training.
+  φ is untouched (784 rows), all rewards untouched, α and γ untouched.
+
+- **Agent:** `benedict_coin_collector` v5 · commit `<to be filled in>`
+- **Training:** 10 000 rounds, `coin-heaven`, no opponents, `run = q_v5_task1`.
+- **Measurement:** `results/eval/benedict_q_v5__task1.csv`, 300 rounds, seed 20260731,
+  paired against `benedict_q_v4__task1.csv`.
+
+- **Known confound, stated up front.** Longer episodes mean more transitions per round, so
+  v5 trains on substantially more data than v4 at the same round count. An improvement could
+  therefore come from *more data* rather than from *better-distributed data*. The control is
+  a second v4-configuration run with the round count raised until total steps match
+  (`q_v4b_task1`). I will only run it if E05 shows an effect worth attributing — if the
+  result is null, the confound does not matter, because more data did not help either.
+
+### Prediction (written before the run)
+
+1. **Training dynamics change sharply, and this is near-certain.** By the last 1000
+   episodes: `steps` above 120 (from 61.0), `KILLED_SELF` below 0.15 (from 0.94),
+   `BOMB_DROPPED` below 0.3 (from 1.97). If this does *not* happen the schedule is not
+   wired up correctly and nothing else in the experiment means anything.
+2. **`coins` barely moves — I predict 46 to 49, quite possibly "no effect shown".**
+   The 58 unfinished rounds fail because the clipped offset saturates beyond ±3, which is
+   a *representational* limit. Extra visits to far-field states add data, not information.
+   A tabular method cannot separate two states that encode identically no matter how often
+   it sees them.
+3. **`suicides` stays around 0.01 or improves slightly.** Row 171's `BOMB` argmax comes
+   from the `(0,0)` collision at round start, which occurs at a rate independent of ε.
+   Lower ε means fewer `(171, BOMB)` samples *and* fewer terminal penalties on them, so the
+   sign of the effect is genuinely unclear to me.
+4. **Real risk in the other direction:** with ε at 0.02 for the last 3000 episodes, rarely
+   visited rows stop being refreshed and can freeze at noisy values. If `invalid` or
+   `suicides` rise, that is the mechanism, and the answer is a higher floor rather than
+   abandoning the schedule.
+5. **Occupied rows stay at 295** — or drop slightly, if the reduced exploration means some
+   far rows are never entered at all. A drop would itself be evidence for point 4.
+
+**What a null result would mean, and why it is still worth running.** If prediction 2 holds,
+the conclusion is that on this rung the binding constraint is the feature map and not the
+data, which is a much stronger statement than "clipping is the limit" made from E04 alone —
+it survives a deliberate attempt to fix the problem by other means. It also matters for
+task 2 regardless of the outcome here: there, dying early is not an exploration artefact but
+the thing to be learned, and an agent that never survives its own bomb during training cannot
+learn what comes after it.
+
+### Result
+
+| Metric | v4 | v5 | Paired difference | 95 % CI | Verdict |
+|---|---|---|---|---|---|
+| `coins` | 46.107 | | | | |
+| `steps` | 176.5 | | | | |
+| `invalid` | 0.12 | | | | |
+| `suicides` | 0.010 | | | | |
+| training `steps`/episode (last 1000) | 61.0 | | | | |
+| training `KILLED_SELF` (last 1000) | 0.94 | | | | |
+| occupied rows | 295 | | | | |
+
+### Verdict
+
+*(filled in after the measurement)*
+
+### What I do next
+
+*(filled in after the measurement)*
+
+---
+
 ## E04 — Give the coin feature a sense of distance
 
 - **Question:** E03 removed every death, so the agent now has all 400 steps available —
