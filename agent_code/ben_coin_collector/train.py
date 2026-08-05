@@ -1,99 +1,211 @@
-from collections import namedtuple, deque
-
 import pickle
 from typing import List
 
 import events as e
-from .callbacks import state_to_features
 
-# This is only an example!
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+from .callbacks import MODEL_FILE
+from .features import (ACTIONS, distance_to_nearest_coin, state_to_features)
 
-# Hyper parameters -- DO modify
-TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
+try:
+    from tools.trainlog import TrainLogger
+except ImportError:
+    TrainLogger = None
+
+
+ALPHA = 0.15
+GAMMA = 0.95
+
+EPSILON_START = 1.0
+EPSILON_END = 0.05
+EPSILON_DECAY = 0.9995
+POTENTIAL_SCALE = 0.1
+
+RUN_NAME = "ben_coin_collector_Qlearning_potential_scale01_coin15_invalid10_test6"
+
+
+STEP_PENALTY = -0.01
+
+EVENT_REWARDS = {
+    e.COIN_COLLECTED: 15.0,
+    e.INVALID_ACTION: -10.0,
+    e.WAITED: -0.02,
+    
+}
+
+def coin_potential(game_state):
+    #Berechnet das Zustandspotential anhand der BFS-Distanz
+
+    if game_state is None:
+        return 0.0
+
+    distance = distance_to_nearest_coin(
+        field=game_state["field"],
+        start=game_state["self"][3],
+        coins=game_state["coins"],
+    )
+
+    if distance is None:
+        return 0.0
+
+    return 1.0 / (distance + 1)
+
+
+def potential_shaping_reward(old_game_state, new_game_state):
+    #Berechnet den zusätzlichen potentialbasierten Reward
+
+    old_potential = coin_potential(old_game_state)
+    new_potential = coin_potential(new_game_state)
+
+    return POTENTIAL_SCALE * (
+        GAMMA * new_potential - old_potential
+    )
 
 
 def setup_training(self):
-    """
-    Initialise self for training purpose.
+    #Initialisiert die Variablen für das Training
 
-    This is called after `setup` in callbacks.py.
+    self.epsilon = EPSILON_START
+    self.episode_events = []
+    self.episode_reward = 0.0
 
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
-    """
-    # Example: Setup an array that will note transition tuples
-    # (s, a, r, s')
-    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
-
-
-def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
-    """
-    Called once per step to allow intermediate rewards based on game events.
-
-    When this method is called, self.events will contain a list of all game
-    events relevant to your agent that occurred during the previous step. Consult
-    settings.py to see what events are tracked. You can hand out rewards to your
-    agent based on these events and your knowledge of the (new) game state.
-
-    This is *one* of the places where you could update your agent.
-
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
-    :param old_game_state: The state that was passed to the last call of `act`.
-    :param self_action: The action that you took.
-    :param new_game_state: The state the agent is in now.
-    :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
-    """
-    self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-
-    # Idea: Add your own events to hand out rewards
-    if ...:
-        events.append(PLACEHOLDER_EVENT)
-
-    # state_to_features is defined in callbacks.py
-    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
+    if TrainLogger is not None:
+        self.trainlog = TrainLogger(
+            agent="ben_coin_collector",
+            run=RUN_NAME,
+            hyperparams={
+                "alpha": ALPHA,
+                "gamma": GAMMA,
+                "epsilon_start": EPSILON_START,
+                "epsilon_end": EPSILON_END,
+                "epsilon_decay": EPSILON_DECAY,
+                "reward_variant": "potential_shaping",
+                "potential_scale": POTENTIAL_SCALE,
+            },
+            extra_columns=["states"],
+        )
+    else:
+        self.trainlog = None
 
 
-def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
-    """
-    Called at the end of each game or when the agent died to hand out final rewards.
-    This replaces game_events_occurred in this round.
+def update_q(self, state, action, reward, next_state):
+    #Aktualisiert einen Q-Wert anhand eines Übergangs
 
-    This is similar to game_events_occurred. self.events will contain all events that
-    occurred during your agent's final step.
+    if state is None:
+        return
 
-    This is *one* of the places where you could update your agent.
-    This is also a good place to store an agent that you updated.
+    if action not in ACTIONS:
+        return
 
-    :param self: The same object that is passed to all of your callbacks.
-    """
-    self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
+    action_index = ACTIONS.index(action)
+    old_value = self.q_table[state][action_index]
 
-    # Store the model
-    with open("my-saved-model.pt", "wb") as file:
-        pickle.dump(self.model, file)
+    if next_state is None:
+        continuation = 0.0
+    else:
+        continuation = GAMMA * self.q_table[next_state].max()
+
+    target = reward + continuation
+    learning_error = target - old_value
+
+    self.q_table[state][action_index] = (
+        old_value + ALPHA * learning_error
+    )
 
 
-def reward_from_events(self, events: List[str]) -> int:
-    """
-    *This is not a required function, but an idea to structure your code.*
+def game_events_occurred(
+    self,
+    old_game_state: dict,
+    self_action: str,
+    new_game_state: dict,
+    events: List[str],
+):
+    #Verarbeitet einen Übergang innerhalb einer laufenden Runde
 
-    Here you can modify the rewards your agent get so as to en/discourage
-    certain behavior.
-    """
-    game_rewards = {
-        e.COIN_COLLECTED: 1,
-        e.KILLED_OPPONENT: 5,
-        PLACEHOLDER_EVENT: -.1  # idea: the custom event is bad
-    }
-    reward_sum = 0
+    old_state = state_to_features(old_game_state)
+    new_state = state_to_features(new_game_state)
+    event_reward = reward_from_events(self, events)
+    shaping_reward = potential_shaping_reward(
+        old_game_state=old_game_state,
+        new_game_state=new_game_state,)
+    reward = event_reward + shaping_reward
+
+    update_q(
+        self=self,
+        state=old_state,
+        action=self_action,
+        reward=reward,
+        next_state=new_state,
+    )
+
+    self.episode_events.extend(events)
+    self.episode_reward += reward
+
+
+def end_of_round(
+    self,
+    last_game_state: dict,
+    last_action: str,
+    events: List[str],
+):
+    #Verarbeitet das Rundenende und speichert die Q-Tabelle
+
+    event_reward = reward_from_events(self, events)
+    shaping_reward = potential_shaping_reward(
+        old_game_state=last_game_state,
+        new_game_state=None,
+)
+
+    final_reward = event_reward + shaping_reward
+
+    update_q(
+        self=self,
+        state=state_to_features(last_game_state),
+        action=last_action,
+        reward=final_reward,
+        next_state=None,
+    )
+
+    self.episode_events.extend(events)
+    self.episode_reward += final_reward
+
+    self.epsilon = max(
+        EPSILON_END,
+        self.epsilon * EPSILON_DECAY,
+    )
+
+    with open(MODEL_FILE, "wb") as model_file:
+        pickle.dump(dict(self.q_table), model_file)
+
+    if self.trainlog is not None:
+        self.trainlog.log_episode(
+            episode=last_game_state["round"],
+            score=last_game_state["self"][1],
+            steps=last_game_state["step"],
+            events=self.episode_events,
+            reward=self.episode_reward,
+            epsilon=self.epsilon,
+            extra={
+                "states": len(self.q_table),
+            },
+        )
+
+    self.episode_events = []
+    self.episode_reward = 0.0
+
+
+def reward_from_events(self, events: List[str]) -> float:
+    #Berechnet den Reward eines Spielschritts
+
+    reward = STEP_PENALTY
+
     for event in events:
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
-    self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    return reward_sum
+        reward += EVENT_REWARDS.get(event, 0.0)
+
+    self.logger.debug(
+        "Reward %.3f for events %s.",
+        reward,
+        events,
+    )
+
+    return reward

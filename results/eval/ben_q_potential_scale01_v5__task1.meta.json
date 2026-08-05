@@ -4,7 +4,7 @@
   ],
   "base_seed": 20260731,
   "git_commit": "4da2b84-dirty",
-  "label": "ben_q_unshaped_v1__task1",
+  "label": "ben_q_potential_scale01_v5__task1",
   "n_rounds": 300,
   "platform": "macOS-26.5.1-arm64-arm-64bit",
   "python": "3.12.13",
@@ -28,6 +28,6 @@
       "CRATE_DENSITY": 0
     }
   },
-  "timestamp_utc": "2026-08-05T10:00:26+00:00",
-  "wall_clock_s": 13.9
+  "timestamp_utc": "2026-08-05T13:59:53+00:00",
+  "wall_clock_s": 14.0
 }

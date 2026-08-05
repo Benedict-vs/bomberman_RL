@@ -1,0 +1,36 @@
+{
+  "agent": "ben_coin_collector",
+  "columns": [
+    "episode",
+    "wall_clock_s",
+    "score",
+    "steps",
+    "reward",
+    "epsilon",
+    "COIN_COLLECTED",
+    "CRATE_DESTROYED",
+    "COIN_FOUND",
+    "KILLED_OPPONENT",
+    "KILLED_SELF",
+    "GOT_KILLED",
+    "SURVIVED_ROUND",
+    "INVALID_ACTION",
+    "BOMB_DROPPED",
+    "WAITED",
+    "states"
+  ],
+  "git_commit": "4da2b84",
+  "history": [],
+  "hyperparams": {
+    "alpha": 0.15,
+    "epsilon_decay": 0.9995,
+    "epsilon_end": 0.05,
+    "epsilon_start": 1.0,
+    "gamma": 0.95,
+    "potential_scale": 0.1,
+    "reward_variant": "potential_shaping"
+  },
+  "python": "3.12.13",
+  "run": "ben_coin_collector_Qlearning_potential_shaping_scale01_test5",
+  "started_utc": "2026-08-05T13:51:13+00:00"
+}
