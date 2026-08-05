@@ -186,6 +186,6 @@ def reward_from_events(self, events: List[str]) -> int:
             reward_sum += game_rewards[event]
             
     # small negative reward for each step to encourage faster coin collection (disabled for first run)
-    #reward_sum -= 0.1 
+    reward_sum -= 0.1 
     
     return reward_sum
