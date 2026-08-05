@@ -20,7 +20,9 @@ STEP_COST = -0.1  # cost of taking a step, to encourage shorter paths
 
 ALPHA = 0.1         # learning rate
 GAMMA = 0.9         # discount factor
-EPS = 0.2           # exploration rate during training
+EPS_START = 0.2           # exploration rate during training
+EPS_END = 0.02
+EPS_DECAY = 0.9995  # decay per step, so that exploration decreases over time
 
 REWARDS = {
     e.COIN_COLLECTED: 5,
@@ -30,7 +32,7 @@ REWARDS = {
 }
 
 # Change this per experiment: the training log is appended to, not overwritten.
-RUN_NAME = "q_v4_task1"
+RUN_NAME = "q_v5_task1"
 
 
 def setup_training(self):
@@ -43,7 +45,7 @@ def setup_training(self):
     """
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
-    self.eps = EPS
+    self.eps = EPS_START
     self.alpha = ALPHA
     self.gamma = GAMMA
 
@@ -52,15 +54,18 @@ def setup_training(self):
     self.trainlog = TrainLogger(
         agent="benedict_coin_collector",
         run=RUN_NAME,
-        hyperparams={"alpha": ALPHA, "gamma": GAMMA, "eps": EPS,
+        hyperparams={"alpha": ALPHA, "gamma": GAMMA, 
+                     "eps_start": EPS_START, "eps_end": EPS_END, "eps_decay": EPS_DECAY,
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
-                     "n_states": len(self.q), "features": "4 wall bits + 2 coin direction bits"},
+                     "n_states": len(self.q),
+                     "features": "4 wall bits + dx, dy clipped to [-3, 3]"},
         extra_columns=["td_error"],
     ) if TrainLogger else None
     self.episode_events = []
     self.episode_reward = 0.0
     self.episode_td = []
+    self.eps = max(EPS_END, self.eps * EPS_DECAY)  # decay exploration rate per episode
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
