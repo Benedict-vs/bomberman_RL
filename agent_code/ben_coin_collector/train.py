@@ -19,16 +19,16 @@ GAMMA = 0.95
 EPSILON_START = 1.0
 EPSILON_END = 0.05
 EPSILON_DECAY = 0.9995
-POTENTIAL_SCALE = 0.1
+POTENTIAL_SCALE = 0.0
 
-RUN_NAME = "ben_coin_collector_Qlearning_potential_scale01_coin15_invalid10_test6"
+RUN_NAME = "ben_coin_collector_Qlearning_coin_reward15_unshaped_test7"
 
 
 STEP_PENALTY = -0.01
 
 EVENT_REWARDS = {
     e.COIN_COLLECTED: 15.0,
-    e.INVALID_ACTION: -10.0,
+    e.INVALID_ACTION: -1.0,
     e.WAITED: -0.02,
     
 }
@@ -79,7 +79,7 @@ def setup_training(self):
                 "epsilon_start": EPSILON_START,
                 "epsilon_end": EPSILON_END,
                 "epsilon_decay": EPSILON_DECAY,
-                "reward_variant": "potential_shaping",
+                "reward_variant": "unshaped_coin15",
                 "potential_scale": POTENTIAL_SCALE,
             },
             extra_columns=["states"],
