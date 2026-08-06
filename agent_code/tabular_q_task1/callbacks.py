@@ -4,10 +4,10 @@ Merged from two independently developed rung-1 coin collectors after both
 solved the rung (50.00 +- 0.00 coins over 300 rounds each). What came from
 where, and why, is in `experiments/task1.md` section 7:
 
-- BFS direction to the nearest coin  (from Maxi's agent)
-- random tie-breaking among equal-value actions  (from Maxi's agent)
+- BFS direction to the nearest coin  
+- random tie-breaking among equal-value actions 
 - per-cell learning rate, full six-action set, dense mixed-radix table,
-  seeded RNGs and the measurement harness  (from Benedict's agent)
+  seeded RNGs and the measurement harness  
 
 State: 4 wall bits + BFS direction to the nearest coin -> 16 x 5 = 80 rows.
 Deliberately small: task 2 multiplies this by the danger features, and the
@@ -44,30 +44,26 @@ N_STATES = int(np.prod(FEATURE_SIZES))
 POLICY_SEED = 20260731
 
 
-def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
-    """Index into ACTIONS of the first step on a shortest path to a coin.
+def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
+    """Index into ACTIONS of the first step on a shortest path to a target.
 
-    Breadth-first, so the first coin reached is a nearest one *by path*, which
-    Manhattan distance is not -- it cannot see that a wall is in the way.
-    Returns NO_COIN when there is no coin or none is reachable.
-
-    Cost scales inversely with coin density: the search stops at the first coin
-    found, so it expands a handful of nodes with 50 coins on the board and
-    floods it when one distant coin is left (0.002 ms vs 0.12 ms measured).
+    Prioritizes coins. If no coin is reachable, falls back to the nearest crate.
+    Done in a single BFS pass to maintain the 0.12 ms performance.
     """
-    if not coins:
+    # Wenn weder Münzen noch Kisten existieren, können wir uns die Suche sparen
+    if not coins and not (field == 1).any():
         return NO_COIN
 
-    targets = set(coins)        # set, not list: this is tested at every node
+    targets = set(coins)
     if (x, y) in targets:
-        return NO_COIN          # standing on it; it is collected this step
+        return NO_COIN
 
-    # Each queue entry carries the first step that led to it, so the direction
-    # falls out of the search without reconstructing the path.
     queue = [((x, y), None)]
     visited = {(x, y)}
     head = 0
     width, height = field.shape
+    
+    nearest_crate_step = None
 
     while head < len(queue):
         (cx, cy), first = queue[head]
@@ -75,16 +71,40 @@ def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
 
         for action_idx, (dx, dy) in enumerate(DELTAS):
             nx, ny = cx + dx, cy + dy
+            
             if not (0 <= nx < width and 0 <= ny < height):
                 continue
-            if (nx, ny) in visited or field[nx, ny] != 0:
+                
+            if (nx, ny) in visited:
                 continue
+                
             step = action_idx if first is None else first
+            
+            # Priorität 1: Münze gefunden! (Wir brechen ab und laufen hin)
             if (nx, ny) in targets:
-                return step + 1         # +1 because 0 is reserved for NO_COIN
+                return step + 1
+                
+            # Priorität 2: Kiste gefunden!
+            if field[nx, ny] == 1:
+                # Da BFS in Ringen sucht, ist die ERSTE Kiste garantiert die nächste.
+                # Wir merken uns den Schritt dorthin, suchen aber weiter nach Münzen.
+                if nearest_crate_step is None:
+                    nearest_crate_step = step + 1
+                visited.add((nx, ny)) # Nicht in die Queue packen, Kisten blockieren den Weg!
+                continue
+                
+            # Wände (-1) blockieren den Weg
+            if field[nx, ny] == -1:
+                continue
+                
+            # Freies Feld (0)
             visited.add((nx, ny))
             queue.append(((nx, ny), step))
 
+    # Queue ist leer -> Keine Münze gefunden. Gibt es eine Kiste?
+    if nearest_crate_step is not None:
+        return nearest_crate_step
+        
     return NO_COIN
 
 

@@ -1,20 +1,10 @@
-"""Q-learning updates for `tabular_q_task1`.
-
-Loaded only with `--train`, so nothing here runs in the tournament. That is why
-`tools/` may be imported (defensively) and why the exploration RNG lives here.
-
-Settings inherited from task 1, with the evidence (`experiments/task1.md`):
-
+"""
 - **alpha = 1/N(s,a)^0.7, not a constant.** Largest single effect measured on
   rung 1: constant alpha gave 20.78 +- 6.98 coins over 5 seeds, per-cell gave
   49.15 +- 1.23. A constant alpha satisfies neither of L26's convergence
   conditions, so busy cells never settle -- and an unsettled cell here is not a
   small error but an absorbing deadlock.
-- **KILLED_SELF = -5.** Removed every suicide at once, which is why BOMB can
-  stay in the action set instead of being masked out.
-- **The epsilon schedule is not justified by rung-1 numbers** (no demonstrated
-  difference over 5 seeds). Kept for task 2, where danger states are a distinct
-  region of the state space that only a surviving agent ever reaches.
+- **KILLED_SELF = -5.**  to avoid suicide withouth removing the bomb action
 
 Reproducibility needs BOTH the exploration seed here and `main.py --seed`;
 either alone leaves runs incomparable. Train on a world seed that is *not* the
