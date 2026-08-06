@@ -17,9 +17,11 @@
     "INVALID_ACTION",
     "BOMB_DROPPED",
     "WAITED",
-    "td_error"
+    "td_error",
+    "states_seen",
+    "cell_coverage"
   ],
-  "git_commit": "66000e8",
+  "git_commit": "fa1dec1",
   "history": [],
   "hyperparams": {
     "alpha": 0.1,
@@ -29,11 +31,12 @@
     "eps_end": 0.02,
     "eps_mode": "decay",
     "eps_start": 0.2,
-    "features": "4 wall bits + BFS direction to nearest coin, else crate",
+    "features": "4 wall bits + BFS target (direction x kind: coin | crate) + danger level + escape direction",
     "gamma": 0.9,
-    "n_states": 80,
+    "n_states": 2880,
     "rewards": {
       "COIN_COLLECTED": 5,
+      "CRATE_DESTROYED": 1,
       "INVALID_ACTION": -1,
       "KILLED_SELF": -5,
       "WAITED": -0.1
@@ -44,5 +47,5 @@
   },
   "python": "3.12.13",
   "run": "q_e10_s0",
-  "started_utc": "2026-08-06T13:22:14+00:00"
+  "started_utc": "2026-08-06T14:30:39+00:00"
 }

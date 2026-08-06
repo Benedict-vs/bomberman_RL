@@ -296,3 +296,183 @@ das Problem — v1 lief seine abgeschlossenen Runden bereits in 124,1 Schritten.
   in `ALLOWED_ACTIONS` — und zwar **zusammen** mit den Gefahren-Merkmalen
   („liege ich im Explosionsradius?", „habe ich einen Fluchtweg?"). E01 hat gezeigt, was
   passiert, wenn `BOMB` ohne diese Merkmale im Aktionsraum steht: 100 % Selbstmord.
+
+---
+
+## E10 — `CRATE_DESTROYED` als Belohnung, erstes Training auf Stufe 2
+
+**Vorhersage steht vor dem Training** (das war der offene Punkt aus `MAXI.md` vom 06.08.).
+Pilotlauf: 2000 Runden, ein Seed. Der Eintrag soll noch keine gute Politik liefern, sondern
+die erste ehrliche Stufe-2-Zahl und die Belege, mit denen ich den richtigen Trainingsumfang
+für E11 festlege.
+
+- **Agent:** `maxi_task2`, tabellarisches Q-Learning, Commit `fa1dec1` (+ die Änderung unten)
+  - Merkmale (`callbacks.py`): 4 Blockiert-Bits (16) × BFS-Ziel als Richtung **und** Art
+    (9: 0 = nichts erreichbar, 1–4 Münze, 5–8 Kiste) × Gefahrenstufe (4) ×
+    Fluchtrichtung (5) = **2880 Zustände**, 6 Aktionen.
+  - α = 1/N(s,a)^0,7 · γ = 0,9 · ε: 0,2 → 0,02 (×0,9995 pro Runde) · Schrittkosten −0,1
+- **Frage:** Lernt der Agent überhaupt zu bomben, sobald zerstörte Kisten belohnt werden —
+  und reichen Gefahrenkarte und Flucht-BFS als Merkmale aus, um die Bombe zu überleben?
+- **Änderung (genau eine):** `CRATE_DESTROYED: 1` in `REWARDS` (`train.py`). Bisher war
+  `COIN_COLLECTED` das einzige positive Signal, und ohne freigelegte Münzen gibt es auf
+  `classic` keinen Grund, je eine Bombe zu legen — genau das zeigt der Boden unten.
+  Wertbegründung: eine Münze ist 5 wert, eine Kiste 1. Die Kiste ist Mittel zum Zweck, und
+  eine Bombe zerstört meist mehrere Kisten auf einmal; ein höherer Wert würde Kistenfarmen
+  über das Münzensammeln stellen. Die Höhe selbst wird später abliert.
+- **Bewusst *nicht* geändert:** `callbacks.py` bleibt unangetastet. Drei bekannte Schwächen
+  bleiben drin, damit E10 exakt den in `MAXI.md` dokumentierten Merkmalssatz misst und ihr
+  Effekt als Messwert auftaucht statt als Vermutung: (a) der Flucht-BFS rechnet **ohne
+  Zeit** — er akzeptiert jedes sichere Feld, egal ob es vor der Detonation erreichbar ist,
+  und läuft durch gerade explodierende Felder; (b) `escape_direction` liefert `0` sowohl für
+  „schon sicher" als auch für „kein Fluchtweg"; (c) `BOMB` wird nie maskiert, auch nicht
+  ohne Bombe im Vorrat.
+- **Training:** 2000 Runden `classic`, ohne Gegner, Welt-Seed `20260806` — bewusst **nicht**
+  der Mess-Seed `20260731`, sonst messe ich auf den Arenen, auf denen trainiert wurde.
+- **Messung:** 300 Runden, Seed `20260731`, ε = 0
+- **Daten:** `results/train/task2_crates/maxi_task2__q_e10_s0.csv`,
+  `results/eval/task2_crates/maxi_q_v1__task2.csv`
+
+```bash
+uv run python main.py play --no-gui --agents maxi_task2 --train 1 \
+    --n-rounds 2000 --seed 20260806 --scenario classic
+
+uv run python tools/evaluate.py --agents maxi_task2 --opponents none \
+    --scenario classic --n-rounds 300 --seed 20260731 \
+    --label maxi_q_v1__task2 --out-dir results/eval/task2_crates
+```
+
+### Skala: Boden und Decke auf Stufe 2
+
+Referenzmessungen (`results/eval/baselines/ref_*__task2.csv`, Commit `7799000`) und der
+Boden aus Benedicts Stufe-1-Modell auf Stufe 2:
+
+| Agent | `score` | `suicides` | `crates` | `bombs` | `survived` |
+|---|---|---|---|---|---|
+| `rule_based_agent` | 8,41 | 0,00 | 116,4 | 37,9 | 1,00 |
+| `coin_collector_agent` | **8,50** | 0,00 | 116,3 | 37,8 | 1,00 |
+| `peaceful_agent` | 0,00 | 0,00 | 0,00 | 0,00 | 1,00 |
+| `random_agent` | 0,003 | **1,00** | 3,01 | 1,08 | 0,00 |
+| Stufe-1-Modell auf Stufe 2 (`benedict_task1model__task2_floor`) | 0,00 | 0,00 | 0,00 | 0,00 | 1,00 |
+
+Die Decke liegt bei 8,5 von 9 Münzen. Der interessante Boden ist die letzte Zeile: ein
+Agent ohne Kistenbelohnung legt **null** Bomben und überlebt deshalb makellos —
+`survived = 1,00` ist auf dieser Stufe allein wertlos. Und `random_agent` zeigt die
+Gegenrichtung: wer bombt, ohne zu fliehen, stirbt in 100 % der Runden.
+
+### Vorhersage
+
+1. **Der Agent bombt.** `bombs` > 0 und `crates` deutlich > 0 — er verlässt also den
+   Nullpunkt der letzten Tabellenzeile. Das ist das Bestehenskriterium von E10; wird es
+   verfehlt, ist die Belohnungshöhe (oder die fehlende Nützlichkeits-Information „liegt
+   eine Kiste neben mir?") das Thema von E11, nicht die Flucht.
+2. **`suicides` bleibt hoch, > 0,3 pro Runde.** Der Flucht-BFS ignoriert die Zeit; das
+   Merkmal *zeigt* eine Fluchtrichtung, garantiert aber nicht, dass sie rechtzeitig
+   ankommt. Trifft das nicht ein — `suicides` nahe 0 —, ist das Merkmal besser als gedacht
+   und die geplante Zeitrechnung in E11 überflüssig.
+3. **`score` zwischen 0,003 und 8,41**, also über `random_agent` und klar unter beiden
+   Referenzen. 2000 Runden auf 2880 Zuständen reichen nicht für eine gute Politik; ich
+   erwarte eher das untere Drittel, Größenordnung 1–3.
+4. **`cell_coverage` < 20 %, `states_seen` < 1000 von 2880** am Ende des Trainings. Der
+   Smoke-Test über 120 Runden lag bei 4,7 % der Zustände. Bestätigt sich das, ist der
+   Befund des Piloten „zu wenig Episoden" und E11 ist schlicht der große Lauf
+   (5000 Runden × 3 Seeds).
+5. **`think_max_ms` bleibt unter 100.** Gefahrenkarte plus zwei BFS-Durchläufe pro Schritt
+   sind neu; das ist die erste Gelegenheit zu prüfen, ob das 0,5-s-Limit in Reichweite gerät.
+
+### Ergebnis
+
+Training: 2000 Runden in 13 s, Commit `fa1dec1` + die Belohnungsänderung
+(`.meta.json` weist `fa1dec1-dirty` aus — die Änderung war zur Messung noch nicht
+eingecheckt). Verlauf in Blöcken zu 400 Episoden:
+
+| Episoden | `steps` | `CRATE_DESTROYED` | `BOMB_DROPPED` | `KILLED_SELF` | ø\|TD\| |
+|---|---|---|---|---|---|
+| 0–400 | 16,2 | 4,27 | 1,59 | 1,000 | 0,654 |
+| 400–800 | 26,1 | 5,79 | 2,28 | 1,000 | 0,571 |
+| 800–1200 | 36,7 | 6,76 | 2,62 | 1,000 | 0,513 |
+| 1200–1600 | 44,4 | 7,24 | 2,90 | 0,995 | 0,538 |
+| 1600–2000 | 58,2 | 8,04 | 3,06 | 0,995 | 0,478 |
+
+Ende des Trainings: `states_seen` 540/2880, `cell_coverage` 14,5 %, ε = 0,074.
+
+Messung, 300 Runden, Seed `20260731`, ε = 0:
+
+| Agent | `score` | `suicides` | `crates` | `bombs` | `survived` |
+|---|---|---|---|---|---|
+| `maxi_task2` | 0,243 [0,190; 0,300] | 0,593 [0,537; 0,650] | 6,82 [6,43; 7,22] | 2,64 [2,50; 2,79] | 0,407 [0,350; 0,463] |
+
+Gepaart gegen den Boden (Stufe-1-Modell auf Stufe 2) und gegen `rule_based_agent`:
+
+| Metrik | Boden | `maxi_task2` | Differenz (95-%-KI) | Urteil |
+|---|---|---|---|---|
+| `score` | 0,000 | 0,243 | +0,243 [+0,190; +0,300] | **BESSER** |
+| `crates` | 0,00 | 6,82 | +6,82 [+6,43; +7,22] | **BESSER** |
+| `bombs` | 0,00 | 2,64 | +2,64 [+2,50; +2,79] | **BESSER** |
+| `suicides` | 0,000 | 0,593 | +0,593 [+0,537; +0,650] | **SCHLECHTER** |
+| `survived` | 1,000 | 0,407 | −0,593 [−0,650; −0,537] | **SCHLECHTER** |
+
+| Metrik | `rule_based_agent` | `maxi_task2` | Differenz (95-%-KI) | Urteil |
+|---|---|---|---|---|
+| `score` | 8,410 | 0,243 | −8,17 [−8,27; −8,06] | **SCHLECHTER** |
+| `crates` | 116,43 | 6,82 | −109,61 [−110,39; −108,83] | **SCHLECHTER** |
+| `bombs` | 37,87 | 2,64 | −35,22 [−35,43; −35,02] | **SCHLECHTER** |
+| `suicides` | 0,000 | 0,593 | +0,593 [+0,537; +0,650] | **SCHLECHTER** |
+| `survived` | 1,000 | 0,407 | −0,593 [−0,650; −0,537] | **SCHLECHTER** |
+
+Der aufschlussreichste Schnitt ist die Aufteilung nach Überleben — die Mittelwerte oben
+mischen zwei völlig verschiedene Verhaltensweisen:
+
+| Teilmenge | n | `steps` | `bombs` | `crates` | `coins` |
+|---|---|---|---|---|---|
+| überlebt | 122 | **400,0** | 2,25 | 5,12 | 0,23 |
+| gestorben | 178 | **20,0** | 2,92 | 7,99 | 0,25 |
+
+Nebenzahlen: `invalid` 4,0 · 235 von 300 Runden ohne eine einzige Münze ·
+`think_max_ms` **0,216** (Limit 500), `think_mean_ms` 0,030.
+
+### Vorhersagen gegen Ergebnis
+
+| # | Vorhersage | Ergebnis | |
+|---|---|---|---|
+| 1 | `bombs` > 0, `crates` > 0 | 2,64 / 6,82 | ✓ |
+| 2 | `suicides` > 0,3 | 0,593 | ✓ |
+| 3 | `score` in (0,003; 8,41), erwartet 1–3 | 0,243 | ✓ / ✗ |
+| 4 | `cell_coverage` < 20 %, `states_seen` < 1000 | 14,5 % / 540 | ✓ |
+| 5 | `think_max_ms` < 100 | 0,216 | ✓ |
+
+Vorhersage 3 war der Größenordnung nach zu optimistisch, und der Grund steht in der
+Aufteilungstabelle: der Agent sammelt praktisch keine Münzen (235 von 300 Runden bei
+null), obwohl `COIN_COLLECTED` mit 5 die mit Abstand größte Belohnung ist. Er kommt gar
+nicht so weit — 59 % der Runden enden nach im Mittel 20 Schritten mit der eigenen Bombe.
+
+### Was ich daraus mache
+
+- **Bestehenskriterium erfüllt: die Kistenbelohnung erzeugt das Bombenlegen.** Ohne sie
+  ist das Verhalten exakt die Nullzeile des Bodens (0 Bomben, 0 Kisten, `survived` 1,00);
+  mit ihr ist der Unterschied in allen drei Größen weit außerhalb der KIs. Das ist die
+  Antwort auf die Frage des Eintrags — und zugleich der Beleg, dass `survived` allein auf
+  dieser Stufe nichts wert ist: der schlechteste Agent im Feld hat den besten Wert.
+- **Die Gefahren-Merkmale reichen nicht.** Vorhersage 2 ist eingetreten, und die
+  Aufteilung zeigt, warum: die 178 toten Runden enden nach 20 Schritten, also bei der
+  zweiten oder dritten Bombe. Der Flucht-BFS rechnet ohne Zeit — er zeigt auf ein sicheres
+  Feld, ohne zu prüfen, ob es vor der Detonation erreichbar ist — und `escape == 0`
+  bedeutet gleichzeitig „schon sicher" und „kein Fluchtweg". Beide Punkte waren vor dem
+  Lauf als bewusst nicht behoben notiert; jetzt gibt es die Zahl dazu.
+- **Die 122 überlebenden Runden sind kein Erfolg, sondern das zweite Fehlerbild:** 400
+  Schritte bei 2,25 Bomben und 0,23 Münzen. Der Agent hört nach den ersten Bomben auf und
+  läuft die Runde aus. Das ist dasselbe Muster wie die absorbierenden Zyklen aus E01, nur
+  ohne die ungültigen Aktionen (`invalid` nur 4,0) — hier läuft er, er kommt nur nirgends
+  an. Verdacht: bei `target == 0` (nichts erreichbar, weil Kisten den BFS blockieren) hat
+  die Tabelle keine sinnvolle Aktion gelernt.
+- **Abdeckung ist eine Nebenbaustelle, nicht die Hauptursache.** 14,5 % nach 2000 Runden
+  ist wenig, aber beide Fehlerbilder sind systematisch und nicht sprunghaft — mehr
+  Episoden derselben Politik würden sie nicht auflösen. Der große Lauf lohnt erst nach dem
+  Merkmalsfix.
+- **Rechenzeit ist kein Thema.** 0,216 ms Spitze bei einem Limit von 500 ms lässt reichlich
+  Raum für einen teureren Flucht-BFS mit Zeitrechnung.
+- **E11:** Flucht-BFS mit Zeitrechnung (nur Felder akzeptieren, die vor der Detonation
+  erreichbar sind; gerade explodierende Felder nicht durchqueren) **plus** die Trennung von
+  „schon sicher" und „kein Fluchtweg" (`N_STATES` 2880 → 3456). Das sind zwei Änderungen an
+  derselben Funktion; sie einzeln zu messen wäre sauberer, aber die zweite ist ohne die
+  erste kaum interpretierbar — also ein Eintrag mit Kontrolllauf für die Zeitrechnung
+  allein. Erst danach der große Trainingslauf (5000 Runden × 3 Seeds).

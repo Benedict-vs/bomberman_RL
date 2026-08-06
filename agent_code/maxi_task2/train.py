@@ -58,8 +58,12 @@ REWARDS = {
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
     e.KILLED_SELF: -5,
-    # TODO task 2: CRATE_DESTROYED, and finally ablate the coin reward against
-    # the game's actual +1 -- open since the first experiment.
+    # E10: the only positive signal for bombing on rung 2. A coin is 5, a crate
+    # 1 -- the crate is the means, not the goal, and one bomb usually destroys
+    # several at once, so a higher value would put crate farming above coins.
+    e.CRATE_DESTROYED: 1,
+    # TODO: ablate the magnitude above, and the coin reward against the game's
+    # actual +1 -- open since the first experiment.
 }
 
 # --- Experiment switches --------------------------------------------------
