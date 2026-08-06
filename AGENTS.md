@@ -200,10 +200,12 @@ danger features, never before.
   measurement harness from Benedict's). 50.00 coins in every round at 123.7 steps — **faster
   than `coin_collector_agent`'s 125.3**, which is the metric that discriminates on this rung.
   Rationale, findings and reproduction: `experiments/task1.md`.
-  Agent folders are named `<method>_task<rung>` (`tabular_q_task1`, later `dqn_task2`); each
-  rung gets its own folder so two rungs can be measured against each other without checking
-  out an old commit. `benedict_coin_collector` and `maxi_coin_collector` stay as frozen
-  evidence for their ledgers — do not develop in them.
+  Each rung gets its own folder so two rungs can be measured against each other without
+  checking out an old commit. Per-person development folders are `<person>_task<rung>`
+  (`benedict_task2`); the agreed, merged baseline for a rung is `<method>_task<rung>`
+  (`tabular_q_task1`, later `dqn_task2`) and is frozen once it is agreed.
+  `benedict_coin_collector` and `maxi_coin_collector` stay as frozen evidence for their
+  ledgers — do not develop in them.
 - `tools/` holds our measurement chain; it is **not** submitted, so nothing in
   `agent_code/<name>/callbacks.py` may import from it.
 - `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
