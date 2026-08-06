@@ -125,6 +125,11 @@ Conventions we all follow, otherwise the numbers are not comparable:
   kinds of round is meaningless. Always report the **completion rate** next to it, or restrict
   `steps` to completed rounds (`tools/plot_task1_versions.py` does the latter). This is what
   distinguishes "navigates badly" from "navigates fine but gets stuck".
+  **From rung 2 on, read the completion rate together with `survived`.** A dead agent also
+  ends the round, so completion stops meaning "finished the job": measured on `classic`,
+  `random_agent` "completes" 100 % of rounds at 19.0 steps because it kills itself, while
+  `rule_based_agent` completes 8 % at 399.1 (`experiments/benedict.md` E08). Taken alone,
+  completion rate ranks the worst agent in the field first.
 - **`analyze.py` assumes higher is better**, so it prints `WORSE` for a *falling* `steps`.
   On task 1 (and anywhere else efficiency is the goal) read that row inverted.
 - Primary metric `score`. Per-rung metric sets via `analyze.py --preset task1…task4`:

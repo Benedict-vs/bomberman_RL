@@ -256,11 +256,105 @@ and `score` is not usable as a progress signal until the agent reliably opens cr
 
 ### Result
 
-*(to be filled in)*
+300 rounds each, `classic`, solo, seed 20260731, commit `7799000`:
+
+| Agent | score | crates | bombs | suicides | survived | `round_steps` | invalid |
+|---|---|---|---|---|---|---|---|
+| `peaceful_agent` | 0.000 | 0.00 | 0.00 | 0.000 | 1.000 | 400.0 | 256.21 |
+| **`benedict_task2` (E09)** | 0.000 | 0.00 | 0.00 | 0.000 | 1.000 | 400.0 | 290.67 |
+| `random_agent` | 0.003 | 3.01 | 1.08 | **1.000** | 0.000 | 19.0 | 11.84 |
+| `coin_collector_agent` | **8.500** [8.420, 8.577] | **116.26** | 37.83 | 0.000 | 1.000 | 399.5 | 1.74 |
+| `rule_based_agent` | **8.410** [8.313, 8.503] | **116.43** | 37.87 | 0.000 | 1.000 | 399.1 | 1.76 |
+
+Completion rate (round ended before step 400): `coin_collector` 0.053, `rule_based` 0.080,
+`peaceful` 0.000, `random` **1.000**.
+
+### Prediction 1 was wrong at the premise
+
+I predicted `coin_collector_agent` would score exactly 0.00 with 0 bombs, on the grounds that
+"it has no bomb logic". It scores 8.500 and drops 37.8 bombs a round. **I asserted the
+contents of an agent I had not read.**
+
+`diff agent_code/coin_collector_agent/callbacks.py agent_code/rule_based_agent/callbacks.py`
+is 36 lines: `coin_collector_agent` is `rule_based_agent` minus the `coordinate_history`
+loop-breaker, minus opponent hunting, minus the per-round reset. The crate-bombing, dead-end
+bombing and blast-escape logic is **identical**. On rung 1 it looked like a pure coin walker
+because without crates that code never fires — and I carried that impression onto a rung
+where it is false.
+
+The coin-placement fact underneath the prediction was correct and is still correct (all 9
+coins start under crates, `environment.py:377–386`). The error was the inference from it: I
+checked the environment and not the agent.
+
+### Predictions, scored
+
+1. **`coin_collector_agent` scores 0.00 — wrong**, see above. 8.500, 116.26 crates.
+2. **`peaceful_agent` 0.00, survives every round — right.** 0.000 / 1.000, and 256.21 invalid
+   actions, the "moves but does not navigate" profile from rung 1.
+3. **`random_agent`: crates 1–5, score < 0.3, suicides > 0.7, survived < 0.3 — right on all
+   four.** 3.01 · 0.003 · **1.000** · 0.000. It kills itself in *every single round*.
+4. **`rule_based_agent`: score 4–8, crates 25–50, suicides < 0.15, survived > 0.80 — half
+   right.** Suicides and survival right (0.000, 1.000). Score 8.410, just above my range.
+   Crates 116.43, **more than double the top of my range** — I underestimated how much of the
+   board a competent agent clears in 400 steps.
+5. **"`crates` discriminates, `score` orders only one against three, `steps` uninformative" —
+   the ordering claim is wrong, the `steps` claim is right.** Completion is 0.053 and 0.080,
+   below the 10 % refutation threshold I set, so `steps` is not a rung-2 metric. But `crates`
+   does **not** order the field: 116.26 [115.55, 116.97] against 116.43 [115.71, 117.16] is a
+   tie. And `score` orders *three tiers*, not one against three.
+
+### The actual structure: three tiers, and the reference is one of them
+
+| Tier | agents | score | crates | suicides |
+|---|---|---|---|---|
+| 0 — inert | `peaceful`, **E09** | 0.000 | 0.00 | 0.000 |
+| 1 — bombs, dies | `random` | 0.003 | 3.01 | 1.000 |
+| 2 — reference | `coin_collector` ≈ `rule_based` | ~8.45 | ~116 | 0.000 |
+
+**`coin_collector_agent` and `rule_based_agent` are indistinguishable on this rung**, exactly
+as they were on rung 1 (125.3 vs 124.8 steps) and for the mirror-image reason: there the bomb
+code never ran, here the opponent code never runs. Solo `classic` does not exercise anything
+that separates them. So rung 2 again has **one** reference, not two — and the difference in
+score (8.500 vs 8.410) is small enough and in the *unexpected* direction that it should not be
+claimed without a paired test.
+
+**The ceiling is 8.45 of 9 coins**, i.e. 94 %. That is the number E11 gets measured against,
+and it costs ~38 bombs across 400 steps with **zero** suicides.
+
+### What discriminates, and in what order
+
+Revised from prediction 5, and this sets the progress metric for E10 and E11:
+
+- **`crates` is the leading indicator.** It moves first and it separates tier 0 from tier 1
+  from tier 2 (0.00 / 3.01 / 116). An agent that learns to bomb crates but not to find the
+  revealed coins registers on `crates` while `score` is still 0 — which is exactly the state
+  E10 is expected to reach.
+- **`suicides` is the gate between tier 1 and tier 2, and it is binary in the reference
+  field**: 1.000 for `random`, 0.000 for both competent agents. There is no middle ground in
+  the references. That is the whole rung in one number.
+- **`score` is the outcome metric** and is what gets reported, but it is useless as a progress
+  signal until the agent both bombs *and* survives — it stays pinned at 0 through the entire
+  first half of the work.
+- **`steps` is not a metric on this rung** (completion 5–8 %), and it is actively misleading:
+  `random_agent` "completes" 100 % of rounds at 19.0 steps because it *dies*. **Completion
+  rate must be read together with survival**, or the worst agent in the field looks like the
+  fastest. This is the rung-1 `steps` trap in a new disguise and belongs in `AGENTS.md`.
 
 ### Verdict
 
-*(to be filled in)*
+**Scale established.** Target 8.45 score / ~116 crates / 0.000 suicides, one meaningful
+reference (`coin_collector_agent` and `rule_based_agent` are interchangeable solo). Progress
+metric order for task 2: **`crates` → `suicides` → `score`**.
+
+Cost of the E08 error: nothing, because it was measured before anything was built on it. That
+is the argument for running the reference measurement first, and it is now the second rung in
+a row where doing so overturned an assumption I would otherwise have optimised against for a
+week.
+
+**Method note.** E08 prediction 1 and E09 prediction 1 failed the same way: I reasoned
+confidently from the environment code and did not check the *other* half of the system — the
+agent in one case, the agent's visitation distribution in the other. Reading
+`coin_collector_agent/callbacks.py` would have taken 30 seconds.
 
 ---
 
