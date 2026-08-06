@@ -21,6 +21,135 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E09 — Transfer floor: the rung-1 agent, unchanged, on `classic`
+
+- **Question:** what does the task-1 agent actually *do* when crates appear? This is the
+  "before" column of every table in the task-2 chapter, and it decides whether the rung-2
+  work starts from something partially useful or from scratch.
+- **Change:** none to the agent. `agent_code/benedict_task2/` is byte-identical to
+  `tabular_q_task1/` apart from identity strings, and it loads the rung-1 table
+  (49.15 ± 1.23 coins on `coin-heaven`). Only the scenario changes.
+- **Agent:** `benedict_task2` · commit `<fill in from .meta.json>` · label
+  `benedict_task1model__task2_floor`
+- **Training:** none. This is a pure transfer measurement at ε = 0.
+- **Measurement:** `results/eval/task2_crates/benedict_task1model__task2_floor.csv`,
+  300 rounds, `classic`, `--opponents none`, seed 20260731.
+
+### What the state space does when crates appear (established before the run)
+
+Two facts about the rung-1 feature map, both checked against the code and the shipped table
+rather than assumed:
+
+1. **The coin digit goes dead.** `environment.py:377–386` places coins *preferentially under
+   crates*: the 9 coins are drawn from a shuffled list of crate tiles first, free tiles only
+   as a fallback. `classic` has ≈ 90 crates and 9 coins, so all 9 start non-collectable and
+   `game_state['coins']` is **empty at step 1**. `coin_direction` returns `NO_COIN` at every
+   step until the agent blows a crate open. Digit 5 is therefore frozen at 0, and the agent
+   runs on four wall bits alone — a 16-row table.
+2. **Most of those 16 rows were never trained.** `blocked` uses `field != 0`, so on `classic`
+   crates count as walls. Simulated over 300 generated arenas: the blocked-neighbour count of
+   a free tile is distributed **[0, 1, 2, 3, 4] → 0.001, 0.012, 0.202, 0.421, 0.364**, i.e.
+   79 % of free tiles have three or four blocked neighbours. On `coin-heaven` (no crates)
+   those configurations essentially do not occur, and the shipped table confirms it: rows
+   `0111`, `1011`, `1101`, `1110`, `1111` at `NO_COIN` are **exactly zero**, 5 of the 16.
+   **78.5 % of free tiles on a `classic` arena map to an all-zero row.**
+
+An all-zero row means `q_row == q_row.max()` is true for all six actions, so `act` tie-breaks
+uniformly — **including `BOMB`**. The agent that scored 49/50 coins is, on this rung, a random
+agent for roughly four steps in five.
+
+### Prediction (written before the run)
+
+1. **This is not a "score 0" floor, it is a `random_agent` floor.** Expect the row to look
+   like E08's `random_agent`, not like its `coin_collector_agent`: `suicides` **> 0.5 per
+   round**, `survived` **< 0.5**, `bombs` on the order of 1–3 per round, and `crates`
+   **> 0** — it will destroy crates by accident. `score` **0.0–0.4**, non-zero only because a
+   blind bomb occasionally frees a coin the agent then stumbles onto.
+2. **`score` will be within noise of `random_agent`'s.** If the paired CI against
+   `random_agent` excludes 0 in *either* direction, one of the two arguments above is wrong
+   and I need to know which before building on the table.
+3. **The four trained `NO_COIN` rows with large positive values** (rows 15, 30, 45, 60, max
+   ≈ +18.6 to +19.6, one and two blocked neighbours) **will not help.** They cover 21 % of
+   tiles and their argmax is a movement direction learned from a coin gradient that no longer
+   exists. Concretely: `invalid` should stay low (< 1 per round) while `score` stays at zero —
+   the agent moves legally and pointlessly.
+4. **`steps` will be 400.00 in essentially every round**, because the round only ends when
+   crates, coins and bombs are all gone. If the completion rate is above ~2 %, my reading of
+   `environment.py:289` is wrong for this rung.
+
+**Refutation condition for the whole entry:** any of `score` > 1.0, `suicides` < 0.1, or
+`bombs` ≈ 0 means the all-zero-row argument is wrong — most likely because the agent's
+*visitation* distribution differs sharply from the static tile distribution I simulated
+(it dies early, so it never reaches the interior). That would be worth knowing on its own,
+and the fix is to log the visited rows rather than count tiles.
+
+### Why run it at all, given the prediction
+
+Two reasons. It is the honest "before" number for the report, and — more usefully — it turns
+"the rung-1 features are insufficient" from an assertion into a measurement with a CI. The
+78.5 % figure above is the quantitative version of the argument that the danger and crate
+features are *necessary*, and it is worth having in the Experiments chapter as the reason the
+next two experiments exist.
+
+### Result
+
+*(to be filled in)*
+
+### Verdict
+
+*(to be filled in)*
+
+---
+
+## E08 — Reference measurement on `classic`, no opponents
+
+- **Question:** what is the scale on rung 2, and **which metric discriminates on it**? On
+  rung 1 the equivalent measurement (Maxi's E00) reframed the whole rung: `coins` turned out
+  to be a pass criterion with zero variance, and `steps` was the real target. Running the
+  provided agents first is cheap and stops me optimising the wrong column for a week.
+- **Change:** none. Measurement of the four provided agents, each alone.
+- **Agent:** `random_agent`, `peaceful_agent`, `coin_collector_agent`, `rule_based_agent` ·
+  commit `<fill in from .meta.json>` · labels `ref_<agent>__task2`
+- **Measurement:** `results/eval/baselines/ref_<agent>__task2.csv`, 300 rounds each,
+  `classic`, `--opponents none`, seed 20260731, `--preset task2`.
+
+### Prediction (written before the run)
+
+1. **`coin_collector_agent` scores exactly 0.00**, with `bombs` 0.00 and `crates` 0.00, and
+   survives every round. It has no bomb logic, and by the coin-placement argument in E09 all
+   9 coins start under crates, so nothing ever becomes collectable. **Refutation:** any
+   non-zero score means my reading of `environment.py:377–386` is wrong, and E09's central
+   argument goes with it.
+2. **`peaceful_agent` also scores 0.00** and also survives every round, for the same reason
+   plus its own refusal to bomb. So **three of the four reference agents are tied at zero on
+   the primary metric** — which is the actual finding of this experiment: on rung 2, `score`
+   does not order the reference field, it only separates `rule_based_agent` from everything
+   else.
+3. **`random_agent`: `crates` 1–5 per round, `score` < 0.3, `suicides` > 0.7, `survived`
+   < 0.3.** It is the only cheap agent that bombs, so it is the honest floor for anything
+   that bombs — and, per E09, the right comparison for my own transferred agent.
+4. **`rule_based_agent` is the only meaningful reference on this rung.** Expect `score` 4–8
+   of 9, `crates` 25–50, `suicides` < 0.15, `survived` > 0.80.
+5. **The discriminating metric is `crates`, with `score` second and `steps` uninformative.**
+   `crates` orders all four agents; `score` orders only one against three; `steps` should be
+   400.00 for every agent that survives, because the round cannot end while crates remain.
+   **Refutation:** if `rule_based_agent` completes more than ~10 % of rounds inside 400 steps,
+   `steps` is informative after all and belongs beside `crates` as a rung-2 efficiency metric.
+
+**What I do with the answer.** Prediction 5 sets the progress metric for E10 and E11. If it
+holds, the task-2 ladder is *crates destroyed → coins scored → suicides down*, in that order,
+and `score` is not usable as a progress signal until the agent reliably opens crates at all.
+
+### Result
+
+*(to be filled in)*
+
+### Verdict
+
+*(to be filled in)*
+
+---
+
 ## E07 — Is the ε schedule still doing anything?
 
 - **Question:** E06 arm B changed *two* things relative to E04 — the per-cell learning rate
