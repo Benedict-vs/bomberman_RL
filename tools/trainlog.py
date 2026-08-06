@@ -102,7 +102,12 @@ class TrainLogger:
         self._since_flush = 0
         self._started = time.time()
 
-        directory = Path(out_dir) if out_dir else REPO_ROOT / "results" / "train"
+        # Anchored to the repo, not to the cwd: `agents.py:304` chdirs into
+        # `agent_code/<name>/` around every callback, so a relative out_dir
+        # would silently write the log there instead. `REPO_ROOT / abs_path`
+        # is still abs_path, so an absolute out_dir keeps working.
+        directory = REPO_ROOT / (Path(out_dir) if out_dir
+                                 else Path("results") / "train")
         directory.mkdir(parents=True, exist_ok=True)
         self.path = directory / f"{agent}__{run}.csv"
         self.meta_path = directory / f"{agent}__{run}.meta.json"
