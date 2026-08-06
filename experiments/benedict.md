@@ -93,11 +93,125 @@ next two experiments exist.
 
 ### Result
 
-*(to be filled in)*
+| Metric | value (300 rounds) |
+|---|---|
+| `score` | **0.000** |
+| `coins` | 0.000 |
+| `crates` | **0.000** |
+| `bombs` | **0.000** |
+| **`moves`** | **0.000** |
+| `invalid` | 290.667 |
+| `suicides` | 0.000 |
+| `survived` | **1.000** |
+| `round_steps` | 400.0 in every round |
+| `think_mean_ms` | 0.006 |
+
+Paired against `random_agent` (E08), 300 rounds: `score` −0.003 [−0.010, +0.000] *no effect
+shown* · `crates` −3.007 [−3.153, −2.867] WORSE · `bombs` −1.080 WORSE · `suicides` −1.000
+BETTER · `survival` +1.000 BETTER.
+
+**The agent never takes a single step in any of the 300 rounds.** `moves = 0` with
+`invalid = 290.7` is not a bad policy, it is no policy at all.
+
+### Diagnosis: it freezes on its starting tile
+
+`invalid` is not spread out — it is bimodal, and the two modes are exactly 3 : 1.
+
+| `invalid` | rounds | share | behaviour |
+|---|---|---|---|
+| 400 | 218 | 0.727 | pushes into a wall every step, 400 times |
+| 0 | 82 | 0.273 | waits every step, 400 times |
+
+0.727 and 0.273 are 3/4 and 1/4. The four starting corners are cleared of crates
+(`environment.py:369–374`), so each has exactly two blocked neighbours — both board walls —
+and the coin digit is `NO_COIN` from step 1. That fixes the row on step 1 of every round:
+
+| corner | blocked (U,R,D,L) | row | argmax | outcome |
+|---|---|---|---|---|
+| (1,1) | 1,0,0,1 | 45 | `UP` | blocked → INVALID, state unchanged, forever |
+| (1,15) | 0,0,1,1 | 15 | `DOWN` | blocked → INVALID, forever |
+| (15,1) | 1,1,0,0 | 60 | `UP` | blocked → INVALID, forever |
+| (15,15) | 0,1,1,0 | 30 | `WAIT` | waits, forever |
+
+Three corners of four freeze on an invalid action, one on `WAIT` — 0.75 / 0.25, measured
+0.727 / 0.273. The agent is stuck on the tile it spawned on, in every round, from step 1.
+
+### Why those four rows are the worst in the table
+
+They carry the **highest values in the whole model**:
+
+```
+NO_COIN rows   max 19.60   <- global argmax of the entire table is row 30
+coin rows      max 17.70
+```
+
+`NO_COIN` on `coin-heaven` only occurs at the instant the last coin is collected. Those rows
+were therefore updated a handful of times each, always from `end_of_round`, always
+bootstrapping off one another — enough to inflate them above every legitimately trained row
+and not nearly enough to order the six actions sensibly. Three of the four resulting argmaxes
+point into a wall.
+
+The semantic mismatch is the whole story. In the training distribution `NO_COIN` meant *the
+round is over and it went well*. On `classic` it means *no coin has been visible for 400
+steps*. Transfer carried a "success" state onto a "no information" state, and because an
+invalid action leaves the state unchanged, the arbitrary argmax of a barely-trained row is
+not a small error — it is an absorbing fixed point.
+
+This is the third distinct route to the same failure. E01 reached it through an unconverged
+learning rate, E04 through deterministic tie-breaking, and E09 through distribution shift.
+**On this state representation, any row the agent can enter and not leave is a round-ending
+bug, and the number of such rows is a property of the deployment distribution, not of
+training.**
+
+### Predictions, scored
+
+1. **"A `random_agent` floor, not a zero floor: suicides > 0.5, bombs 1–3, crates > 0" —
+   wrong, and wrong in the direction that mattered.** Measured: 0 suicides, 0 bombs, 0 crates,
+   100 % survival. My argument was that 78.5 % of *free tiles* map to an all-zero row where
+   `act` tie-breaks uniformly over six actions including `BOMB`. The tile statistic is
+   correct; it is simply irrelevant, because the agent never reaches a second tile.
+2. **"`score` within noise of `random_agent`" — right by accident.** −0.003 [−0.010, +0.000].
+   Both agents score ~0, for completely different reasons; the null hides the fact that
+   `random_agent` at least destroys 3 crates a round and mine destroys none.
+3. **"The four high-value `NO_COIN` rows will not help" — right, but I got the consequence
+   backwards.** I predicted `invalid < 1 per round` with the agent "moving legally and
+   pointlessly". It is 290.7, and those four rows are not merely unhelpful — they are the
+   entire failure.
+4. **"`round_steps` = 400 in essentially every round" — right.** 400.0 in all 300, completion
+   rate 0.000.
+
+**The refutation condition fired exactly as written.** I wrote: *"any of `score` > 1.0,
+`suicides` < 0.1, or `bombs` ≈ 0 means the all-zero-row argument is wrong — most likely
+because the agent's visitation distribution differs sharply from the static tile distribution
+I simulated."* Two of the three triggered, and the stated cause was the actual cause. Writing
+down *why* a prediction might fail, and not just what it predicts, is what turned a wrong
+guess into a diagnosis in one run instead of an afternoon.
 
 ### Verdict
 
-*(to be filled in)*
+**Floor established: 0.000 score, 0.000 crates, 0.000 moves.** The rung-1 model transfers
+*nothing* to `classic` — it is strictly worse than `random_agent`, which at least opens 3.0
+crates per round. Nothing in the rung-1 table is worth keeping as an initialisation; task 2
+starts from zeros.
+
+Three requirements for the task-2 feature map follow directly, and they are now measured
+rather than argued:
+
+1. **`NO_COIN` must stop being a single state.** "No coin is visible" is the *normal*
+   condition on this rung, not a terminal one. It needs a target that is defined when no coin
+   exists — the direction to the nearest crate — so the digit carries information for the
+   399 steps out of 400 where the coin list is empty.
+2. **Crates must not be encoded as walls.** `field != 0` collapses "impassable forever" and
+   "impassable until I bomb it", and the second is the entire point of the rung. The corner
+   rows above are not even the worst case of this — they are just the first one reached.
+3. **An unreachable-argmax row must be detectable before a 300-round run.** The four rows
+   that broke this were visible in the shipped table by inspection: three of them have an
+   argmax pointing at a blocked neighbour, which is knowable from the row index alone. That
+   check belongs in the standing diagnostic next to the loop detector, and it would have
+   predicted this result in under a second.
+
+Requirement 3 is the cheapest and goes in first, because it is a guard on every experiment
+after this one, not a feature.
 
 ---
 

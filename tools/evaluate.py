@@ -393,11 +393,12 @@ def main(argv=None) -> int:
     csv_path = write_outputs(records, meta, out_dir, label)
 
     if not args.quiet:
+        # resolve() first: a relative --out-dir would otherwise make relative_to
+        # raise *after* the CSV is safely written, which reads like a lost run.
+        shown = csv_path.resolve().relative_to(REPO_ROOT)
         print_quick_summary(records)
-        print(f"Wrote {csv_path.relative_to(REPO_ROOT)}  "
-              f"({len(records)} rows, {meta['wall_clock_s']}s)")
-        print(f"Analyse with: uv run python tools/analyze.py "
-              f"{csv_path.relative_to(REPO_ROOT)}")
+        print(f"Wrote {shown}  ({len(records)} rows, {meta['wall_clock_s']}s)")
+        print(f"Analyse with: uv run python tools/analyze.py {shown}")
 
     return 0
 
