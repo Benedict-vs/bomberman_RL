@@ -16,11 +16,11 @@ N_STATES = int(np.prod(FEATURE_SIZES))
 # (dx, dy) for UP, RIGHT, DOWN, LEFT - image coords, y grows downwards
 DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
 
-def state_to_features(game_state: dict) -> int | None:
+def state_to_features(game_state: dict) -> int:
     """Map a game state onto a row index of the Q-table"""
     
-    if game_state is None:          # bevor the first and after the last step
-        return None
+    if game_state is None:
+        raise ValueError("state_to_features called without a game state")
     
     field = game_state['field']     # indexing is field[x, y]
     x, y = game_state['self'][3]
@@ -77,12 +77,14 @@ def act(self, game_state: dict):
     """Called each game step to determine the agent's next action."""
     
     state = state_to_features(game_state)
-    
-    eps = self.eps if self.train else 0.0           # exploration rate: set in train.py
-    if np.random.random() < eps:
-        return np.random.choice(ACTIONS)
-    
-    return ACTIONS[int(np.argmax(self.q[state]))]   # untrained agents will have 
+
+    # self.eps and self.rng are set in train.py. Outside training the policy is
+    # purely greedy, so the tournament never reaches either of them -- which is
+    # what keeps the agent working when train.py is not imported at all.
+    if self.train and self.rng.random() < self.eps:
+        return ACTIONS[int(self.rng.integers(len(ACTIONS)))]
+
+    return ACTIONS[int(np.argmax(self.q[state]))]   # untrained agents will have
                                                     # q[state] = 0, so argmax
                                                     # returns 0, i.e. UP
 

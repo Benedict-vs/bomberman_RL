@@ -21,6 +21,163 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E06 — A per-cell learning rate, and 5 seeds per configuration
+
+- **Question:** E05b showed that two training runs of *identical code* can differ by 17
+  coins. Does a learning rate that decays with the number of visits to a cell remove that
+  fragility — and how large is the run-to-run spread once it is measured properly?
+
+- **Why α.** In E05b the wrong action won row 409 by **0.022**. With a constant α = 0.1
+  every visit moves a cell by a tenth of the TD error, so a high-traffic cell never settles;
+  it keeps jittering at exactly the scale that decides the argmax. L26 gives the condition
+  for convergence — `sum α = ∞` and `sum α² < ∞` — which a constant α does not satisfy.
+  A per-cell schedule does:
+
+  `α(s,a) = 1 / N(s,a)^0.7`, with `N(s,a)` the visit count. Exponent 0.7 lies in the (0.5, 1]
+  window where both conditions hold. High-traffic cells like row 409 become nearly frozen;
+  rarely visited ones keep learning fast. That is the exact shape of the problem.
+
+  Deliberately *not* doing action masking, which was the other candidate. The agent should
+  learn that walking into a wall is bad — it already does, `invalid` is 0.15 in v5 — and
+  masking would hide the instability rather than fix it.
+
+- **Change from E05:** `self.alpha` becomes `1 / N(s,a)^0.7` instead of the constant 0.1.
+  φ, rewards, γ and the ε schedule are untouched.
+
+- **Design — two arms, five seeds each.** This is the first experiment with n > 1, because
+  E05b proved n = 1 is not interpretable:
+
+  | arm | configuration | runs |
+  |---|---|---|
+  | **A (baseline)** | v5 exactly: constant α = 0.1, ε decay | seeds 0–4 |
+  | **B** | as A but per-cell α | seeds 0–4 |
+
+  Arm A doubles as the **replication of E05**, which is still an n = 1 claim.
+
+- **Reproducibility, fixed before this experiment (infrastructure, not a version).**
+  Two independent RNGs had to be pinned, which is why v4 and v4b were incomparable:
+  1. the agent's exploration — `self.rng = np.random.default_rng(TRAIN_SEED + RUN_INDEX)`
+     in `setup_training`, drawn from in `act`. Seeded here rather than in `callbacks.py` so
+     the tournament path, where `train.py` is never imported, cannot touch it;
+  2. the world — `main.py --seed`, which places the coins. Without it every run sees
+     different arenas.
+
+  Verified: same index + same world seed → **bit-identical** Q-tables; different index →
+  different tables. The training world seed is **810731**, deliberately *not* the evaluation
+  seed 20260731, so the agent is never trained on the arenas it is measured on.
+
+  Seeding buys reproducibility, not reliability — a bad draw returns identically. Reliability
+  is what the five runs per arm are for.
+
+### Prediction (written before the run)
+
+1. **The means barely move.** Arm A ≈ arm B ≈ 49–50 coins. Task 1 is at the ceiling; there
+   is under half a coin of headroom. Anyone reading only the means will conclude "no effect".
+2. **The spread collapses, and that is the whole point.** Standard deviation of `coins`
+   across the five seeds: arm A above 5 (it must contain runs like v4b), arm B below 1.
+   The metric that decides this experiment is **the worst run**, not the mean:
+   min over seeds ≥ 48 for arm B, and I expect arm A to produce at least one run below 40.
+3. **Rows whose argmax is a blocked direction:** arm B has zero in high-traffic rows
+   (offset ≠ (0,0)). Arm A has at least one such row in at least one of its five runs.
+4. **Arm A replicates E05 in the mean** — around 49–50 coins, confirming the ε-decay result
+   is real and not the same kind of lucky draw that v4 turned out to be.
+5. **Risk:** with α = 1 on the first visit, early estimates swing violently, and a cell
+   visited once early can sit on a wild value for a long time before enough visits pull it
+   back. If arm B is *worse* on the mean, that is the mechanism, and the fix is a floor
+   (`α = max(0.01, 1/N^0.7)`) rather than abandoning the schedule.
+
+**What a null result would mean.** If both arms have small spread, then E05b's v4b was not
+learning-rate instability but something specific to that draw, and the report's claim
+becomes "single training runs are not comparable, therefore we report n = 5" — which is
+worth stating regardless, since it changes how every earlier number should be read.
+
+### Result
+
+| Metric | arm A (const α) | arm B (per-cell α) | |
+|---|---|---|---|
+| `coins` mean over 5 seeds | | | |
+| `coins` std over 5 seeds | | | |
+| `coins` worst seed | | | |
+| `invalid` mean / worst | | | |
+| runs with a blocked-argmax high-traffic row | | | |
+
+### Verdict
+
+*(filled in after the measurement)*
+
+### What I do next
+
+*(filled in after the measurement)*
+
+---
+
+## E05b — Control: is E05 the distribution or just more data?
+
+- **Question:** E05 trained on 1.8× the transitions of E04 because ε decay lengthens
+  episodes. Was the gain the *distribution* of the data or merely its *volume*? Control:
+  v4's configuration (constant ε = 0.2) with the round count raised from 10 000 to 17 800
+  so total steps match.
+- **Agent:** v4b · commit `28f32ba` · `eps_decay = 1`, everything else identical to v5.
+- **Prediction:** no improvement, `coins` stays near 46. Under constant ε the agent dies at
+  step 61 regardless of round count, so late-round states stay unvisited; more data cannot
+  reach states the policy never enters.
+
+### Result
+
+| Metric | v4 (10 000 rounds) | v4b (17 800 rounds) | Paired difference | 95 % CI |
+|---|---|---|---|---|
+| `coins` | 46.107 | **29.477** | −16.630 | [−18.770, −14.537] |
+| `steps` | 176.5 | 299.6 | +123.117 | [+102.036, +143.584] |
+| `invalid` | 0.12 | **163.15** | +163.030 | [+143.586, +182.914] |
+| `suicides` | 0.010 | 0.167 | +0.157 | [+0.117, +0.200] |
+
+Training dynamics were indistinguishable from v4 (ε 0.200 throughout, 55–65 steps per
+episode, `KILLED_SELF` 0.95, ~4 invalid actions per episode). The configuration was correct.
+The *agent* was not.
+
+### Cause: one cell
+
+Row 409 — `UP` blocked, coin one tile to the left. A very common state.
+
+| | UP (blocked) | RIGHT | DOWN | LEFT (correct) | argmax |
+|---|---|---|---|---|---|
+| v4 | 15.730 | 15.457 | 15.752 | **18.935** | LEFT |
+| v5 | 12.169 | 12.609 | 12.792 | **15.878** | LEFT |
+| v4b | **15.514** | 13.479 | 15.492 | 14.267 | **UP** |
+
+In v4b the correct action ranks fourth and `UP` wins by **0.022**. And an invalid action
+**does not move the agent**, so the next state is identical, so it chooses `UP` again — a
+deterministic, absorbing deadlock. 163 wasted actions per round out of one wrong cell in
+1770.
+
+That is the amplifier worth remembering: elsewhere a 0.022 error costs 0.022. Here it costs
+17 coins, because the failure mode is a fixed point rather than a detour.
+
+### Verdict
+
+**The control does not answer the question it was built to answer, and reveals a bigger
+problem.** v4 and v4b differ in round count *and* in the unseeded exploration RNG, so this
+is n = 1 against n = 1. A 17-coin swing traced to a single cell is run-to-run variance, not
+evidence about data volume.
+
+The uncomfortable consequence: **E05's +3.823 is also n = 1 against n = 1** and is not yet a
+result. Its mechanism evidence is much stronger — training episodes 61 → 119 steps,
+completions 242 → 299, the entire training distribution shifted — but the effect size cannot
+be claimed until it is replicated. That is arm A of E06.
+
+`tools/README.md` has said "3–5 runs per configuration with different seeds" from the start.
+Every experiment up to here ignored it, and E01–E05 should be read as single draws.
+
+### What I do next
+
+1. **Seed both RNGs** (agent exploration and world) so runs are reproducible at all. Done as
+   infrastructure ahead of E06; verified bit-identical.
+2. **E06 with five seeds per arm**, arm A replicating E05.
+3. **Not** action masking. The deadlock is real, but the honest fix is a learning rate that
+   converges, not removing the agent's ability to make the mistake.
+
+---
+
 ## E05 — Decay ε so training sees the round the agent actually plays
 
 - **Question:** ε has been fixed at 0.2 since E01. With six actions that is a 3.3 % chance

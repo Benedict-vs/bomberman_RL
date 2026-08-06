@@ -1,7 +1,10 @@
-import numpy as np
+import os
 from typing import List
+
+import numpy as np
+
 import events as e
-from .callbacks import state_to_features, ACTIONS, MODEL_FILE
+from .callbacks import state_to_features, ACTIONS, MODEL_FILE, N_STATES
 
 try:
     from tools.trainlog import TrainLogger
@@ -22,7 +25,7 @@ ALPHA = 0.1         # learning rate
 GAMMA = 0.9         # discount factor
 EPS_START = 0.2           # exploration rate during training
 EPS_END = 0.02
-EPS_DECAY = 0.9995  # decay per step, so that exploration decreases over time
+EPS_DECAY = 0.9995  # decay per episode, so that exploration decreases over time
 
 REWARDS = {
     e.COIN_COLLECTED: 5,
@@ -31,8 +34,24 @@ REWARDS = {
     e.KILLED_SELF: -5,
 }
 
+# --- Reproducibility ------------------------------------------------------
+# `--seed` fixes the arenas but NOT the agent's exploration, so two training
+# runs of the same code diverge. That made v4 and v4b incomparable (a 17-coin
+# swing from one wrong cell), so the exploration RNG is seeded here.
+#
+# Seeding alone only buys reproducibility, not reliability: a bad draw comes
+# back identically. Reliability comes from running the SAME configuration under
+# several indices and reporting the spread -- hence BM_RUN_INDEX, so a shell
+# loop can do that without editing this file. Absent (i.e. in the tournament,
+# where train.py is never imported at all) it defaults to 0.
+TRAIN_SEED = 20260731
+RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 0))
+
+ALPHA_MODE = os.environ.get("BM_ALPHA", "const")   # "const" | "visit"
+ALPHA_EXP = 0.7      # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
+
 # Change this per experiment: the training log is appended to, not overwritten.
-RUN_NAME = "q_v5_task1"
+RUN_NAME = f"q_e06{'b' if ALPHA_MODE == 'visit' else 'a'}_s{RUN_INDEX}_task1"
 
 
 def setup_training(self):
@@ -45,16 +64,20 @@ def setup_training(self):
     """
     # Example: Setup an array that will note transition tuples
     # (s, a, r, s')
+    self.rng = np.random.default_rng(TRAIN_SEED + RUN_INDEX)
     self.eps = EPS_START
-    self.alpha = ALPHA
     self.gamma = GAMMA
+    
+    self.visits = np.zeros((N_STATES, len(ACTIONS)), dtype=np.int64)
 
     # Per-episode accumulators for the learning curve. evaluate.py measures the
     # finished agent; this is what shows whether it converged, and when.
     self.trainlog = TrainLogger(
         agent="benedict_coin_collector",
         run=RUN_NAME,
-        hyperparams={"alpha": ALPHA, "gamma": GAMMA, 
+        hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_EXP": ALPHA_EXP,
+                     "gamma": GAMMA,
+                     "train_seed": TRAIN_SEED + RUN_INDEX, "run_index": RUN_INDEX,
                      "eps_start": EPS_START, "eps_end": EPS_END, "eps_decay": EPS_DECAY,
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
@@ -108,7 +131,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     td_target = reward + self.gamma * np.max(self.q[s_next])
     td_error = td_target - self.q[s, a]
-    self.q[s, a] += self.alpha * td_error
+    self.q[s, a] += learning_rate(self, s, a) * td_error
 
     self.episode_td.append(abs(td_error))
 
@@ -138,7 +161,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     td_target = reward                  # no next state, so no future reward
     td_error = td_target - self.q[s, a]
-    self.q[s, a] += self.alpha * td_error
+    self.q[s, a] += learning_rate(self, s, a) * td_error
 
     np.save(MODEL_FILE, self.q)
 
@@ -163,3 +186,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
 def reward_from_events(self, events: List[str]) -> float:
     return sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_COST
+
+def learning_rate(self, s: int, a: int) -> float:
+    self.visits[s, a] += 1
+    if ALPHA_MODE == "visit":
+        return 1.0 / self.visits[s, a] ** ALPHA_EXP
+    return ALPHA
