@@ -288,17 +288,21 @@ are scattered across rounds, so they are GC or scheduler noise.
 | Claim | File |
 |---|---|
 | Reference agents (E00) | `results/eval/baselines/baseline_*__task1.csv` |
-| Benedict E01–E05 progression | `results/eval/benedict_q_v{1..5}__task1.csv` |
-| Benedict E05b (the 17-coin swing) | `results/eval/benedict_q_v4b__task1.csv` |
-| Benedict E06 both arms, 5 seeds | `results/eval/benedict_q_e06{a,b}_s{0..4}__task1.csv` |
-| Benedict E07 ε ablation, 5 seeds | `results/eval/benedict_q_e07c_s{0..4}__task1.csv` |
-| Maxi E01/E02 | `results/eval/maxi_q_v{1,2,3}__task1.csv` |
-| Cross-agent solo / duel | `results/eval/{benedict,maxi}_final__task1.csv`, `duell_benedict_vs_maxi__task1.csv` |
-| Merged agent, 5 seeds | `results/eval/benedict_merged_s{0..4}__task1.csv` |
-| Merged agent, model selection | `results/eval/benedict_merged_s{0..4}__task1_val.csv` (seed 550731) |
-| Merged agent, shipped model | `results/eval/benedict_merged__task1.csv` |
-| Learning curves | `results/train/*.csv` + `.meta.json` (hyperparameters per run) |
+| Benedict E01–E05 progression | `results/eval/task1_coin_collectors/benedict_q_v{1..5}__task1.csv` |
+| Benedict E05b (the 17-coin swing) | `results/eval/task1_coin_collectors/benedict_q_v4b__task1.csv` |
+| Benedict E06 both arms, 5 seeds | `results/eval/task1_coin_collectors/benedict_q_e06{a,b}_s{0..4}__task1.csv` |
+| Benedict E07 ε ablation, 5 seeds | `results/eval/task1_coin_collectors/benedict_q_e07c_s{0..4}__task1.csv` |
+| Maxi E01/E02 | `results/eval/task1_coin_collectors/maxi_q_v{1,2,3}__task1.csv` |
+| Cross-agent solo / duel | `results/eval/task1_coin_collectors/{benedict,maxi}_final__task1.csv`, `.../duell_benedict_vs_maxi__task1.csv` |
+| Merged agent, 5 seeds | `results/eval/task1_coin_collectors/benedict_merged_s{0..4}__task1.csv` |
+| Merged agent, model selection | `results/eval/task1_coin_collectors/benedict_merged_s{0..4}__task1_val.csv` (seed 550731) |
+| Merged agent, shipped model | `results/eval/task1_coin_collectors/benedict_merged__task1.csv` |
+| Learning curves | `results/train/task1_coin_collectors/*.csv` + `.meta.json` (hyperparameters per run) |
 | Figures | `tools/plot_task1_versions.py` (steps split by completion), `analyze.py --plot` |
+
+The merged agent's training logs are named `benedict_agent__q_merged_s*` — that was the
+agent's folder name when they were produced, before it was renamed to `tabular_q_task1`.
+Left as written rather than tidied, so the files still match what the `.meta.json` records.
 
 Every `.meta.json` records the git commit, seed, scenario and a snapshot of `settings.py`.
 
@@ -336,7 +340,8 @@ for i in 0 1 2 3 4; do
     BM_RUN_INDEX=$i uv run python main.py play --no-gui --agents tabular_q_task1 \
       --train 1 --scenario coin-heaven --n-rounds 10000 --seed 810731 >/dev/null 2>&1
     uv run python tools/evaluate.py --agents tabular_q_task1 --opponents none \
-      --scenario coin-heaven --n-rounds 300 --label benedict_merged_s${i}__task1 --quiet ) &
+      --scenario coin-heaven --n-rounds 300 --label benedict_merged_s${i}__task1 \
+      --out-dir "results/eval/task1_coin_collectors" --quiet ) &
 done
 wait
 
@@ -345,7 +350,8 @@ for i in 0 1 2 3 4; do
   ( export BM_MODEL_SUFFIX="_s${i}"
     uv run python tools/evaluate.py --agents tabular_q_task1 --opponents none \
       --scenario coin-heaven --n-rounds 300 --seed 550731 \
-      --label benedict_merged_s${i}__task1_val --quiet ) &
+      --label benedict_merged_s${i}__task1_val \
+      --out-dir "results/eval/task1_coin_collectors" --quiet ) &
 done
 wait
 cp agent_code/tabular_q_task1/q_table_s1.npy agent_code/tabular_q_task1/q_table.npy

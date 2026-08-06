@@ -193,9 +193,25 @@ danger features, never before.
 - Our agents live in `agent_code/` alongside the provided ones (`tpl_agent` is the template;
   `rule_based_agent` is the strong reference opponent and a good source of training data —
   but our submitted agent must be *learned*, not rule-based).
+- **`agent_code/tabular_q_task1/` is the agreed rung-1 baseline** and the starting point for
+  everything after it. It merges the two independently developed coin collectors on the
+  evidence of both ledgers (BFS coin direction and random tie-breaking from Maxi's; per-cell
+  learning rate `1/N(s,a)^0.7`, the full six-action set, the mixed-radix table and the seeded
+  measurement harness from Benedict's). 50.00 coins in every round at 123.7 steps — **faster
+  than `coin_collector_agent`'s 125.3**, which is the metric that discriminates on this rung.
+  Rationale, findings and reproduction: `experiments/task1.md`.
+  Agent folders are named `<method>_task<rung>` (`tabular_q_task1`, later `dqn_task2`); each
+  rung gets its own folder so two rungs can be measured against each other without checking
+  out an old commit. `benedict_coin_collector` and `maxi_coin_collector` stay as frozen
+  evidence for their ledgers — do not develop in them.
 - `tools/` holds our measurement chain; it is **not** submitted, so nothing in
   `agent_code/<name>/callbacks.py` may import from it.
 - `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
+  Grouped per rung, same names in both trees: `task1_coin_collectors/`, `task2_crates/`,
+  plus `results/eval/baselines/` for the provided agents. Underscores, never spaces — a
+  directory with a space in it silently breaks unquoted globs in analysis scripts.
+  Non-default locations need `--out-dir`, e.g.
+  `--out-dir results/eval/task2_crates`.
 - `experiments/<person>.md` is the hand-written results ledger: one entry per experiment with
   question, change, **prediction written before the run**, commit hash, numbers and verdict.
   The CSVs are raw data; this is the narrative the report's Experiments chapter is built from,
