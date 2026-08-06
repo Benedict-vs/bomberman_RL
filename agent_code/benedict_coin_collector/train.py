@@ -1,3 +1,29 @@
+"""Q-learning updates for `benedict_coin_collector`.
+
+Loaded only when the game runs with `--train`, so nothing here executes in the
+tournament. That is why `tools/` may be imported (defensively) and why the
+exploration RNG lives here rather than in `callbacks.py`.
+
+Settings that ended task 1, and why (details in `experiments/benedict.md`):
+
+- **alpha = 1/N(s,a)^0.7, not a constant.** The single largest effect measured.
+  A constant alpha satisfies neither of L26's convergence conditions, so
+  high-traffic cells never settle; on this problem an unsettled cell is not a
+  small error but an absorbing deadlock. Constant alpha: 20.78 +- 6.98 coins
+  over 5 seeds. Per-cell: 49.15 +- 1.23 (E06).
+- **KILLED_SELF = -5.** Removed every suicide at once (E03). Without it the only
+  pressure against BOMB is that the episode ends, which is worth ~0.02 once the
+  coin reward inflates a row.
+- **The epsilon schedule is NOT justified by task-1 numbers** (E07 showed no
+  demonstrated difference). It is kept for task 2, where danger states are a
+  genuinely distinct region of the state space that only a surviving agent
+  reaches.
+
+Reproducibility needs BOTH the exploration seed here and `main.py --seed`;
+either alone leaves runs incomparable. Use a training world seed that is not
+the evaluation seed (20260731), or the agent is measured on arenas it trained on.
+"""
+
 import os
 from typing import List
 
@@ -12,18 +38,13 @@ except ImportError:     # tools/ is not part of the submission
     TrainLogger = None
 
 
-# # Hyper parameters -- DO modify
-# TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
-# RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-
-# # Events
-# PLACEHOLDER_EVENT = "PLACEHOLDER"
-
-STEP_COST = -0.1  # cost of taking a step, to encourage shorter paths
-
-ALPHA = 0.1         # learning rate
+STEP_COST = -0.1    # cost of taking a step, to encourage shorter paths
 GAMMA = 0.9         # discount factor
-EPS_START = 0.2           # exploration rate during training
+
+ALPHA = 0.1         # only used when ALPHA_MODE == "const"
+ALPHA_EXP = 0.7     # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
+
+EPS_START = 0.2
 EPS_END = 0.02
 
 REWARDS = {
@@ -33,45 +54,26 @@ REWARDS = {
     e.KILLED_SELF: -5,
 }
 
-# --- Reproducibility ------------------------------------------------------
-# `--seed` fixes the arenas but NOT the agent's exploration, so two training
-# runs of the same code diverge. That made v4 and v4b incomparable (a 17-coin
-# swing from one wrong cell), so the exploration RNG is seeded here.
-#
-# Seeding alone only buys reproducibility, not reliability: a bad draw comes
-# back identically. Reliability comes from running the SAME configuration under
-# several indices and reporting the spread -- hence BM_RUN_INDEX, so a shell
-# loop can do that without editing this file. Absent (i.e. in the tournament,
-# where train.py is never imported at all) it defaults to 0.
-TRAIN_SEED = 20260731
+# --- Experiment switches --------------------------------------------------
+# Set from the environment so a shell loop can sweep seeds and arms without
+# editing this file. All default to the settings task 1 ended on.
 RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 0))
+ALPHA_MODE = os.environ.get("BM_ALPHA", "visit")    # "visit" | "const"
+EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const"
 
-ALPHA_MODE = os.environ.get("BM_ALPHA", "const")   # "const" | "visit"
-ALPHA_EXP = 0.7      # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
-
-EPS_MODE = os.environ.get("BM_EPS", "decay")          # "decay" | "const"
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
+TRAIN_SEED = 20260731
 
-RUN_NAME = f"q_e07c_s{RUN_INDEX}_task1"               # per-cell alpha, constant eps
-
-# # Change this per experiment: the training log is appended to, not overwritten.
-# RUN_NAME = f"q_e06{'b' if ALPHA_MODE == 'visit' else 'a'}_s{RUN_INDEX}_task1"
+EXPERIMENT = "e07c"     # change per experiment; the training log is appended to
+RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 
 
 def setup_training(self):
-    """
-    Initialise self for training purpose.
+    """Called once before the first round, after `setup` in callbacks.py."""
 
-    This is called after `setup` in callbacks.py.
-
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
-    """
-    # Example: Setup an array that will note transition tuples
-    # (s, a, r, s')
     self.rng = np.random.default_rng(TRAIN_SEED + RUN_INDEX)
     self.eps = EPS_START
     self.gamma = GAMMA
-    
     self.visits = np.zeros((N_STATES, len(ACTIONS)), dtype=np.int64)
 
     # Per-episode accumulators for the learning curve. evaluate.py measures the
@@ -79,8 +81,9 @@ def setup_training(self):
     self.trainlog = TrainLogger(
         agent="benedict_coin_collector",
         run=RUN_NAME,
-        hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_EXP": ALPHA_EXP,
-                     "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END, "eps_decay": EPS_DECAY,
+        hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_exp": ALPHA_EXP,
+                     "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END,
+                     "eps_decay": EPS_DECAY,
                      "gamma": GAMMA,
                      "train_seed": TRAIN_SEED + RUN_INDEX, "run_index": RUN_INDEX,
                      "step_cost": STEP_COST,
@@ -93,31 +96,10 @@ def setup_training(self):
     self.episode_reward = 0.0
     self.episode_td = []
 
-def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
-    """
-    Called once per step to allow intermediate rewards based on game events.
 
-    When this method is called, self.events will contain a list of all game
-    events relevant to your agent that occurred during the previous step. Consult
-    settings.py to see what events are tracked. You can hand out rewards to your
-    agent based on these events and your knowledge of the (new) game state.
-
-    This is *one* of the places where you could update your agent.
-
-    :param self: This object is passed to all callbacks and you can set arbitrary values.
-    :param old_game_state: The state that was passed to the last call of `act`.
-    :param self_action: The action that you took.
-    :param new_game_state: The state the agent is in now.
-    :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
-    """
-    # self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-
-    # # Idea: Add your own events to hand out rewards
-    # if ...:
-    #     events.append(PLACEHOLDER_EVENT)
-
-    # # state_to_features is defined in callbacks.py
-    # self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
+def game_events_occurred(self, old_game_state: dict, self_action: str,
+                         new_game_state: dict, events: List[str]):
+    """One Q-learning update per step."""
 
     reward = reward_from_events(self, events)
 
@@ -139,31 +121,17 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     self.episode_td.append(abs(td_error))
 
+
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
-    """
-    Called at the end of each game or when the agent died to hand out final rewards.
-    This replaces game_events_occurred in this round.
+    """Terminal update, model save, and one row in the training log."""
 
-    This is similar to game_events_occurred. self.events will contain all events that
-    occurred during your agent's final step.
-
-    This is *one* of the places where you could update your agent.
-    This is also a good place to store an agent that you updated.
-
-    :param self: The same object that is passed to all of your callbacks.
-    """
-    # self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    # self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
-
-    # # Store the model
-    # with open("my-saved-model.pt", "wb") as file:
-    #     pickle.dump(self.model, file)
-    
     s = state_to_features(last_game_state)
     a = ACTIONS.index(last_action)
     reward = reward_from_events(self, events)
 
-    td_target = reward                  # no next state, so no future reward
+    # Q(terminal, .) = 0, so no bootstrap term. Leaving it in would teach the
+    # agent that dying is as good as surviving -- step (0) of L26's algorithm.
+    td_target = reward
     td_error = td_target - self.q[s, a]
     self.q[s, a] += learning_rate(self, s, a) * td_error
 
@@ -185,14 +153,19 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.episode_events = []
     self.episode_reward = 0.0
     self.episode_td = []
-    self.eps = max(EPS_END, self.eps * EPS_DECAY)  # decay exploration rate per episode
 
+    # After logging, so the recorded epsilon is the one that generated the episode.
+    self.eps = max(EPS_END, self.eps * EPS_DECAY)
 
-def reward_from_events(self, events: List[str]) -> float:
-    return sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_COST
 
 def learning_rate(self, s: int, a: int) -> float:
+    """Per-cell learning rate. See the module docstring for why this matters."""
+
     self.visits[s, a] += 1
     if ALPHA_MODE == "visit":
         return 1.0 / self.visits[s, a] ** ALPHA_EXP
     return ALPHA
+
+
+def reward_from_events(self, events: List[str]) -> float:
+    return sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_COST

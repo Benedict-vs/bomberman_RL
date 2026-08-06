@@ -1,0 +1,48 @@
+{
+  "agent": "benedict_coin_collector",
+  "columns": [
+    "episode",
+    "wall_clock_s",
+    "score",
+    "steps",
+    "reward",
+    "epsilon",
+    "COIN_COLLECTED",
+    "CRATE_DESTROYED",
+    "COIN_FOUND",
+    "KILLED_OPPONENT",
+    "KILLED_SELF",
+    "GOT_KILLED",
+    "SURVIVED_ROUND",
+    "INVALID_ACTION",
+    "BOMB_DROPPED",
+    "WAITED",
+    "td_error"
+  ],
+  "git_commit": "d4c55b2",
+  "history": [],
+  "hyperparams": {
+    "alpha": 0.1,
+    "alpha_EXP": 0.7,
+    "alpha_mode": "visit",
+    "eps_decay": 1.0,
+    "eps_end": 0.02,
+    "eps_mode": "const",
+    "eps_start": 0.2,
+    "features": "4 wall bits + dx, dy clipped to [-3, 3]",
+    "gamma": 0.9,
+    "n_states": 784,
+    "rewards": {
+      "COIN_COLLECTED": 5,
+      "INVALID_ACTION": -1,
+      "KILLED_SELF": -5,
+      "WAITED": -0.1
+    },
+    "run_index": 1,
+    "step_cost": -0.1,
+    "train_seed": 20260732
+  },
+  "python": "3.12.13",
+  "run": "q_e07c_s1_task1",
+  "started_utc": "2026-08-06T09:08:19+00:00"
+}

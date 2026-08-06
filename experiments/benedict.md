@@ -63,20 +63,81 @@ the rung where it is expensive to discover.
 
 | Metric | E06 arm B (ε decay) | E07c (constant ε) |
 |---|---|---|
-| `coins`, mean over 5 seeds | 49.15 | |
-| `coins`, std | 1.23 | |
-| `coins`, worst seed | 47.16 | |
-| training `steps`, last 1000 | 125.6 (s0) | |
-| training `KILLED_SELF`, last 1000 | 0.104 (s0) | |
-| simulated coins before loop | 50.0 in all five | |
+| `coins`, mean over 5 seeds | 49.15 | 48.68 |
+| `coins`, std | 1.23 | **0.33** |
+| `coins`, worst seed | 47.16 | **48.10** |
+| per seed | 50.0 · 47.2 · 50.0 · 49.8 · 48.7 | 48.9 · 48.1 · 48.7 · 48.9 · 48.8 |
+| full-sweep rate (all 50 coins) | 0.981 (worst 0.940) | 0.966 (worst **0.950**) |
+| `invalid` | 0.055 | 0.043 |
+| `suicides` | 0.0173 | 0.0247 |
+| **training `steps`, last 1000** | 120–128 | **68–72** |
+| **training `KILLED_SELF`, last 1000** | 0.10–0.15 | **0.88–0.90** |
+
+Mean difference −0.47 with a pooled standard error of ≈ 0.57 — **not demonstrated**.
+Constant ε is markedly *more consistent* (std 0.33 against 1.23) and has the better worst
+seed, which was not predicted.
+
+### E05's mechanism is refuted, not just its number
+
+E05 argued that ε decay helps because *training never reaches the late round*: at constant
+ε the agent bombs itself and dies at step ~61, while evaluation runs to 130–400.
+
+E07 reproduces that training regime exactly — **68–72 steps per episode, dying in 89 % of
+them** — and still evaluates at **48.68 coins over ~130 steps**. The agent plays well in a
+regime it has essentially never trained in. The distribution mismatch is real; it simply
+does not matter.
+
+Why: **φ is position-relative and contains no notion of time or of how many coins are left.**
+"The late round" is not a distinct region of the state space. A coin five tiles away produces
+exactly the same row at step 3 as at step 300, and the agent meets that row constantly in the
+first 70 steps. Only the *frequency* of rows shifts as the round progresses, not their
+identity — which is what a good state abstraction is supposed to do.
+
+So E05 was wrong twice: the +3.823 was a lucky draw (E06), and the story explaining it was
+also wrong (E07). What actually fixed task 1 was the learning rate, and nothing else.
+
+### Predictions, scored
+
+1. **"No demonstrated difference, 47–50, std below 2" — right.** 48.68 ± 0.33.
+2. **Prediction 2's second branch fired, and it was the decisive one.** I wrote: *"if training
+   steps stay near 61 while evaluation coins still reach ~49, then the whole 'training must
+   see the late round' story is wrong."* Training steps 68–72, evaluation 48.68. Recording
+   both branches in advance is what makes this a refutation rather than a shrug.
+3. **`KILLED_SELF` near 0.9 in training, without reaching the greedy policy — right.**
+   0.88–0.90 while training, `suicides` 0.0247 at evaluation.
+4. **"If E07 wins outright" — it did not win on the mean, but it won on spread and worst
+   case**, which I had not considered. Lower variance is the more useful property when only
+   one model ships.
 
 ### Verdict
 
-*(filled in after the measurement)*
+**No demonstrated difference on task 1 — the ε schedule earns nothing here.** Task 1 is
+settled either way: ~49 coins of 50, ~97 % full sweeps, both configurations.
+
+**Decision: keep the schedule going into task 2 anyway**, and be explicit that this is *not*
+justified by the task-1 numbers. The reason E05's mechanism failed is specific to task 1's
+feature map: nothing in φ marks a hazard or a deadline, so no part of the state space depends
+on surviving. **On task 2 that changes completely.** Danger states — in a blast radius, bomb
+timer running — are a genuinely distinct region, reachable only by surviving the four steps
+after dropping a bomb. An agent dying in 89 % of training episodes never experiences the
+escape it must learn. The argument that failed here is the argument that should hold there,
+and E07 is the reason I will be able to say why.
+
+If the schedule turns out to earn nothing on task 2 either, it goes.
 
 ### What I do next
 
-*(filled in after the measurement)*
+1. **Ship `q_e06b_s0.npy`** as the task-1 model, following the pre-declared "index 0" rule.
+   Choosing the ε-decay arm is a decision about task 2, not about its 50.0 on seed 0 — the two
+   arms are statistically indistinguishable here.
+2. **Task 2** (`classic`, no opponents). Everything so far is a navigator that survives by
+   never bombing; there it must bomb deliberately and escape. Required:
+   - a **danger feature** (in blast radius / steps until detonation / is there an escape),
+   - crates in the wall bits are already handled (`field != 0`),
+   - the reward table revisited: `CRATE_DESTROYED` added, and `COIN_COLLECTED` +5 finally
+     ablated against the game's +1 — an ablation now three experiments overdue.
+3. **Carry forward: per-cell α, n = 5 seeds, prediction before the run, and the
+   `loop_check` replay** — the last of which caught more than the 300-round evaluations did.
 
 ---
 
