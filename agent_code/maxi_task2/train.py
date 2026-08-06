@@ -37,6 +37,13 @@ except ImportError:     # tools/ is not part of the submission
 
 AGENT_NAME = "maxi_task2"
 
+# `agents.py` chdirs into this agent's directory before calling us, so a plain
+# relative "results/train/..." lands in agent_code/maxi_task2/, not at the repo
+# root where AGENTS.md wants it. Derive the root from __file__ instead --
+# still no absolute path in the source, which is the submission rule.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+TRAINLOG_DIR = os.path.join(REPO_ROOT, "results", "train", "task2_crates")
+
 STEP_COST = -0.1    # encourages shorter paths
 GAMMA = 0.9
 
@@ -92,11 +99,11 @@ def setup_training(self):
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
                      "n_states": len(self.q),
-                     "features": "4 wall bits + BFS direction to nearest coin, else crate"},
-        # Task-2 logs go beside the task-2 evaluations; see AGENTS.md. Relative
-        # to the cwd, which for training is always the repo root.
-        out_dir="results/train/task2_crates",
-        extra_columns=["td_error"],
+                     "features": "4 wall bits + BFS target (direction x kind: coin | crate) "
+                                 "+ danger level + escape direction"},
+        # Task-2 logs go beside the task-2 evaluations; see AGENTS.md.
+        out_dir=TRAINLOG_DIR,
+        extra_columns=["td_error", "states_seen", "cell_coverage"],
     ) if TrainLogger else None
     self.episode_events = []
     self.episode_reward = 0.0
@@ -146,6 +153,16 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.episode_events.extend(events)
     self.episode_reward += reward
     self.episode_td.append(abs(td_error))
+
+    # How much of the table the run has actually touched. The state space grew
+    # 80 -> 2880 rows when the danger and coin/crate features went in, and
+    # 1/N(s,a)^0.7 only converges on cells that are visited often -- a row seen
+    # twice is noise, not a policy. If this plateaus far below 1.0 the limit is
+    # reachability (states the game never produces), not the episode count;
+    # unreached rows keep their zero-initialised Q values and are harmless,
+    # rarely-reached ones are what produce erratic play.
+    seen = self.visits > 0
+    states_seen = int(seen.any(axis=1).sum())
     if self.trainlog:
         self.trainlog.log_episode(
             episode=last_game_state["round"],
@@ -154,7 +171,18 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
             events=self.episode_events,
             reward=self.episode_reward,
             epsilon=self.eps,
-            extra={"td_error": float(np.mean(self.episode_td))},
+            extra={"td_error": float(np.mean(self.episode_td)),
+                   "states_seen": states_seen,
+                   "cell_coverage": float(seen.mean())},
+        )
+
+    # Also in the agent log, so a run without tools/ (i.e. the submission
+    # layout) is not blind. Every 100th round keeps the log readable.
+    if last_game_state["round"] % 100 == 0 and states_seen:
+        self.logger.info(
+            f"round {last_game_state['round']}: {states_seen}/{len(self.q)} states seen "
+            f"({states_seen / len(self.q):.1%}), {seen.mean():.1%} of cells, "
+            f"median visits over seen cells {np.median(self.visits[seen]):.0f}"
         )
     self.episode_events = []
     self.episode_reward = 0.0

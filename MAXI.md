@@ -7,6 +7,62 @@ welche Ideen ich habe und warum ich mich so entschieden habe.
 
 ## Einträge
 
+### 2026-08-06 — Stufe 2: Ziel-Merkmal nach Art getrennt, Besuchszähler, Logpfad-Bug
+
+- **Stand:** `maxi_task2` hat jetzt Gefahrenkarte, Gefahrenstufe und Flucht-BFS
+  (uncommittet aus der letzten Sitzung). Der Merkmalssatz ist damit
+  `4 Wandbits + Ziel (Richtung × Art) + Gefahr + Flucht` → **2880 Zustände**.
+  Noch **nicht trainiert**, noch **nicht gemessen** — es gibt bis jetzt keine Zahl,
+  die irgendetwas über Stufe 2 aussagt.
+- **Gemacht:**
+  - **Auslöser war ein Absturz, kein Bug:** `python main.py play --my-agent maxi_task2`
+    bricht in `setup()` mit „Q-table on disk has shape (80, 6), expected (1600, 6)" ab.
+    Die Formprüfung tut genau das, wofür sie da ist — die Tabelle auf der Platte stammt
+    aus dem Merkmalssatz *vor* den Gefahren-Merkmalen. Alte Zeilen sind nicht
+    weiterverwendbar: das gemischtradixe `encode()` vergibt jetzt andere Indizes,
+    Zeile *k* bedeutet etwas völlig anderes. Auffüllen wäre schlechter als Nullen.
+  - **Ziel-Merkmal nach Art getrennt** (die seit dem 05.08. offene Frage in
+    `experiments/maxi.md`): eine Stelle mit 9 Werten statt 5 — `0` nichts erreichbar,
+    `1..4` **Münze** in Richtung `ACTIONS[0..3]`, `5..8` **Kiste** in Richtung
+    `ACTIONS[0..3]` (`COIN_OFFSET`/`CRATE_OFFSET`). `target_direction()` liefert den
+    versetzten Wert, Münzvorrang und der eine BFS-Durchlauf bleiben unverändert.
+  - **Besuchszähler ausgelesen:** `self.visits` gab es schon für die Lernrate, wurde
+    aber nie ausgewertet. Neu zwei Spalten im Trainingslog (`states_seen`,
+    `cell_coverage`) plus alle 100 Runden eine Zeile im Agentenlog — inklusive
+    **Median der Besuche über die gesehenen Zellen**, denn das ist die Zahl, die
+    „schon konvergiert" von „einmal berührt" unterscheidet. Läuft ohne `tools/`.
+  - **Bug gefunden und behoben:** `agents.py:305` wechselt vor `setup_training()` ins
+    Agentenverzeichnis. Das relative `out_dir="results/train/task2_crates"` landete
+    deshalb unter `agent_code/maxi_task2/results/…` statt im Repo-Wurzelverzeichnis —
+    der Kommentar in `train.py` behauptete ausdrücklich das Gegenteil. `out_dir` leitet
+    sich jetzt aus `__file__` ab; kein absoluter Pfad im Quelltext, Einreichungsregel
+    bleibt gewahrt. **Das alte `q_e10_s0`-Log liegt noch am falschen Ort** — vor dem
+    nächsten Lauf verschieben, sonst wird weiter dorthin angehängt.
+  - Rauchtest 120 Runden: Spalten füllen sich, **136/2880 Zustände (4,7 %), 2,6 % der
+    Zellen, Median 1 Besuch**. Das ist ein untrainierter Agent, der früh stirbt — also
+    eine Untergrenze und *kein* Ergebnis, nur der Nachweis, dass das Messgerät geht.
+- **Entscheidung + Warum:**
+  - **Eine 9-wertige Stelle statt zweier Stellen (Richtung, Art).** Mit getrennter
+    Art-Stelle wären `(NO_TARGET, Münze)` und `(NO_TARGET, Kiste)` dieselbe Lage in zwei
+    Zeilen, die sich die Erfahrung teilen. Die Versätze vermeiden diese toten Zeilen.
+  - **Jetzt trennen, nicht später.** Die Tabelle muss wegen der Gefahren-Merkmale
+    ohnehin von Null neu trainiert werden — das ist der einzige Moment, an dem die
+    Trennung nichts extra kostet. Sonst zahlt man ein zweites volles Training.
+  - **Kein Ergebnis ohne `tools/evaluate.py` bei ε = 0.** Der Rauchtest oben ist
+    ausdrücklich keins; siehe die 48,2-gegen-1,45-Erfahrung aus E01.
+- **Nächster Schritt / Ideen:**
+  1. Trainieren und **Abdeckung beobachten**: 80 → 2880 Zeilen ist das 36-Fache der
+     Stufe-1-Tabelle. Bleibt `cell_coverage` niedrig *und* der Median bei 1–2, ist die
+     Frage, ob die Zeilen unerreichbar sind (harmlos, Nullen) oder nur selten besucht
+     (das ist das, was erratisches Spiel erzeugt). Danach erst mehr Episoden.
+  2. `CRATE_DESTROYED` in `REWARDS` — steht als TODO in `train.py` und ist auf Stufe 2
+     das eigentliche Lernsignal. Ohne das lernt der Agent nur wegzulaufen.
+  3. Offene Vorhersage vor dem Lauf in `experiments/maxi.md` notieren (E10), bevor
+     trainiert wird — nicht danach.
+  4. Unittest für die Explosionsgeometrie steht **seit dem 31.07.** offen. Die
+     Gefahrenkarte ist jetzt der Kern des Agenten; das ist die Stelle, an der ein
+     stiller Fehler alles kostet und in keiner Metrik als Fehler auftaucht.
+
 ### 2026-08-05 — Stufe 1 gelöst: 50/50 Münzen, schneller als die Referenz
 
 - **Stand:** `maxi_coin_collector` ist ein tabellarischer Q-Learner auf
