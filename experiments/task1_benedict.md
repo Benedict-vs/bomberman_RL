@@ -135,6 +135,51 @@ The last two rows are the same problem solved two ways, which is worth a paragra
 random tie-breaking hides an unconverged table, a converging learning rate removes the
 reason ties decide anything.
 
+### Measured, 300 paired rounds each (2026-08-06)
+
+**Solo, identical arenas** — `benedict_final__task1` vs `maxi_final__task1`:
+
+| Metric | Maxi | Benedict | Paired difference | Reading |
+|---|---|---|---|---|
+| coins | 50.000 ± 0.000 | 50.000 ± 0.000 | +0.000 | **Tie — both perfect in all 300 rounds** |
+| completion time (`steps`) | **123.8** | 130.3 | +6.413 [+5.223, +7.620] | **Maxi is faster.** `analyze.py` prints BETTER for the higher value; on this rung that is inverted |
+| invalid actions | 0.06 | **0.00** | −0.060 [−0.087, −0.033] | Benedict |
+| `think_max_ms` | 22.3 | **0.4** | — | Benedict, ~55× |
+
+Both agents solve the rung completely, so coins cannot separate them. Maxi's routing is
+genuinely ~5 % shorter, which is the BFS-derived coin direction paying off against the
+clipped Manhattan offset — the trade E04 chose deliberately, and this is its price.
+The compute gap is a dense array lookup against a dict of tuples; irrelevant at 500 ms,
+worth remembering if the feature map grows on rung 4.
+
+**Head to head, both agents on the same board:**
+
+| | coins | invalid actions |
+|---|---|---|
+| Benedict | 24.680 | mean **11.5**, median **2** |
+| Maxi | 25.257 | mean **155.8**, median **126** |
+
+Paired difference in coins **−0.577, 95 % CI [−1.327, +0.173]** — contains zero, so **no
+demonstrated difference**. (114 rounds ahead, 33 tied, 153 behind.) The per-agent intervals
+printed by `analyze.py`'s summary mode look further apart than that; the paired difference is
+the one to quote.
+
+**The finding that matters is the invalid actions.** `environment.py:121` — `tile_is_free`
+excludes tiles held by active agents and bombs. **Neither feature map contains `others`**, so
+both agents repeatedly try to walk through their opponent. Solo this is invisible (0.00 and
+0.06); in company it is 11.5 and 155.8 per round.
+
+Why the 14× gap between two agents with the same blind spot is worth understanding before
+rung 3 — a plausible reading is that masking `WAIT` leaves Maxi's agent no legal way to
+*yield*: when the argmax move is blocked by the opponent, its only options are other moves,
+and the state is unchanged, so it re-issues the same rejected action. Benedict's agent keeps
+`WAIT` in the action set. That is a hypothesis, not a measurement — it needs a controlled
+run before it goes in the report.
+
+On rung 1 this costs nothing (the coins run out regardless, and both survive every round).
+On rungs 3 and 4 those are steps not spent escaping a blast, and an opponent-aware feature
+becomes mandatory for both of us.
+
 ## 8 · Reproducing the final model
 
 ```bash
