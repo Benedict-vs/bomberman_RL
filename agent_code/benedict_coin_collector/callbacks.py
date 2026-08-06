@@ -3,7 +3,15 @@ import pickle
 
 import numpy as np
 
-MODEL_FILE = os.path.join(os.path.dirname(__file__), "q_table.npy")
+# Training-only escape hatch: several training runs launched in parallel would
+# otherwise all write the same file and clobber each other. With the variable
+# unset -- every normal game, and the tournament, where the environment is not
+# ours to set -- this is exactly "q_table.npy", so the submitted path is
+# unchanged. Relative to this file, never absolute.
+MODEL_FILE = os.path.join(
+    os.path.dirname(__file__),
+    f"q_table{os.environ.get('BM_MODEL_SUFFIX', '')}.npy",
+)
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 

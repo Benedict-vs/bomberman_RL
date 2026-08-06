@@ -127,5 +127,10 @@ final_project.pdf
 #   git show <commit>:agent_code/<agent>/q_table.npy > scratchpad/<person>/models/q_vN.npy
 scratchpad/*/models/
 
+# Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The real model is
+# q_table.npy and stays versioned; these are scratch and must never end up in
+# the submitted agent folder.
+agent_code/*/q_table_*.npy
+
 # macOS
 .DS_Store

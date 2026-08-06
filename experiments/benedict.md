@@ -21,6 +21,65 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E07 — Is the ε schedule still doing anything?
+
+- **Question:** E06 arm B changed *two* things relative to E04 — the per-cell learning rate
+  **and** the ε schedule — and they were never separated. E05, which introduced the schedule,
+  turned out to be an unreplicated lucky draw. So: with a converging α, does decaying ε still
+  contribute anything at all?
+- **Change from E06 arm B:** exactly one. `EPS_DECAY = 1.0`, i.e. ε stays at 0.2 for the whole
+  run. Per-cell α = 1/N^0.7 kept, φ kept, rewards kept, γ kept.
+- **Agent:** `benedict_coin_collector` · commit `<to be filled in>` · arm label `e07c`
+- **Training:** 10 000 rounds, `coin-heaven`, world seed **810731** (never the evaluation
+  seed), five runs at `BM_RUN_INDEX` 0–4.
+- **Measurement:** `results/eval/benedict_q_e07c_s{0..4}__task1.csv`, 300 rounds each,
+  seed 20260731. Compared against E06 arm B (49.15 ± 1.23, worst 47.16) as distributions,
+  not as single runs.
+
+### Prediction (written before the run)
+
+1. **No demonstrated difference. E07 lands at 47–50 mean with std below 2**, overlapping
+   arm B's 49.15 ± 1.23. Reasoning: E05's mechanism was "training never reaches the late
+   round because the agent dies at step 61". Per-cell α already removes the deadlocks that
+   truncate those episodes, so long episodes should now appear *without* the schedule.
+2. **The decisive diagnostic is training `steps` over the last 1000 episodes.** If it lands
+   near 120 (arm B's value) at a constant ε = 0.2, the schedule was never the cause — α was.
+   If it stays near 61 (the v4/E04 value) while evaluation coins still reach ~49, then the
+   whole "training must see the late round" story is wrong, because the agent would be
+   playing well at ε = 0 having never trained there.
+3. **`invalid` and `suicides` stay at arm B's levels** (0.15 and 0.000). Constant ε = 0.2
+   means the training agent keeps bombing itself — `KILLED_SELF` near 0.9 rather than arm B's
+   0.10 — but that is a property of the *behaviour* policy and should not reach the greedy one.
+4. **If E07 wins outright** (mean above 49.15 with non-overlapping spread), the reading is
+   that constant exploration keeps rare rows refreshed, which the ε floor of 0.02 does not.
+   That would be an argument for a *higher floor*, not for abandoning schedules.
+
+**Why it is worth running even though I expect a null.** Carrying an untested knob into
+task 2 is how a configuration becomes folklore. If ε decay does nothing here, the task-2
+agent starts with one fewer thing to reason about; if it does something, I learn that before
+the rung where it is expensive to discover.
+
+### Result
+
+| Metric | E06 arm B (ε decay) | E07c (constant ε) |
+|---|---|---|
+| `coins`, mean over 5 seeds | 49.15 | |
+| `coins`, std | 1.23 | |
+| `coins`, worst seed | 47.16 | |
+| training `steps`, last 1000 | 125.6 (s0) | |
+| training `KILLED_SELF`, last 1000 | 0.104 (s0) | |
+| simulated coins before loop | 50.0 in all five | |
+
+### Verdict
+
+*(filled in after the measurement)*
+
+### What I do next
+
+*(filled in after the measurement)*
+
+---
+
 ## E06 — A per-cell learning rate, and 5 seeds per configuration
 
 - **Question:** E05b showed that two training runs of *identical code* can differ by 17

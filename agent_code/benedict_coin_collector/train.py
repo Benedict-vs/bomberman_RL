@@ -25,7 +25,6 @@ ALPHA = 0.1         # learning rate
 GAMMA = 0.9         # discount factor
 EPS_START = 0.2           # exploration rate during training
 EPS_END = 0.02
-EPS_DECAY = 0.9995  # decay per episode, so that exploration decreases over time
 
 REWARDS = {
     e.COIN_COLLECTED: 5,
@@ -50,8 +49,13 @@ RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 0))
 ALPHA_MODE = os.environ.get("BM_ALPHA", "const")   # "const" | "visit"
 ALPHA_EXP = 0.7      # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
 
-# Change this per experiment: the training log is appended to, not overwritten.
-RUN_NAME = f"q_e06{'b' if ALPHA_MODE == 'visit' else 'a'}_s{RUN_INDEX}_task1"
+EPS_MODE = os.environ.get("BM_EPS", "decay")          # "decay" | "const"
+EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
+
+RUN_NAME = f"q_e07c_s{RUN_INDEX}_task1"               # per-cell alpha, constant eps
+
+# # Change this per experiment: the training log is appended to, not overwritten.
+# RUN_NAME = f"q_e06{'b' if ALPHA_MODE == 'visit' else 'a'}_s{RUN_INDEX}_task1"
 
 
 def setup_training(self):
@@ -76,9 +80,9 @@ def setup_training(self):
         agent="benedict_coin_collector",
         run=RUN_NAME,
         hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_EXP": ALPHA_EXP,
+                     "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END, "eps_decay": EPS_DECAY,
                      "gamma": GAMMA,
                      "train_seed": TRAIN_SEED + RUN_INDEX, "run_index": RUN_INDEX,
-                     "eps_start": EPS_START, "eps_end": EPS_END, "eps_decay": EPS_DECAY,
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
                      "n_states": len(self.q),
