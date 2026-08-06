@@ -125,14 +125,14 @@ Conventions we all follow, otherwise the numbers are not comparable:
   kinds of round is meaningless. Always report the **completion rate** next to it, or restrict
   `steps` to completed rounds (`tools/plot_task1_versions.py` does the latter). This is what
   distinguishes "navigates badly" from "navigates fine but gets stuck".
-  **From rung 2 on, read the completion rate together with `survived`.** A dead agent also
+  **From task 2 on, read the completion rate together with `survived`.** A dead agent also
   ends the round, so completion stops meaning "finished the job": measured on `classic`,
   `random_agent` "completes" 100 % of rounds at 19.0 steps because it kills itself, while
   `rule_based_agent` completes 8 % at 399.1 (`experiments/benedict.md` E08). Taken alone,
   completion rate ranks the worst agent in the field first.
 - **`analyze.py` assumes higher is better**, so it prints `WORSE` for a *falling* `steps`.
   On task 1 (and anywhere else efficiency is the goal) read that row inverted.
-- Primary metric `score`. Per-rung metric sets via `analyze.py --preset task1…task4`:
+- Primary metric `score`. Per-task metric sets via `analyze.py --preset task1…task4`:
   task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
   task 3 `score`/`kills`/**`suicides`**/`survived` ·
   task 4 `score`/**`won`**/`kills`/`suicides`/`killed_by`/`think_ms`.
@@ -172,9 +172,9 @@ stay ignored — they are pure functions of the CSVs.
 
 **Keep the action set in step with the features.** `BOMB` in the action space without a danger
 feature ("am I in a blast radius / do I have an escape?") is not survivable: ε-exploration drops
-a bomb, escaping is not learnable, and the agent dies. Measured on rung 1: **100 % `KILLED_SELF`
-over 1000 episodes**, gone the moment `BOMB` was masked out (`experiments/maxi.md` E01). On rung 1
-`BOMB`/`WAIT` are useless anyway (no crates); they come back on rung 2 **together with** the
+a bomb, escaping is not learnable, and the agent dies. Measured on task 1: **100 % `KILLED_SELF`
+over 1000 episodes**, gone the moment `BOMB` was masked out (`experiments/maxi.md` E01). On task 1
+`BOMB`/`WAIT` are useless anyway (no crates); they come back on task 2 **together with** the
 danger features, never before.
 
 ## Hints that matter for the grade
@@ -198,23 +198,23 @@ danger features, never before.
 - Our agents live in `agent_code/` alongside the provided ones (`tpl_agent` is the template;
   `rule_based_agent` is the strong reference opponent and a good source of training data —
   but our submitted agent must be *learned*, not rule-based).
-- **`agent_code/tabular_q_task1/` is the agreed rung-1 baseline** and the starting point for
+- **`agent_code/tabular_q_task1/` is the agreed task-1 baseline** and the starting point for
   everything after it. It merges the two independently developed coin collectors on the
   evidence of both ledgers (BFS coin direction and random tie-breaking from Maxi's; per-cell
   learning rate `1/N(s,a)^0.7`, the full six-action set, the mixed-radix table and the seeded
   measurement harness from Benedict's). 50.00 coins in every round at 123.7 steps — **faster
-  than `coin_collector_agent`'s 125.3**, which is the metric that discriminates on this rung.
+  than `coin_collector_agent`'s 125.3**, which is the metric that discriminates on this task.
   Rationale, findings and reproduction: `experiments/task1.md`.
-  Each rung gets its own folder so two rungs can be measured against each other without
-  checking out an old commit. Per-person development folders are `<person>_task<rung>`
-  (`benedict_task2`); the agreed, merged baseline for a rung is `<method>_task<rung>`
+  Each task gets its own folder so two tasks can be measured against each other without
+  checking out an old commit. Per-person development folders are `<person>_task<task>`
+  (`benedict_task2`); the agreed, merged baseline for a task is `<method>_task<task>`
   (`tabular_q_task1`, later `dqn_task2`) and is frozen once it is agreed.
   `benedict_coin_collector` and `maxi_coin_collector` stay as frozen evidence for their
   ledgers — do not develop in them.
 - `tools/` holds our measurement chain; it is **not** submitted, so nothing in
   `agent_code/<name>/callbacks.py` may import from it.
 - `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
-  Grouped per rung, same names in both trees: `task1_coin_collectors/`, `task2_crates/`,
+  Grouped per task, same names in both trees: `task1_coin_collectors/`, `task2_crates/`,
   plus `results/eval/baselines/` for the provided agents. Underscores, never spaces — a
   directory with a space in it silently breaks unquoted globs in analysis scripts.
   Non-default locations need `--out-dir`, e.g.
