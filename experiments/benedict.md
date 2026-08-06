@@ -93,21 +93,95 @@ worth stating regardless, since it changes how every earlier number should be re
 
 ### Result
 
-| Metric | arm A (const α) | arm B (per-cell α) | |
+| Metric | arm A (const α = 0.1) | arm B (α = 1/N^0.7) |
+|---|---|---|
+| `coins`, mean over 5 seeds | 20.78 | **49.15** |
+| `coins`, std over 5 seeds | **6.98** | **1.23** |
+| `coins`, worst seed | 11.07 | **47.16** |
+| `coins`, best seed | 30.01 | 50.00 |
+| per seed | 11.1 · 20.1 · 30.0 · 18.7 · 24.0 | 50.0 · 47.2 · 50.0 · 49.8 · 48.7 |
+| high-traffic blocked-argmax rows | 0 in all 5 | 0 in all 5 |
+| simulated loop entry (step) | 25 · 42 · 69 · 54 · 56 | 136 · 133 · 137 · 136 · 135 |
+| simulated coins before the loop | 10.7 · 18.4 · 29.5 · 22.8 · 23.8 | **50.0 in all five** |
+
+Every arm-B run sweeps the whole board; its "loop" is the benign idle after the last coin.
+Every arm-A run deadlocks between step 25 and step 69.
+
+### The result that hurts: E05 does not replicate
+
+Arm A **is** the v5 configuration — same φ, same rewards, same ε schedule, only the RNG
+pinned. v5 measured **49.93**. Five seeded runs of the same configuration give
+**20.78 ± 6.98, best 30.01.** v5 was not a result, it was a lucky draw, and its 49.93 lies
+far outside the distribution its own configuration produces.
+
+The same doubt now attaches to v4's 46.107, also a single draw of a constant-α
+configuration. The two numbers that E04 and E05 were built on are both unreplicated.
+
+**What still stands:** the large effects. E02 (+29.4 coins from the coin direction) and E03
+(`suicides` 0.427 → 0.000, with the mechanism read directly out of the table) are far too
+big to be draw noise, and E03's cause was verified cell by cell rather than inferred from a
+mean. The small ones — E04's +3.9 and E05's +3.8 — are **not established**, and the report
+must say so.
+
+### Why the training logs showed nothing
+
+| last 1000 episodes | v5 | arm A s0 | arm B s0 |
 |---|---|---|---|
-| `coins` mean over 5 seeds | | | |
-| `coins` std over 5 seeds | | | |
-| `coins` worst seed | | | |
-| `invalid` mean / worst | | | |
-| runs with a blocked-argmax high-traffic row | | | |
+| steps | 119.3 | 118.5 | 125.6 |
+| coins | 45.48 | 44.77 | 48.40 |
+| `KILLED_SELF` | 0.193 | 0.239 | 0.104 |
+
+Arm A's training is indistinguishable from v5's and looks healthy — 44.8 coins per episode —
+while the same table scores 11.1 at evaluation. The cause is ε: at 0.02 a random action
+arrives every ~50 steps and knocks the policy out of the cycle it is stuck in, so a
+deadlock-prone table never reveals itself in training. At ε = 0 nothing rescues it.
+
+This is exactly the rule Maxi added to `AGENTS.md` on 2026-08-05 ("a training curve is not a
+result"), arrived at independently from a different agent and a different failure. It is now
+supported by two unrelated pieces of evidence and belongs in the report as a methodological
+finding rather than a footnote.
+
+### Predictions, scored
+
+1. **"Both arms 49–50, the means barely move" — badly wrong.** Arm A is 20.78. The error was
+   assuming arm A would reproduce v5; that assumption was the very thing under test.
+2. **"The spread collapses" — right, and the thresholds nearly exact.** Arm A std 6.98
+   (predicted > 5), arm B std 1.23 (predicted < 1, marginally missed), arm B worst 47.16
+   (predicted ≥ 48, marginally missed), arm A produced runs below 40 (predicted at least one;
+   all five were below 31).
+3. **"Arm A has a blocked-argmax high-traffic row" — wrong.** Zero, in all ten tables. The
+   failure mode here is an early absorbing **2-cycle** between two tiles, not the row-409
+   deadlock from E05b. Row 409 was one instance of a broader class, and I generalised from a
+   sample of one.
+4. **"Arm A replicates E05" — wrong, and the most important miss.** See above.
+5. **α = 1 on the first visit destabilising early learning — did not happen.** No floor needed.
 
 ### Verdict
 
-*(filled in after the measurement)*
+**Arm B wins decisively, and the experiment's real finding is about method.** A per-cell
+learning rate takes task 1 from 20.78 ± 6.98 to 49.15 ± 1.23 with a worst case of 47.16 —
+it does not merely raise the mean, it removes the failure mode. `sum α = ∞`, `sum α² < ∞`
+from L26 turns out not to be a formality: with a constant α the high-traffic cells never
+settle, and on this problem an unsettled cell is not a small error but an absorbing
+deadlock.
+
+Second finding, equally important: **every result in E01–E05 is a single draw.** From here
+on, no claim without n = 5.
 
 ### What I do next
 
-*(filled in after the measurement)*
+1. **E07: is ε decay still needed?** Arm B is per-cell α *plus* ε decay, and the two were
+   never separated. Ablate it — per-cell α with constant ε = 0.2, five seeds. If it makes no
+   difference, E05's mechanism story was wrong as well as its number, and the schedule can be
+   dropped before task 2 rather than carried along untested.
+2. **Ship arm B seed 0 as the task-1 model**, and fix the convention now: *the submitted
+   table is always run index 0*, chosen before seeing the results. Picking the best of five
+   would be cherry-picking, and the difference (50.0 vs 49.15) is not worth the dishonesty.
+3. **Re-run E04's comparison under n = 5** if the report needs the clipped-offset claim.
+   Cheaper alternative: state it as unreplicated and let the E02/E03/E06 chain carry the
+   argument.
+4. **Then task 2.** Per-cell α goes along; on a rung where a single wrong cell means death
+   rather than a wasted step, the stability matters more, not less.
 
 ---
 
