@@ -1,4 +1,4 @@
-"""Q-learning updates for `tabular_q_task1`.
+"""Q-learning updates for `maxi_task2`.
 
 Loaded only with `--train`, so nothing here runs in the tournament. That is why
 `tools/` may be imported (defensively) and why the exploration RNG lives here.
@@ -35,7 +35,7 @@ except ImportError:     # tools/ is not part of the submission
     TrainLogger = None
 
 
-AGENT_NAME = "tabular_q_task1"
+AGENT_NAME = "maxi_task2"
 
 STEP_COST = -0.1    # encourages shorter paths
 GAMMA = 0.9
@@ -65,7 +65,9 @@ EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const"
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
 TRAIN_SEED = 20260731
 
-EXPERIMENT = "merged"   # change per experiment; the training log is appended to
+# Change per experiment. The training log is *appended* to, so a stale value
+# here silently merges two runs into one file.
+EXPERIMENT = "e10"
 RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 
 
@@ -90,7 +92,10 @@ def setup_training(self):
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
                      "n_states": len(self.q),
-                     "features": "4 wall bits + BFS direction to nearest coin"},
+                     "features": "4 wall bits + BFS direction to nearest coin, else crate"},
+        # Task-2 logs go beside the task-2 evaluations; see AGENTS.md. Relative
+        # to the cwd, which for training is always the repo root.
+        out_dir="results/train/task2_crates",
         extra_columns=["td_error"],
     ) if TrainLogger else None
     self.episode_events = []

@@ -1,7 +1,8 @@
-"""Tabular Q-learning agent — merged task-1 baseline, built to grow into task 2.
+"""Tabular Q-learning agent — task 2 (`classic`, no opponents).
 
-Merged from two independently developed rung-1 coin collectors after both
-solved the rung (50.00 +- 0.00 coins over 300 rounds each). What came from
+Forked from `agent_code/tabular_q_task1/`, the agreed rung-1 baseline, which was
+itself merged from two independently developed coin collectors after both solved
+rung 1 (50.00 +- 0.00 coins over 300 rounds each). What came from
 where, and why, is in `experiments/task1.md` section 7:
 
 - BFS direction to the nearest coin  (from Maxi's agent)
@@ -31,10 +32,13 @@ ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 # (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
 DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
 
-# Digit 5 of the feature vector: 0 = no coin reachable, 1..4 = ACTIONS[0..3].
-NO_COIN = 0
+# Digit 5 of the feature vector: 0 = no target reachable, 1..4 = ACTIONS[0..3].
+NO_TARGET = 0
 
-# 4 wall bits (U, R, D, L) + BFS direction to the nearest coin
+# 4 wall bits (U, R, D, L) + BFS direction to the nearest target (coin, else crate).
+# NOTE: one digit for both target kinds, so the agent cannot tell "a coin lies
+# that way" (walk onto it) from "a crate lies that way" (stop short and bomb).
+# See the open question in `experiments/maxi.md` before training on this.
 FEATURE_SIZES = (2, 2, 2, 2, 5)
 N_STATES = int(np.prod(FEATURE_SIZES))
 
@@ -44,23 +48,25 @@ N_STATES = int(np.prod(FEATURE_SIZES))
 POLICY_SEED = 20260731
 
 
-def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
-    """Index into ACTIONS of the first step on a shortest path to a coin.
+def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
+    """Index into ACTIONS of the first step on a shortest path to a target.
 
-    Breadth-first, so the first coin reached is a nearest one *by path*, which
+    Breadth-first, so the first target reached is a nearest one *by path*, which
     Manhattan distance is not -- it cannot see that a wall is in the way.
-    Returns NO_COIN when there is no coin or none is reachable.
+    Coins take priority; if none is reachable, falls back to the nearest crate,
+    which is what gives the agent something to walk towards on `classic` once
+    the revealed coins are gone. Both come out of a single BFS pass, so the
+    0.12 ms worst case measured on task 1 still holds.
 
-    Cost scales inversely with coin density: the search stops at the first coin
-    found, so it expands a handful of nodes with 50 coins on the board and
-    floods it when one distant coin is left (0.002 ms vs 0.12 ms measured).
+    Returns NO_TARGET when neither a coin nor a crate is reachable.
     """
-    if not coins:
-        return NO_COIN
+    # Neither coins nor crates on the board -- nothing to search for.
+    if not coins and not (field == 1).any():
+        return NO_TARGET
 
     targets = set(coins)        # set, not list: this is tested at every node
     if (x, y) in targets:
-        return NO_COIN          # standing on it; it is collected this step
+        return NO_TARGET        # standing on it; it is collected this step
 
     # Each queue entry carries the first step that led to it, so the direction
     # falls out of the search without reconstructing the path.
@@ -68,6 +74,8 @@ def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
     visited = {(x, y)}
     head = 0
     width, height = field.shape
+
+    nearest_crate_step = None
 
     while head < len(queue):
         (cx, cy), first = queue[head]
@@ -77,15 +85,36 @@ def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
             nx, ny = cx + dx, cy + dy
             if not (0 <= nx < width and 0 <= ny < height):
                 continue
-            if (nx, ny) in visited or field[nx, ny] != 0:
+            if (nx, ny) in visited:
                 continue
+
             step = action_idx if first is None else first
+
+            # Priority 1: a coin. Nothing beats it, so the search stops here.
             if (nx, ny) in targets:
-                return step + 1         # +1 because 0 is reserved for NO_COIN
-            visited.add((nx, ny))
+                return step + 1         # +1 because 0 is reserved for NO_TARGET
+
+            # Priority 2: a crate. BFS expands in rings, so the first crate seen
+            # is the nearest one -- remember the way there, but keep searching
+            # for a coin, which would override it.
+            if field[nx, ny] == 1:
+                if nearest_crate_step is None:
+                    nearest_crate_step = step + 1
+                # Marked visited but never queued: crates block the path.
+                visited.add((nx, ny))
+                continue
+
+            if field[nx, ny] == -1:     # stone wall
+                continue
+
+            visited.add((nx, ny))       # free tile
             queue.append(((nx, ny), step))
 
-    return NO_COIN
+    # Queue exhausted, so no coin is reachable. Fall back to the crate.
+    if nearest_crate_step is not None:
+        return nearest_crate_step
+
+    return NO_TARGET
 
 
 def state_to_features(game_state: dict) -> int:
@@ -103,7 +132,7 @@ def state_to_features(game_state: dict) -> int:
     # in a two-agent game: 11.5 invalid actions per round.
     blocked = tuple(int(field[x + dx, y + dy] != 0) for dx, dy in DELTAS)
 
-    return encode(blocked + (coin_direction(x, y, field, game_state['coins']),))
+    return encode(blocked + (target_direction(x, y, field, game_state['coins']),))
 
 
 def encode(features: tuple[int, ...]) -> int:
