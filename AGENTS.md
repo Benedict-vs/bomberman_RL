@@ -77,6 +77,15 @@ python main.py play --help
 Useful flags: `--no-gui` (fast training), `--skip-frames`, `--seed` (fixes crates/coins, not agent
 RNG), `--turn-based` (with `user_agent`), `--continue-without-training`.
 Logs land in `agent_code/<name>/logs/<name>.log`; levels in `settings.py`.
+**`BM_QUIET_LOGS=1` drops all three log levels to WARNING** — use it for training sweeps. The
+engine logs per step, so a 40 000-round `classic` run is ~10 M INFO lines; measured saving 25 %
+of wall clock, and `logs/game.log` goes from GB-scale to empty. It is an environment switch, not
+an edited constant, so unset (every normal game, every evaluation, the tournament) `settings.py`
+holds exactly the upstream values and there is nothing to restore before submitting.
+Note that `agents.py:226-228` hardcodes the agent log path in mode `"w"`, so parallel runs of the
+same agent overwrite each other's — during a sweep the training CSV is the only usable record.
+While sweeping, also check how often `train.py` calls `np.save`: once per round on a 614 KB table
+is ~25 GB of writes per run, and five concurrent runs make that the dominant I/O.
 
 ## Models we are building
 - **Model A — tabular Q-learning on hand-built features.** Lecture technique, fast to converge,
@@ -92,7 +101,8 @@ Logs land in `agent_code/<name>/logs/<name>.log`; levels in `settings.py`.
 Details and rationale in `KONZEPT.md` §6. The short version:
 
 - **`tools/evaluate.py`** — per-round, per-agent statistics as CSV + `.meta.json`
-  (git commit, seed, a snapshot of `settings.py`). Drives `BombeRLeWorld` directly and
+  (git commit, seed, and a snapshot of the *rules* in `settings.py` — board size, bomb, timeout,
+  rewards, scenario config; **not** the whole file). Drives `BombeRLeWorld` directly and
   touches no framework file, so it survives the tournament reset.
   `main.py --save-stats` is *not* enough: it only writes lifetime totals per agent and
   per-round totals summed over all agents, so no per-agent confidence interval is possible.
@@ -224,5 +234,8 @@ danger features, never before.
   The CSVs are raw data; this is the narrative the report's Experiments chapter is built from,
   and nothing in `tools/` can reconstruct it after the fact. Same ownership rule as the
   logbooks — only append to your own.
-- Restore original `settings.py` values before submitting if changed for training.
-  `tools/evaluate.py` records the active settings in its `.meta.json` so a mismatch is visible.
+- Restore original `settings.py` values before submitting if changed for training. Better still,
+  make a training-only change an *environment switch* whose default is the upstream value
+  (`BM_QUIET_LOGS`), so there is nothing to remember. `evaluate.py`'s `.meta.json` catches an
+  edited **rule** (board, bomb, timeout, reward, scenario) but not anything else in the file —
+  log levels, for instance, are not snapshotted, so an edit there is invisible in the metadata.

@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 from fallbacks import pygame
@@ -66,7 +67,22 @@ INPUT_MAP = {
 }
 
 # Logging levels
-LOG_GAME = logging.INFO
-LOG_AGENT_WRAPPER = logging.INFO
-LOG_AGENT_CODE = logging.DEBUG
+#
+# Training-only escape hatch (ours, not upstream): with BM_QUIET_LOGS set, the
+# engine's per-step logging drops to WARNING. A 40 000-round run on `classic` is
+# ~10 M steps, and a five-seed sweep runs five of them at once, so the INFO
+# stream is a real share of the wall clock. It is also close to worthless during
+# a sweep: agents.py:226-228 hardcodes every run's agent log to
+# agent_code/<name>/logs/<name>.log in mode "w", so parallel runs overwrite one
+# another's and the training CSV is the only usable record anyway.
+#
+# Deliberately an environment switch rather than an edited constant: unset --
+# every normal game, every evaluation, and the tournament -- these are exactly
+# the upstream values, so there is nothing to remember to restore before
+# submitting. Note that tools/evaluate.py's settings snapshot does NOT cover log
+# levels, so an edited constant here would have been invisible in .meta.json.
+_QUIET_LOGS = bool(os.environ.get("BM_QUIET_LOGS"))
+LOG_GAME = logging.WARNING if _QUIET_LOGS else logging.INFO
+LOG_AGENT_WRAPPER = logging.WARNING if _QUIET_LOGS else logging.INFO
+LOG_AGENT_CODE = logging.WARNING if _QUIET_LOGS else logging.DEBUG
 LOG_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB

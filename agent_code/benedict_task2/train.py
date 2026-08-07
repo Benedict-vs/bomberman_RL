@@ -21,6 +21,7 @@ either alone leaves runs incomparable. Train on a world seed that is *not* the
 evaluation seed (20260731), or the agent is measured on arenas it trained on.
 """
 
+import atexit
 import os
 from typing import List
 
@@ -45,6 +46,12 @@ ALPHA_EXP = 0.7     # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (
 
 EPS_START = 0.2
 EPS_END = 0.02
+
+# Rounds between model saves. The table is 614 KB, so saving every round is
+# ~25 GB of writes over a 40 000-round run and five of those run concurrently --
+# enough I/O to matter. A crash costs at most this many rounds of learning, and
+# the atexit hook in setup_training covers every normal ending.
+SAVE_EVERY = 100
 
 REWARDS = {
     e.COIN_COLLECTED: 5,
@@ -104,6 +111,17 @@ def setup_training(self):
     self.episode_reward = 0.0
     self.episode_td = []
 
+    # environment.py:112 runs the agent in-process (SequentialAgentBackend), so
+    # this fires on any normal exit. Without it, a round count that is not a
+    # multiple of SAVE_EVERY would silently ship a table up to SAVE_EVERY
+    # rounds stale -- the kind of mismatch that is invisible until a run does
+    # not reproduce.
+    atexit.register(save_table, self)
+
+
+def save_table(self) -> None:
+    np.save(MODEL_FILE, self.q)
+
 
 def game_events_occurred(self, old_game_state: dict, self_action: str,
                          new_game_state: dict, events: List[str]):
@@ -143,7 +161,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     td_error = td_target - self.q[s, a]
     self.q[s, a] += learning_rate(self, s, a) * td_error
 
-    np.save(MODEL_FILE, self.q)
+    if last_game_state["round"] % SAVE_EVERY == 0:
+        save_table(self)
 
     self.episode_events.extend(events)
     self.episode_reward += reward
