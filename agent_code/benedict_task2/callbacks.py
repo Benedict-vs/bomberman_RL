@@ -180,6 +180,52 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
     return NO_TARGET
 
 
+def escape_direction(x: int, y: int, field: np.ndarray, danger: np.ndarray,
+                     occupied: set) -> int:
+    """First step of a shortest path out of every blast, or NO_TARGET if none.
+
+    Time-aware, which is what separates it from `target_direction`: a tile that
+    is safe now can be lethal by the time the agent gets there, and a tile that
+    is in a blast now can be crossed if the agent is past it before the timer
+    runs out. Both cases occur constantly while escaping one's own bomb.
+    """
+
+    queue = [((x, y), None, 0)]
+    visited = {(x, y)}
+    head = 0
+
+    while head < len(queue):
+        (cx, cy), first, depth = queue[head]
+        head += 1
+
+        # Every bomb currently on the board has detonated by then, so a tile
+        # that is still unsafe at this depth cannot be made safe by walking
+        # further. Bounds the search at ~60 tiles.
+        if depth >= SAFE:
+            continue
+
+        for action_idx, (dx, dy) in enumerate(DELTAS):
+            nx, ny = cx + dx, cy + dy
+            if (nx, ny) in visited:
+                continue
+            if field[nx, ny] != 0 or (nx, ny) in occupied:
+                continue
+
+            # `depth` moves have been made to reach (cx, cy), so stepping here
+            # puts the agent on (nx, ny) at the end of step `depth`. It dies if
+            # the blast reaches this tile at or before then.
+            if danger[nx, ny] <= depth:
+                continue
+
+            step = action_idx if first is None else first
+            if danger[nx, ny] >= SAFE:
+                return step + 1     # +1 because 0 is reserved for NO_TARGET
+            visited.add((nx, ny))
+            queue.append(((nx, ny), step, depth + 1))
+
+    return NO_TARGET
+
+
 def state_to_features(game_state: dict) -> int:
     """Map a game state onto a row index of the Q-table."""
 
@@ -207,9 +253,17 @@ def state_to_features(game_state: dict) -> int:
     # is the absorbing-row failure of E09 in a new place.
     bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field))
 
+    # Digit 6 is "the direction that matters right now". While a bomb covers the
+    # agent's tile that is the way out, and nothing else is worth encoding --
+    # a coin four tiles away is irrelevant if the agent is dead in three.
+    if own_danger:
+        target = escape_direction(x, y, field, danger, occupied)
+    else:
+        target = target_direction(x, y, field, game_state['coins'])
+
     features = neighbour_status(x, y, field, danger, occupied) + (
         own_danger,
-        target_direction(x, y, field, game_state['coins']),
+        target,
         bomb_useful,
     )
     return encode(features)

@@ -21,6 +21,84 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E11 — Point digit 6 at the exit when the agent is in a blast
+
+- **Question:** E10 established that the agent declines to bomb because, under its own escape
+  policy, bombing is negative-EV. Does giving it a *direction out* flip that calculation — and by
+  how much does the leading indicator move?
+- **Change from E10:** exactly one. Digit 6 gains a danger branch: when the agent's own
+  tile is covered by a live bomb (digit 5 > 0), digit 6 is the first step of a shortest path to a
+  tile no bomb reaches, found by a time-aware BFS (at depth *k* a tile may only be entered if it
+  is still survivable after *k* moves). The coin and crate branches are untouched, `FEATURE_SIZES`
+  is untouched, the rewards are untouched, and the table stays at 12 800 rows.
+- **Agent:** `benedict_task2` · commit `<fill in from .meta.json>` · labels
+  `benedict_q_e11_s{0..4}__task2`
+- **Training:** 40 000 rounds, `classic`, world seed 810731, `BM_RUN_INDEX` 0–4. Identical to E10
+  in every other respect, so this is a paired comparison against it.
+- **Measurement:** `results/eval/task2_crates/benedict_q_e11_s{0..4}__task2.csv`, 300 rounds,
+  seed 20260731, `--preset task2`.
+
+### Why this is the one change, and why it is defensible
+
+The E10 arithmetic: a bomb pays ≈ +0.50 after γ⁴ discounting, against ≈ −1.50 from a 27–33 %
+escape-failure rate at `KILLED_SELF` = −5. Only the second term is worth attacking, because the
+first is bounded by the crate count and the third — navigation — is nearly free on a board where
+99.7 % of tiles are already bombing spots.
+
+**On the "feature returns the best action" rule.** `final_project.pdf` forbids *"a feature that
+deterministically returns the action which results in the best move"*, and lists as *sanctioned*
+examples "pathfinding features, e.g. the direction to move which brings you closest to the
+nearest coin" and "life-saving features, e.g. whether or not the agent is in the path of a bomb".
+An escape direction is the same construction as the coin direction already shipped in
+`tabular_q_task1`, and it does not return the best move: standing still, collecting a coin on the
+way, or bombing again can all beat running, and the agent still has to weigh them. It is stated
+here so the report argues it rather than hoping nobody asks.
+
+### Prediction (written before the run)
+
+1. **`crates` rises to 20–60 per round**, five-seed mean, from 2.41. Mechanism: with a reliable
+   exit, P(die | bomb) falls below ~0.1, the −1.50 term becomes ≈ −0.5, and `BOMB` turns
+   positive-EV. **Refutation:** `crates` < 5 means the EV story is wrong and the binding
+   constraint is the reward scale, not the escape — in which case E12 becomes `CRATE_DESTROYED`
+   rather than the crate target.
+2. **`suicides` 0.1–0.5, not 0.** The new digit helps *after* the bomb is down. Nothing tells the
+   agent, at the moment it presses `BOMB`, whether an escape will exist once its own bomb is on
+   the board. It has to infer that from the wall pattern in digits 1–4, which is learnable — a
+   dead end has three blocked neighbours — but only from experience. **I expect the remaining
+   suicides to concentrate in rows with three blocked neighbours**, and that is checkable in the
+   table rather than by another 300-round run.
+3. **`score` 1.5–5.0**, against 0.109 and a reference of 8.45. Crates open, coins become visible,
+   and digit 6 switches to the coin branch on its own.
+4. **The 2-cycle is reduced but not gone.** Loop probe: median distinct tiles per round **> 15**
+   (from 2), rounds entering a 2-tile cycle **< 50 %** (from 92 %). It cannot go to zero, because
+   while the agent is safe with no bomb available and no coin visible, digit 6 is still pinned at
+   0 by the crate branch — that is E12's job, and the residual measured here is the size of the
+   prize for doing it.
+5. **`table_check` finding 3 (in a blast, a way out exists, the argmax does not take it): < 10 %**
+   of trained danger rows, from 26.6–33.2 %. This is the direct static signature of the change; if
+   it does not move, the branch is not wired up and nothing else in the entry means anything.
+6. **Seed spread stays wide: `crates` std < 15.** E10's std was 2.27 only because all five seeds
+   failed; a real effect should be large and variable before it is large and stable.
+
+**Refutation condition for the whole entry:** `crates` < 5 *and* finding 3 below 10 %. That
+combination means the escape digit works, the agent still will not use it, and the problem was
+never the escape — it is the reward, and I have been optimising the wrong term.
+
+### Gate order, before any 300-round evaluation
+
+1. `table_check` finding 5 (BOMB rows) — must exceed E10's 17–34.
+2. `table_check` finding 3 — prediction 5.
+3. The loop probe — prediction 4.
+
+E10's lesson is that a static row count is not a visitation distribution, so gate 3 outranks the
+other two: it is the only one that rolls out the policy.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E10 — A rung-2 feature map: danger, crates as crates, and a target that exists
 
 - **Question:** E09 measured the floor at 0.000 and named three requirements for the rung-2
@@ -270,14 +348,32 @@ as a whole — the danger digits work (`suicides` 0.053, `survived` 0.947, and `
 
 ### What I do next
 
-1. **E11: digit 6 always points at the nearest crate.** One change, five seeds, paired CI.
-   Prediction to be written before the run — but the loop probe above is the cheap gate, and it
-   should be run before any 300-round evaluation.
-2. **Add a period-2 cycle check to `table_check.py`**, or rather to the loop probe: median
-   distinct tiles per round is a one-line diagnostic that separated all five seeds here in
-   20 rounds and would have flagged this before the 36-minute training run finished.
-3. **Do not touch the danger digits.** They are the part of the bundle that worked, and E11 must
+*(Revised after the post-mortem: my first instinct was to fix digit 6's crate branch in E11. The
+99.7 % figure argues against it. If nearly every tile is a bombing spot, then **navigating to
+crates is nearly unnecessary on this rung** — a bomb-and-escape cycle is ~7 steps, so 400 steps
+allow ~57 bombs at ~2.5 crates each ≈ 140, against the reference's 116 from 37.8 bombs. An agent
+that only bombs where it stands and survives is already at reference scale. The crate gradient
+buys the last stretch, not the first, so it goes second.)*
+
+1. **E11: digit 6 gains a danger branch.** When digit 5 > 0 it points along a shortest path to a
+   safe tile; the coin and crate branches are untouched and the table does not change size. This
+   attacks the binding constraint — the −1.50 escape-failure term in the EV above.
+2. **E12: the crate branch stops collapsing to `NO_TARGET`.** Once the agent bombs at all, the
+   difference between "clears its own neighbourhood then stalls" and "travels to fresh crates"
+   is directly visible in `crates`, so this becomes measurable on its own.
+3. **The loop probe is the new gate.** Median distinct tiles per round separated all five seeds
+   in 20 rounds where `table_check` saw nothing, and it would have flagged this before the
+   36-minute training run finished. `table_check` looks for period-1 fixed points; the recurring
+   failure on this project is period 2.
+4. **Do not touch the danger digits.** They are the part of the bundle that worked, and E11 must
    not confound its own measurement.
+5. **Later, and separately: D₄ canonicalization.** `final_project.pdf` p. 8 names the board's
+   rotational and mirror symmetries explicitly. Our state is direction-indexed throughout
+   (digits 1–4 and 6 permute with the group, 5 and 7 are invariant, and the four movement actions
+   permute with it), so folding the table by its 8-element symmetry group is exact rather than
+   approximate and multiplies the samples per cell by up to 8. It changes convergence speed, not
+   what is representable, so it is worthless until the feature map carries information — which is
+   exactly why it is not the answer to E10.
 
 ---
 
