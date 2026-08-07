@@ -1,0 +1,49 @@
+{
+  "agent": "benedict_task2",
+  "columns": [
+    "episode",
+    "wall_clock_s",
+    "score",
+    "steps",
+    "reward",
+    "epsilon",
+    "COIN_COLLECTED",
+    "CRATE_DESTROYED",
+    "COIN_FOUND",
+    "KILLED_OPPONENT",
+    "KILLED_SELF",
+    "GOT_KILLED",
+    "SURVIVED_ROUND",
+    "INVALID_ACTION",
+    "BOMB_DROPPED",
+    "WAITED",
+    "td_error"
+  ],
+  "git_commit": "69bd078",
+  "history": [],
+  "hyperparams": {
+    "alpha": 0.1,
+    "alpha_exp": 0.7,
+    "alpha_mode": "visit",
+    "eps_decay": 0.9995,
+    "eps_end": 0.02,
+    "eps_mode": "decay",
+    "eps_start": 0.2,
+    "features": "4 neighbour states (blocked/lethal/in-blast/clear) + own grace period + BFS direction to coin-or-crate + bomb-here-pays-off",
+    "gamma": 0.9,
+    "n_states": 12800,
+    "rewards": {
+      "COIN_COLLECTED": 5,
+      "CRATE_DESTROYED": 0.3,
+      "INVALID_ACTION": -1,
+      "KILLED_SELF": -5,
+      "WAITED": -0.1
+    },
+    "run_index": 4,
+    "step_cost": -0.1,
+    "train_seed": 20260735
+  },
+  "python": "3.12.13",
+  "run": "q_e11_s4",
+  "started_utc": "2026-08-07T09:57:19+00:00"
+}

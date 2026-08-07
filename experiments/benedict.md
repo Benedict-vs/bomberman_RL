@@ -95,7 +95,114 @@ other two: it is the only one that rolls out the policy.
 
 ### Result
 
-*(to be filled in after the run)*
+40 000 rounds per seed. Evaluation at ε = 0, 300 rounds, seed 20260731:
+
+| seed | `score` | `crates` | `bombs` | crates/bomb | `suicides` | `survived` | `invalid` |
+|---|---|---|---|---|---|---|---|
+| s0 | 1.777 | 28.82 | 27.20 | 1.06 | 0.000 | 1.000 | 0.20 |
+| s1 | 2.137 | 32.10 | 16.85 | 1.90 | 0.000 | 1.000 | 0.24 |
+| s2 | 0.527 | 10.67 | 5.27 | 2.02 | 0.000 | 1.000 | 0.01 |
+| s3 | 2.000 | 28.89 | 14.46 | 2.00 | 0.000 | 1.000 | 0.03 |
+| s4 | 2.173 | 30.45 | 17.13 | 1.78 | 0.000 | 1.000 | 0.13 |
+| **mean** | **1.723** ± 0.686 | **26.19** ± 8.78 | 16.18 ± 7.82 | 1.75 | **0.000** | **1.000** | — |
+
+`think_max_ms` 0.147–0.194. Paired against E10 (s0 vs s0, 300 rounds):
+
+| Metric | E10 | E11 | diff | 95 % CI | verdict |
+|---|---|---|---|---|---|
+| `score` | 0.213 | **1.777** | +1.563 | [+1.320, +1.817] | **BETTER** |
+| `crates` | 4.69 | **28.82** | +24.130 | [+20.760, +27.593] | **BETTER** |
+| `bombs` | 2.91 | **27.20** | +24.287 | [+21.667, +26.943] | **BETTER** |
+| `suicides` | 0.063 | **0.000** | −0.063 | [−0.093, −0.037] | **BETTER** |
+| `survived` | 0.937 | **1.000** | +0.063 | [+0.037, +0.093] | **BETTER** |
+
+Against the reference (`coin_collector_agent`): `score` −6.723 [−6.973, −6.463] WORSE, `crates`
+−87.44 [−90.52, −84.19] WORSE, `suicides` and `survival` tied at 0.000 / 1.000.
+
+**One change, 10.9× the crates and 15.8× the score, and every death removed.** The EV argument
+from E10 was right: the binding constraint was the escape, and moving it flipped `BOMB` from
+negative- to positive-EV without touching the reward table.
+
+### Predictions, scored
+
+1. **`crates` 20–60 — right.** 26.19.
+2. **`suicides` 0.1–0.5 — wrong, and better than predicted.** 0.000 across 1500 rounds, with
+   100 % survival. See below; the reasoning behind the miss is the interesting part.
+3. **`score` 1.5–5.0 — right**, at the bottom of the range. 1.723.
+4. **"2-cycle reduced but not gone: median distinct tiles > 15, cycles in < 50 % of rounds" —
+   half right, and the second half badly wrong.** Distinct tiles per round median 30 · 9 · 4 ·
+   25 · 6 (E10: 2), so two seeds of five clear the threshold. But **20/20 rounds still end
+   confined to two tiles**, in every seed. What changed is *when*: entry step median 396 · 46 ·
+   11 · 110 · 23, against E10's 0–23.
+5. **`table_check` finding 3 < 10 % — wrong.** 19.3–22.9 %, down from 26.6–33.2 %. It moved, so
+   the branch is wired up, but nowhere near the prediction.
+6. **`crates` std < 15 — right.** 8.78.
+
+### Finding 3 predicted 20 % deaths and there were none
+
+The static check says one danger row in five has an argmax that does not lead out. The agent died
+zero times in 1500 rounds. **The rows are real and the agent does not enter them** — the same
+error as E09's 78.5 %-of-tiles figure and E10's "17–34 rows prefer `BOMB`" while dropping none.
+Three experiments, three disguises, one lesson: *a count of rows in a table is not a visitation
+distribution.* The loop probe, which rolls the policy out, was right about E10 and right here;
+`table_check` was wrong about both, in opposite directions.
+
+Finding 3 should therefore be read as an *upper bound on rows that could kill*, never as a
+predicted death rate. Weighting it by visitation would require a rollout, at which point the loop
+probe is the cheaper tool.
+
+### The cycle is now the binding constraint, and it is measurable
+
+Cycle entry step against bombs dropped, across the five seeds:
+
+| seed | cycle entry (median step) | `bombs` | `crates` |
+|---|---|---|---|
+| s0 | 396 | 27.20 | 28.82 |
+| s3 | 110 | 14.46 | 28.89 |
+| s1 | 46 | 16.85 | 32.10 |
+| s4 | 23 | 17.13 | 30.45 |
+| s2 | **11** | **5.27** | **10.67** |
+
+The agent is productive until it enters the cycle and does essentially nothing afterwards, so
+`crates` is a function of how long it lasts. s2 gives up at step 11 and collects a quarter of what
+the others do. The cause is unchanged from E10 and now isolated: while the agent is *safe*, digit
+6 still collapses to `NO_TARGET` at 99.7 % of tiles, so the safe branch of the state carries no
+gradient and two mirror rows point at each other. E11 fixed the danger branch only, which is
+exactly what it set out to do — and the residual is the measured size of E12's prize.
+
+### Second gap: it bombs in poor positions
+
+**1.75 crates per bomb, against the reference's 3.07** (116.26 crates from 37.83 bombs). That is
+a separate defect from the cycle and it has a specific cause: digit 7 is binary, and by the same
+99.7 % figure it is *true almost everywhere*. It has therefore degenerated into "do I have a
+bomb" and cannot distinguish a spot that opens one crate from one that opens four. Closing this
+gap alone would take 26.19 crates to ~46 at the same bomb count.
+
+### Verdict
+
+**BETTER, decisively, and the first rung-2 agent that plays.** 1.723 score / 26.19 crates /
+0.000 suicides / 100 % survival, against a floor of 0.000 (E09) and a reference of 8.45 / 116.26
+(E08). Roughly 20 % of the reference on score and 23 % on crates, from one change of one digit.
+
+Both remaining gaps are now quantified rather than guessed, and they are independent:
+
+| gap | evidence | size |
+|---|---|---|
+| the safe branch of digit 6 is constant | 20/20 rounds end in a 2-cycle; `crates` tracks cycle entry | s2 (step 11) collects 10.67, s0 (step 396) collects 28.82 |
+| digit 7 cannot rank bombing spots | 1.75 crates/bomb vs 3.07 | ~46 crates at the same bomb count |
+
+### What I do next
+
+1. **E12: digit 6's safe branch stops collapsing to `NO_TARGET`.** Point at the nearest crate
+   instead of going silent on top of a bombing spot. One change, and the loop probe measures it
+   directly — prediction: cycle entry moves past step 300 in the median seed.
+2. **E13: digit 7 becomes a count.** Crates in blast bucketed 0 / 1 / 2 / 3+ (2 → 4 values, table
+   12 800 → 25 600). Predict `crates`/bomb toward 2.5–3.0.
+3. **Then the ablation panel E10 owes**, from an agent that works: remove the escape branch, the
+   crate branch, digit 7's granularity, and `CRATE_DESTROYED`, one at a time, five seeds each.
+4. **`scratchpad/benedict/loop_probe.py` is now the standing gate** and is committed alongside
+   this entry. It reproduced E10's failure as a control (median 2 tiles, 20/20 rounds, entry at
+   step 0) before being trusted on E11.
 
 ---
 
