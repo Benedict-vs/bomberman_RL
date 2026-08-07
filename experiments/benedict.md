@@ -192,22 +192,62 @@ mean, with one seed at reference parity, from 33.32 / 2.287. Suicides and surviv
 The remaining gap to the reference is no longer a feature gap. It is **run-to-run variance with
 an identified mechanism** (the 2-cycle), and that is what the next experiment has to attack.
 
+### Post-mortem: what the 2-cycle actually is
+
+Three entries in a row I named a mechanism for the cycle and was partly wrong, so rather than
+guess a fourth time I opened one up (`scratchpad/benedict/cycle_dump.py`, written for this).
+Dumping the two rows of the first early-collapsing round, for two collapsed tables:
+
+| table | cycle | tile A | tile B |
+|---|---|---|---|
+| s1 @40 000 | (1,1)↔(2,1) | target `DOWN`, argmax `RIGHT`, Q(R)=0.163 Q(D)=0.163 | target `LEFT`, argmax `LEFT` |
+| s4 @40 000 | (1,1)↔(1,2) | target `RIGHT`, argmax `DOWN`, Q(R)=−0.041 Q(D)=−0.032 | neighbours (3,0,0,0) — a **dead end**, only exit `UP`; Q(UP)=0.046, Q(BOMB)=0.045 |
+
+**No D₄ element maps either pair of rows onto the other.** They are genuinely different states, so
+canonicalising the table by its symmetry group would neither merge them nor touch this cycle —
+which kills the argument I had promoted E14 on. Digit 6 does flip between the tiles, but that is
+a symptom: in s4 it points `DOWN` into a crate the agent has walked up to and then declines to
+bomb, by **0.001**.
+
+That is the real finding, and it generalises. Margin between the best legal move and `BOMB`,
+across all trained rows where a bomb would open a crate:
+
+| table | median margin | share below 0.01 | spread over *legal* actions |
+|---|---|---|---|
+| s1 @40 000 (collapsed) | **0.0089** | 51 % | 0.201 |
+| s4 @40 000 (collapsed) | **0.0061** | 56 % | 0.171 |
+| s0 @10 000 (mediocre) | 0.1238 | 19 % | 0.272 |
+| **s2 @10 000 (reference parity)** | **0.2067** | 5 % | 0.418 |
+
+**The difference between a reference-parity agent and a collapsed one is whether `BOMB` beats
+walking on by 0.2 or by 0.006.** In the collapsed tables half of all bombing opportunities are
+decided by a margin under 0.01, i.e. by noise. This is E05b's row 409 again — a near-tie in a
+high-traffic cell is not a small error, it is the policy — except that per-cell α converged these
+cells honestly. The values really are nearly equal.
+
+**Why they are nearly equal is state aliasing, and it is exactly what Benedict noticed while
+watching the agent play**: it bombs a single crate where moving one tile further would have taken
+three. Digit 7 is *binary*, so "one crate in range" and "four crates in range" are the same row.
+The learned `Q(BOMB)` there is an average over both, which lands close to the value of walking
+on — precisely the flat margin measured above. The behavioural observation, the crates-per-bomb
+gap and the cycle all have one cause.
+
 ### What I do next
 
-1. **E14 is no longer digit 7.** Prediction 7 failed in a way that removes most of its expected
-   gain — crates/bomb is already 2.43 against the reference's 3.07. The gap that matters is
-   116.64 against 54.75 *between seeds of the same code*.
-2. **E14: D₄ canonicalization**, promoted from "later" on new evidence. Two independent reasons,
-   and the second is the one that changed my mind: it multiplies samples per row by up to 8, and
-   — because a corridor tile is self-symmetric under the horizontal flip — it forces
-   `Q(s, LEFT) = Q(s, RIGHT)` exactly, so `act` breaks that tie at random. **The deterministic
-   2-cycle becomes a random walk.** That is a direct attack on the mechanism behind the variance.
-   **Blocker, found while checking E13:** `bfs_first_step` scans `DELTAS` in a fixed order, so
-   among equidistant goals it prefers `UP`, then `RIGHT` (measured distribution 45.5 / 30.6 /
-   13.5 / 10.5 %). The feature map is therefore **not** exactly D₄-equivariant, and
-   canonicalization on top of it would be silently inconsistent. A symmetric tie-break inside the
-   BFS has to come first, and it is a change to the feature map, so it needs its own measurement.
-3. **Then the ablation panel**, which E10 owes and which is now cheap and meaningful.
+1. **E14: digit 7 becomes a bucketed count** (0 / 1 / 2 / 3+), 2 → 4 values, table 12 800 →
+   25 600. Three independent lines of evidence now point at it: the behavioural observation, the
+   crates-per-bomb gap (2.43 against the reference's 3.07, and 1.33 on the worst seed), and the
+   margin table above. The prediction is not only more crates but **less variance**, since
+   splitting an aliased row is what turns a 0.006 margin into a decisive one.
+2. **D₄ is off the list for now.** The dump shows the cycling rows are not symmetry-related, so
+   canonicalisation would not address the failure it was promoted for. Its sample-efficiency
+   argument survives and becomes relevant again if E14's larger table proves data-starved — and
+   the `bfs_first_step` tie-break bias (45.5 / 30.6 / 13.5 / 10.5 %) still has to be fixed before
+   any of that.
+3. **`table_check` finding 6 is measuring the wrong thing.** It takes `np.ptp` over the whole
+   Q-row, which is dominated by the ≈ −1 that invalid actions carry, so it reported a "healthy"
+   median spread of 1.5–2.7 for tables whose legal actions are separated by 0.17. Spread over
+   *legal* actions is the diagnostic; the current one cannot distinguish s2 from s4.
 
 ---
 
