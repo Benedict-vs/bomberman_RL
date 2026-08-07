@@ -21,6 +21,72 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E15 — The first hyperparameter sweep: γ × ε floor, factorial
+
+- **Question:** every feature change so far has produced the same side effect — performance peaks
+  at some checkpoint and then decays — and the seeds that decay fastest are the ones that produce
+  the variance now capping the result. **That phenomenon is invariant to the feature map**
+  (E12 −21 %, E13 −44 %, E14 −24 %, three different representations), which is an argument that
+  it is not caused by the representation. γ and the ε floor have never been varied on this rung;
+  γ has not been varied since E01. Do they explain it?
+- **Change:** no feature change. `GAMMA` and `EPS_END` become environment switches and are swept.
+  **Runs on the E13 feature map** (binary digit 7, 12 800 rows), not E14's — E14 was not
+  demonstrated, cost a doubled table and lost the reference-parity seed, and its one advantage
+  (halved variance) is exactly what this entry is trying to obtain by other means. If E15 works,
+  E14 can be retested on top of tuned hyperparameters, which is a better test of it than E14 was.
+- **Design:** γ ∈ {0.9, 0.95, 0.99} × `EPS_END` ∈ {0.02, 0.10}, five seeds per cell — **30 runs**.
+  α (`1/N^0.7`), the ε decay rate and the rewards are held fixed.
+- **Agent:** `benedict_task2` · commit `<fill in>` · labels
+  `benedict_q_e15_g{90,95,99}_e{02,10}_s{0..4}__ep*__task2`
+- **Training:** 40 000 rounds, world seed 810731, checkpoints 5 000 / 10 000 / 20 000 / 40 000.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731; evaluate the 10 000 and 20 000 checkpoints
+  first and extend if a cell's optimum lands on an edge. Baseline **E13 @10 000: 83.56 ± 24.23
+  crates, 5.990 score**, best seed 116.64. Reference 116.26 / 8.50.
+
+### Why γ is the prime suspect
+
+γ = 0.9 is an effective horizon of 1/(1−γ) ≈ **10 steps**. The BFS targets this agent navigates to
+are routinely 10–30 steps away, and a coin 20 steps out is worth 5 × 0.9²⁰ = **0.61** against a
+step cost of 0.1 per step. So the value function is close to flat over exactly the distances the
+policy has to discriminate — the same flatness that let `BOMB` lose to walking on by 0.006 in the
+E13 post-mortem. A longer horizon should separate states that are currently near-ties.
+
+Why not simply γ → 1: with 400-step episodes and a dense crate reward, a near-undiscounted return
+makes *every* state look similar for the opposite reason, and it converges far more slowly. The
+sweep is there because I do not know which failure mode dominates.
+
+### Prediction (written before the run)
+
+1. **γ = 0.95 wins; its best cell reaches 95–115 crates**, five-seed mean, from 83.56.
+   γ = 0.99 is **worse than 0.95** and possibly worse than 0.9, on slow convergence.
+2. **The central prediction: `crates` std below 12 in the winning cell**, from 24.23. If the mean
+   rises and the spread does not, γ is buying performance without touching the mechanism, and the
+   next suspect is `ALPHA_EXP`.
+3. **The peak-then-decay shrinks: loss from the best checkpoint to 40 000 under 20 %** in the
+   winning cell (E13: −44 %). This is the phenomenon the entry exists to explain; if it is
+   unchanged at every γ, then it is not a discounting effect and `ALPHA_EXP` is next.
+4. **A higher ε floor lowers the mean slightly and lowers the spread**, at every γ: more
+   exploration keeps rare rows refreshed (the mechanism E05 predicted and never got to test) at
+   the cost of a behaviour policy further from greedy. Expected to be the weaker of the two knobs.
+5. **`suicides` do not rise, and should fall** — 0.002 or below at γ = 0.95. Dying forfeits the
+   discounted future, so a longer horizon makes `KILLED_SELF = −5` relatively *more* costly, not
+   less. If suicides rise with γ, my sign is wrong somewhere and the reward scale needs checking
+   before E16 touches it.
+6. **`think_max_ms` unchanged at ~0.2.** γ never enters the feature computation; if this moves,
+   something other than the intended knob changed.
+
+**Refutation condition for the whole entry:** no cell beats 83.56 ± 24.23 by more than the
+five-seed noise. That would mean the variance is not a discounting artefact, and the remaining
+suspects are `ALPHA_EXP` (which sets *when* learning stops) and the reward scale (E16) — in that
+order, because the decay-with-training pattern is a learning-rate signature before it is a reward
+signature.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E14 — Digit 7 counts the crates instead of just noticing them
 
 - **Question:** the E13 post-mortem traced the 2-cycle to a margin: in the seeds that collapse,
