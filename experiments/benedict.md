@@ -101,7 +101,128 @@ and ship" would be shipping a knowingly worse table than a checkpoint that was a
 
 ### Result
 
-*(to be filled in after the run)*
+25 evaluations, 300 rounds each, ε = 0, seed 20260731. Five-seed means:
+
+| checkpoint | `crates` | std | `score` | `suicides` | `survived` | crates/bomb |
+|---|---|---|---|---|---|---|
+| 2 500 | 19.73 | 8.43 | 1.178 | 0.022 | 0.978 | 0.86 |
+| 5 000 | 20.61 | 6.18 | 1.283 | 0.039 | 0.961 | 1.07 |
+| 10 000 | 21.70 | 12.44 | 1.363 | 0.002 | 0.998 | 1.37 |
+| **20 000** | **33.32** | **4.90** | **2.287** | 0.001 | 0.999 | **1.91** |
+| 40 000 | 26.19 | 8.78 | 1.723 | **0.000** | **1.000** | 1.62 |
+
+Per seed, `crates`:
+
+| ep | s0 | s1 | s2 | s3 | s4 |
+|---|---|---|---|---|---|
+| 20 000 | 36.07 | 38.28 | 34.24 | 25.41 | 32.61 |
+| 40 000 | 28.82 | 32.10 | **10.67** | 28.89 | 30.45 |
+
+Paired, 20 000 → 40 000: s0 `crates` −7.247 [−12.133, −2.383] **WORSE**, `score` −0.697
+[−1.073, −0.317] **WORSE**; s2 `crates` −23.563 [−27.800, −19.507] **WORSE**, `score` −1.857
+[−2.200, −1.527] **WORSE**.
+
+**The best table is the one at 20 000 episodes. Training to 40 000 costs 21 % of the crates and
+25 % of the score, and four seeds of five get worse.** The reference is still 116.26 / 8.45, so
+the peak is 29 % of it.
+
+### The curve does not converge — it peaks and declines
+
+Nothing in this ledger predicted that. The refutation condition I wrote was that `crates` might
+still be *rising* between 20 000 and 40 000; instead it falls, with a CI far from zero on both
+seeds tested. That is the E06 arm A finding in a new form: a table can get worse with more
+training, and the only way to see it is to measure at ε = 0.
+
+**Mechanism, and it is the defect E13 already targets.** Seed 2 is the clean case:
+
+| | ep 20 000 | ep 40 000 |
+|---|---|---|
+| `crates` | 34.24 | 10.67 |
+| `bombs` | 17.42 | 5.27 |
+| crates per bomb | 1.97 | 2.02 |
+| loop-probe cycle entry (median step) | 111 | **11** |
+
+It does not bomb *worse* — the crates-per-bomb ratio is unchanged. **It stops playing sooner.**
+As α shrinks (0.0037 at ~3 000 visits, 0.00088 at ~23 000) and ε sits at its floor, near-ties in
+the safe-branch rows harden into a fixed argmax, and when that argmax closes a 2-cycle the round
+is effectively over. More training does not make the policy wrong; it makes an already-wrong
+tie permanent. The thing that degrades with training is exactly the constant digit 6 that E13
+exists to fix.
+
+### The training curve is not a usable proxy, and the error is not constant
+
+Seed 0, training mean over the 1000 episodes before each checkpoint, against the ε = 0 value:
+
+| checkpoint | training | ε = 0 | ratio |
+|---|---|---|---|
+| 2 500 | 16.46 | 12.69 | 0.77 |
+| 5 000 | 34.32 | 20.38 | **0.59** |
+| 10 000 | 32.59 | 19.25 | **0.59** |
+| 20 000 | 39.74 | 36.07 | 0.91 |
+| 40 000 | 34.36 | 28.82 | 0.84 |
+
+I predicted a roughly constant 0.8–0.9. It ranges 0.59 to 0.91, and it is *worst exactly where
+the policy is least settled* — at 5 000 and 10 000 the training log overstates the greedy policy
+by 40 %. So the training curve is not a biased-but-usable convergence signal on this rung either;
+it is a signal whose bias depends on the thing being measured. `AGENTS.md`'s rule survives
+without the qualification I was hoping to add to it.
+
+It is also why I misread the plateau in the first place. The training curve looked flat from
+10 000 onward; the ε = 0 curve rises by 50 % between 10 000 and 20 000 and then falls.
+
+### Predictions, scored
+
+1. **"`crates` at 10 000 within 15 % of 40 000 (≥ 22)" — narrowly wrong (21.70 vs 26.19, 17 %
+   off), and wrong at the premise.** I framed 40 000 as the endpoint worth matching; it is not
+   the best table, so the comparison was the wrong one to make.
+2. **"`crates` at 2 500 much lower, 10–18" — wrong.** 19.73, statistically indistinguishable
+   from 5 000 (20.61) and 10 000 (21.70). **The first 2 500 episodes buy 59 % of the peak and the
+   next 7 500 buy nothing.** All the remaining progress happens between 10 000 and 20 000.
+3. **"The ε = 0 curve is not monotone; at least one seed lower at 40 000 than at its own
+   20 000" — right, and far stronger than predicted.** Four of five.
+4. **"Training/evaluation gap roughly constant at 0.8–0.9" — wrong.** 0.59–0.91, see above.
+5. **"Seed spread ≥ 5 at every checkpoint from 10 000" — narrowly wrong**, and the miss is the
+   interesting part: the spread is *smallest* at the best checkpoint (4.90 at 20 000 against
+   12.44 at 10 000 and 8.78 at 40 000). The seeds agree when the policy is good and diverge when
+   it is not, which makes std a cheap secondary signal.
+6. **"Cycle entry at 40 000 no later than at 10 000 for ≥ 3 of 5 seeds" — wrong.** Only s2. The
+   degradation is not a uniform hardening; it is one seed of five falling off a cliff.
+
+### Reproducibility confirmed as a by-product
+
+E12's 40 000 checkpoint is **round-for-round identical** to E11's final table (per-round `crates`
+compared across all 300 evaluation rounds). Two independent 40 000-round training runs, same
+world seed and same `BM_RUN_INDEX`, produced the same table — so the seeding regime introduced in
+E06 holds on rung 2, and a checkpoint really is what a shorter run would have produced.
+
+### Tooling note
+
+`analyze.py --ablation` was the wrong tool for plotting this curve. It labels every non-base file
+as a "component removed" and prints **HARMFUL** for anything better than the base, which is
+meaningless here and must not reach the report. The numbers are correct paired differences; only
+the framing is wrong. A `--series` mode that plots one metric against an ordered axis with CIs is
+worth adding before the report needs this figure.
+
+### Verdict
+
+**20 000 rounds is the standard from E13 on** — not the 10 000 I expected (21.70 crates is far
+short of 33.32) and not 40 000 (which is actively harmful). Sweeps drop from ~27 min to ~13.
+
+Second finding, and the one for the report: **on this rung, "train longer" is not free and the
+last checkpoint is not the best one.** The convention of shipping the final table is wrong here;
+what should ship is the best *measured* checkpoint, chosen the way E06 fixed the seed convention
+— by a rule declared in advance, not by picking the winner afterwards. Proposed rule, declared
+now: **ship the checkpoint with the highest five-seed mean on the rung's leading indicator, using
+run index 0 within that checkpoint.**
+
+### What I do next
+
+1. **E13 (digit 6's safe branch) at 20 000 rounds.** Its mechanism and E12's degradation
+   mechanism are the same 2-cycle, so E13 should shrink the 20 000 → 40 000 gap as a side effect.
+   Prediction to be written before the run, with that as a secondary check.
+2. **Add the checkpoint rule to `AGENTS.md`**: measure at ε = 0 at several checkpoints, ship the
+   best by a pre-declared rule. This is a team-wide methodology point, not mine alone.
+3. **`--series` mode for `analyze.py`**, before the report needs the curve figure.
 
 ---
 
