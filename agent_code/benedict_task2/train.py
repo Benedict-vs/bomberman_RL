@@ -39,13 +39,13 @@ except ImportError:     # tools/ is not part of the submission
 AGENT_NAME = "benedict_task2"
 
 STEP_COST = -0.1    # encourages shorter paths
-GAMMA = 0.9
+GAMMA = float(os.environ.get("BM_GAMMA", 0.9))
 
 ALPHA = 0.1         # only used when ALPHA_MODE == "const"
 ALPHA_EXP = 0.7     # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
 
 EPS_START = 0.2
-EPS_END = 0.02
+EPS_END = float(os.environ.get("BM_EPS_END", 0.02))
 
 # Rounds between model saves. The table is 614 KB, so saving every round is
 # ~25 GB of writes over a 40 000-round run and five of those run concurrently --
@@ -79,8 +79,9 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e14"
-RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
+EXPERIMENT = "e15"
+ARM = os.environ.get("BM_ARM", "")
+RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
 
 def setup_training(self):
