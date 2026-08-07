@@ -54,12 +54,23 @@ NB_CLEAR = 3        # free and outside every blast
 # Digit 6: 0 = nothing reachable, 1..4 = ACTIONS[0..3].
 NO_TARGET = 0
 
+# Digit 7: crates a bomb here would open, capped. 0 also covers "no bomb
+# available" -- both mean BOMB is not worth considering, and that is the only
+# thing the agent can act on.
+#
+# A count rather than a bit because the bit aliases: with 2 values, "one crate
+# in range" and "four crates in range" are the same row, so Q(BOMB) there is an
+# average over both and lands next to the value of walking on. Measured in the
+# E13 post-mortem -- half of all bombing opportunities in a collapsing table are
+# decided by a margin below 0.01, against 0.207 in the seed at reference parity.
+BOMB_BUCKETS = 4        # 0, 1, 2, 3 or more
+
 # 'danger' entry for a tile no bomb reaches.
 SAFE = s.BOMB_TIMER + 1
 
 # 4 neighbour states + steps of grace on my own tile + target direction
 # + a bomb here would pay off
-FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2)
+FEATURE_SIZES = (4, 4, 4, 4, 5, 5, BOMB_BUCKETS)
 N_STATES = int(np.prod(FEATURE_SIZES))
 
 POLICY_SEED = 20260731
@@ -123,8 +134,10 @@ def neighbour_status(x: int, y: int, field: np.ndarray, danger: np.ndarray,
     return tuple(status)
 
 
-def bomb_hits_crate(x: int, y: int, field: np.ndarray) -> bool:
-    return any(field[cx, cy] == 1 for cx, cy in blast_coords(x, y, field))
+def crates_in_blast(x: int, y: int, field: np.ndarray) -> int:
+    """How many crates a bomb dropped at (x, y) would destroy."""
+
+    return sum(1 for cx, cy in blast_coords(x, y, field) if field[cx, cy] == 1)
 
 
 def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> int:
@@ -269,7 +282,8 @@ def state_to_features(game_state: dict) -> int:
     # in a "crate in range" row with no bomb left, picks BOMB, gets
     # INVALID_ACTION -- and an invalid action leaves the state unchanged, which
     # is the absorbing-row failure of E09 in a new place.
-    bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field))
+    bomb_useful = (min(crates_in_blast(x, y, field), BOMB_BUCKETS - 1)
+                   if have_bomb else 0)
 
     # Digit 6 is "the direction that matters right now". While a bomb covers the
     # agent's tile that is the way out, and nothing else is worth encoding --

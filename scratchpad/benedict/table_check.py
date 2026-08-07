@@ -55,9 +55,9 @@ NEGLIGIBLE = 0.005
 #                      has one. Enables the "in danger and not leaving" check.
 LAYOUTS = {
     (2, 2, 2, 2): dict(name="rung-1 wall bits", blocked=1, clear=0,
-                       lethal=None, danger_digit=None),
+                       lethal=None, danger_digit=None, bomb_digit=None),
     (4, 4, 4, 4): dict(name="rung-2 neighbour states", blocked=0, clear=3,
-                       lethal=1, danger_digit=4),
+                       lethal=1, danger_digit=4, bomb_digit=6),
 }
 
 DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
@@ -382,16 +382,57 @@ def main() -> int:
         print(f"      row {i:5d}  {decode(i, sizes)}  q={np.round(q[i], 2)}")
     print()
 
-    # --- Finding 6: value spread --------------------------------------------
+    # --- Finding 6: value spread over the actions the agent can actually take -
     # A row whose actions are within noise of each other is one update away from
     # flipping its argmax. Maxi's E01/E02 diagnostic, kept because it caught a
     # broken policy that every aggregate number called healthy.
-    spreads = np.array([np.ptp(q[i]) for i in range(n_states) if trained[i]])
-    print(f"[6] value spread over trained rows       : "
+    #
+    # Restricted to *legal* actions since 2026-08-07. Over the whole row the
+    # number is dominated by the ~-1 that invalid moves carry, so it read
+    # 1.5-2.7 ("healthy") for E13 tables whose legal actions were separated by
+    # 0.17 and whose policy collapsed into a 2-cycle. It could not tell the
+    # reference-parity seed from the broken one; over legal actions it can
+    # (0.418 against 0.171).
+    def legal_values(row: int) -> list:
+        digits = decode(row, sizes)
+        moves = [q[row][a] for a in range(4) if digits[a] != layout["blocked"]]
+        return moves + list(q[row][4:])
+
+    spreads = np.array([np.ptp(legal_values(i)) for i in range(n_states)
+                        if trained[i] and i not in set(sealed)])
+    print(f"[6] value spread over legal actions      : "
           f"median {np.median(spreads):.3f}, min {spreads.min():.3f}, "
           f"max {spreads.max():.3f}")
     print(f"    rows with spread < 0.1 (argmax is noise): {int((spreads < 0.1).sum())}")
     print()
+
+    # --- Finding 7: how decisively BOMB wins where it pays off ---------------
+    # The E13 post-mortem: in tables that collapse into a 2-cycle, half of all
+    # bombing opportunities are decided by a margin under 0.01 -- the agent
+    # walks up to a crate and then declines to bomb it by a thousandth. The
+    # reference-parity seed decides the same rows by 0.207. This is the number
+    # that separated them when nothing else did.
+    if layout["bomb_digit"] is not None:
+        margins = []
+        for i in range(n_states):
+            if not trained[i] or i in set(sealed):
+                continue
+            digits = decode(i, sizes)
+            if digits[layout["bomb_digit"]] == 0:
+                continue                # a bomb here is pointless or impossible
+            moves = [q[i][a] for a in range(4) if digits[a] != layout["blocked"]]
+            if not moves:
+                continue
+            margins.append(abs(max(moves) - q[i][actions.index("BOMB")]))
+        if margins:
+            margins = np.array(margins)
+            print(f"[7] |best move - BOMB| where a bomb pays off : "
+                  f"median {np.median(margins):.4f} over {len(margins)} rows")
+            print(f"    decided by less than 0.01 (i.e. by noise): "
+                  f"{np.mean(margins < 0.01):.1%}")
+            print("    Reference points (E13): 0.207 at reference parity,")
+            print("    0.006-0.009 in the seeds that collapse into a 2-cycle.")
+            print()
 
     if frozen_spawns:
         print(f"FAIL: {frozen_spawns / n_spawns:.1%} of spawns sit on an absorbing "

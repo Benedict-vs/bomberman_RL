@@ -21,6 +21,76 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E14 — Digit 7 counts the crates instead of just noticing them
+
+- **Question:** the E13 post-mortem traced the 2-cycle to a margin: in the seeds that collapse,
+  half of all bombing opportunities are decided by less than 0.01 between `BOMB` and walking on,
+  against 0.207 in the seed that reaches reference parity. The proposed cause is aliasing — digit
+  7 is binary, so a row where one crate is in range and a row where four are is **the same row**,
+  and the learned `Q(BOMB)` is an average over both. Does splitting that row restore the margin,
+  and does it reduce the run-to-run variance that is now the largest term in the result?
+- **Change from E13:** exactly one digit. `bomb_useful` (2 values: would a bomb here open a
+  crate, and do I have one) becomes `crates_in_blast` bucketed to **0 / 1 / 2 / 3+** (4 values),
+  still 0 when no bomb is available. `FEATURE_SIZES` (4,4,4,4,5,5,2) → **(4,4,4,4,5,5,4)**, table
+  12 800 → **25 600**. Digits 1–6, the escape branch, and the rewards are untouched.
+- **Agent:** `benedict_task2` · commit `<fill in>` · labels `benedict_q_e14_s{0..4}__ep*__task2`
+- **Training:** 40 000 rounds, five seeds, world seed 810731, checkpoints 5 000 / 10 000 /
+  20 000 / 40 000. Kept at 40 000 rather than E13's optimum of 10 000 because the table doubles —
+  see prediction 7.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731. Baseline **E13 @10 000**: `crates`
+  83.56 ± 24.23, `score` 5.990, crates/bomb 2.43, `suicides` 0.002. Reference: 116.26 / 8.50 /
+  3.07. Model selection on 550731, per `experiments/task1.md` §5.8.
+
+### Where this came from
+
+Not from a plan — from watching the agent play. Benedict noticed it dropping a bomb on a single
+crate where moving one tile further would have caught three. That is the behavioural face of the
+same thing three measurements were pointing at: crates per bomb 2.43 against the reference's
+3.07, and 1.33 on the worst seed; the flat `BOMB` margin above; and a 2-cycle in which the agent
+walks up to the crate its own target digit selected and then declines to bomb it by 0.001.
+
+Worth recording that D₄ canonicalisation was the planned E14 and was dropped on evidence: the
+`cycle_dump` diagnostic showed the two rows of an actual cycle are **not** related by any element
+of the symmetry group, so merging symmetric rows would not have touched the failure it was
+promoted to fix.
+
+### Prediction (written before the run)
+
+1. **`crates` 95–120**, five-seed mean, from 83.56. If every seed bombed like s2 (2.99 crates per
+   bomb at ~37 bombs) the ceiling is ~110. **Refutation:** below 85 — no better than E13 — means
+   the aliasing account of the flat margin is wrong, and the near-ties come from the reward scale
+   rather than from the state.
+2. **The central prediction: variance collapses. `crates` std < 12**, from 24.23. This is the
+   entry's reason to exist. Splitting an aliased row is what turns a 0.006 margin into a decisive
+   one, so fewer seeds should land on the wrong side of a coin flip. **If the mean rises and the
+   spread does not, I have bought crates without fixing the mechanism**, and the next experiment
+   is about the reward, not the features.
+3. **crates per bomb 2.9–3.4**, from 2.43. It may exceed the reference's 3.07: the agent can now
+   decline a one-crate spot and hold its bomb for a three-crate one, which `rule_based_agent`
+   does not do.
+4. **`table_check` finding 7 (the new one): median margin > 0.15 in every seed**, and fewer than
+   15 % of bombing rows decided by less than 0.01 (E13: 0.006–0.207, and 5–56 %). Checkable in a
+   second per seed, before any 300-round run.
+5. **Loop probe: fewer than 5 of 20 rounds confined before 90 % of the round, in every seed.**
+   E13's reference-parity seed manages 2/20; its collapsed seeds are at 19/20.
+6. **Regression guard: `suicides` ≤ 0.01, `survived` ≥ 0.99.** The agent will now hold its bomb
+   while it looks for a denser spot, which means more time standing next to crates in pockets.
+7. **The optimal checkpoint moves later, to 20 000.** The table doubles, so it needs more data;
+   E13 peaked at 10 000 and E12 at 20 000. **If it peaks at 40 000, the table is genuinely
+   data-starved and D₄ canonicalisation comes back onto the list** — for its sample-efficiency
+   argument, which survived the post-mortem, rather than for the cycle argument, which did not.
+
+**Refutation condition for the whole entry:** `crates` < 85 *and* std > 20. That is E13's result
+with a bigger table, and it would mean the margin is set by the reward function rather than by
+what the state can distinguish — in which case the next experiment is `CRATE_DESTROYED` and the
+step cost, and the long-overdue `COIN_COLLECTED` +5 against +1 ablation goes with it.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E13 — Point digit 6 at the crate itself, not at a tile that can hit one
 
 - **Question:** E10 measured that 99.7 % of free tiles on a fresh `classic` arena are

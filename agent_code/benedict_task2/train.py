@@ -79,7 +79,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e13"
+EXPERIMENT = "e14"
 RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 
 
