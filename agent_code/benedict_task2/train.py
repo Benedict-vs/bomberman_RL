@@ -53,6 +53,12 @@ EPS_END = 0.02
 # the atexit hook in setup_training covers every normal ending.
 SAVE_EVERY = 100
 
+# Episodes at which the table is also written to its own file, so the learning
+# curve can be measured at eps = 0 afterwards instead of read off the training
+# log. Learning is untouched -- these are extra writes, not extra updates, so
+# every checkpoint is exactly the table a run of that length would have left.
+CHECKPOINTS = (2_500, 5_000, 10_000, 20_000, 40_000)
+
 REWARDS = {
     e.COIN_COLLECTED: 5,
     e.CRATE_DESTROYED: 0.3,
@@ -73,7 +79,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e11"
+EXPERIMENT = "e12"
 RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 
 
@@ -123,6 +129,16 @@ def save_table(self) -> None:
     np.save(MODEL_FILE, self.q)
 
 
+def checkpoint_file(episode: int) -> str:
+    """`q_table<suffix>__ep<N>.npy` -- exactly the path that
+    `BM_MODEL_SUFFIX=<suffix>__ep<N>` resolves to, so a checkpoint is evaluated
+    by setting that one variable and `callbacks.py` needs no special case.
+    """
+
+    base, ext = os.path.splitext(MODEL_FILE)
+    return f"{base}__ep{episode}{ext}"
+
+
 def game_events_occurred(self, old_game_state: dict, self_action: str,
                          new_game_state: dict, events: List[str]):
     """One Q-learning update per step."""
@@ -160,9 +176,12 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     td_target = reward
     td_error = td_target - self.q[s, a]
     self.q[s, a] += learning_rate(self, s, a) * td_error
-
-    if last_game_state["round"] % SAVE_EVERY == 0:
+    
+    round_no = last_game_state["round"]
+    if round_no % SAVE_EVERY == 0:
         save_table(self)
+    if round_no in CHECKPOINTS:
+        np.save(checkpoint_file(round_no), self.q)
 
     self.episode_events.extend(events)
     self.episode_reward += reward

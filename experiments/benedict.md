@@ -21,6 +21,90 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E12 — A learning curve measured at ε = 0, and what the round count should be
+
+- **Question:** the E11 training curve rises to ~34 crates by episode 10 000 and then oscillates
+  around it for 30 000 more. Is that convergence, or is the training curve hiding progress the
+  greedy policy is still making? And what round count should every experiment after this one use?
+- **Change:** none to the agent, the features or the rewards. `train.py` additionally writes the
+  table at five checkpoints. Learning is untouched — the same updates in the same order — so this
+  entry's answer transfers to E13 onward.
+- **Agent:** `benedict_task2`, the E11 configuration exactly · commit `<fill in>` · labels
+  `benedict_q_e12_s{0..4}__ep{2500,5000,10000,20000,40000}__task2`
+- **Training:** one 40 000-round sweep, five seeds, world seed 810731. Checkpoints at
+  **2 500 / 5 000 / 10 000 / 20 000 / 40 000** episodes.
+- **Measurement:** 25 evaluations, 300 rounds each, ε = 0, seed 20260731, `--preset task2`, plus
+  the loop probe at every checkpoint.
+
+### Why this is worth a full entry rather than a quick check
+
+Every convergence claim in this ledger rests on a *training* log, and `AGENTS.md` has said since
+2026-08-05 that a training curve is not a result — with rung-1 evidence where the gap was
+catastrophic (48.2 coins in training, 1.45 at evaluation, `experiments/maxi.md` E01). This
+produces **the first learning curve in the project measured at ε = 0**, which turns that rule
+from a warning into a quantity: how wrong is the training curve, as a function of training time?
+
+It also happens to answer the round-count question, but that is the by-product. A 10 000-round
+run would have been the cheap way to ask it, and it is strictly worse: because both RNGs are
+seeded and no update depends on the total round count, a 10 000-round run *is* the first 10 000
+episodes of the 40 000-round run. Checkpointing gets five answers from one sweep instead of one.
+
+### Why the plateau is expected, and why that is not the same as "converged well"
+
+`α = 1/N(s,a)^0.7`. Seed 0 ran 9.8 M steps over 432 occupied rows, so a busy cell is visited
+~22 700 times:
+
+| visits | α |
+|---|---|
+| 3 000 (≈ episode 5 000) | 0.0037 |
+| 23 000 (episode 40 000) | 0.00088 |
+
+The high-traffic cells are frozen by episode ~5 000, and ε reaches its 0.02 floor at 4 605 — two
+schedules landing in the same place by coincidence. So a plateau is what the hyperparameters
+*predict*. What that does not tell me is whether the frozen policy is the best one seen: E06 arm A
+established that a table can get worse with more training, and every E11 seed ends in a 2-cycle,
+which is a property of a hardening argmax.
+
+### Prediction (written before the run)
+
+1. **`crates` at 10 000 episodes is within 15 % of its value at 40 000** — so ≥ 22 against E11's
+   26.19 five-seed mean. **Refutation:** below ~18 while the training curve already reads 34 at
+   episode 5–10 k means the training curve *overstates* convergence badly and the greedy policy
+   improves long after it flattens — the rung-1 failure in the opposite direction, and the round
+   count stays at 40 000.
+2. **`crates` at 2 500 is much lower, 10–18.** ε is still 0.06 there and the table is half-formed.
+3. **The ε = 0 curve is not monotone.** At least one seed scores lower at 40 000 than at its own
+   20 000 checkpoint. This is the prediction only an ε = 0 curve can test, and the mechanism is
+   E06 arm A's: as α freezes, an argmax that happened to settle wrong stays wrong.
+4. **The training/evaluation gap is roughly constant at 0.8–0.9** (E11 s0: 33 in training against
+   28.8 measured). If it holds across all five checkpoints, then on *this* rung the training
+   curve is a biased but usable convergence signal — a qualification of the `AGENTS.md` rule
+   rather than a contradiction of it, and worth writing down as such.
+5. **Seed spread does not shrink with training.** `crates` std across seeds ≥ 5 at every
+   checkpoint from 10 000 on (E11 at 40 000: 8.78). The seeds are not converging to one policy,
+   they are converging to different ones — s2 collapses into its cycle at step 11, s0 at 396.
+6. **The 2-cycle gets *worse*, not better, with training.** Loop-probe cycle entry step at 40 000
+   is no later than at 10 000 for at least three of five seeds. A near-tie broken by exploration
+   early becomes a hardened argmax late.
+
+**Refutation condition for the whole entry:** `crates` still rising by more than 5 between the
+20 000 and 40 000 checkpoints, with a paired CI excluding 0. That would mean the plateau I read
+off the training log is an artefact of ε-driven variance masking real progress, and both the
+round-count conclusion and prediction 4 fall with it.
+
+### What I do with the answer
+
+If prediction 1 holds, **10 000 rounds becomes the standard for E13 onward** — 9 minutes per
+sweep instead of 36, which is the difference between three experiments a day and one. If
+prediction 3 or 6 holds, the ship-the-final-table convention needs revisiting: "train to 40 000
+and ship" would be shipping a knowingly worse table than a checkpoint that was already measured.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E11 — Point digit 6 at the exit when the agent is in a blast
 
 - **Question:** E10 established that the agent declines to bomb because, under its own escape
