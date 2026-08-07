@@ -169,10 +169,26 @@ Opponent presets for `--opponents`: `none`, `random`, `peaceful`, `coin_collecto
 
 **Measurements are versioned** (settled 2026-08-04, was the open item in `KONZEPT.md` §6.7).
 `.gitignore` now excludes only `results/figures/`; `results/eval/` and `results/train/` are
-committed. They are small text files and they are the evidence for the report's most important
-chapter. Training logs especially: `--seed` fixes the arenas but *not* the agent's exploration
-RNG, so a lost learning curve cannot be reproduced, only replaced by a different one. Figures
-stay ignored — they are pure functions of the CSVs.
+committed — they are the evidence for the report's most important chapter. Figures stay ignored:
+they are pure functions of the CSVs.
+
+*Amended 2026-08-07.* This section used to say a lost training log "cannot be reproduced, only
+replaced by a different one", because `--seed` fixes the arenas but not the agent's exploration
+RNG. **That has not been true since the exploration RNG was seeded in `setup_training`**
+(`np.random.default_rng(TRAIN_SEED + RUN_INDEX)`); `experiments/benedict.md` E12 confirmed it by
+rerunning a 40 000-round sweep and getting round-for-round identical evaluation results. Training
+logs are reproducible from commit + seeds, at the cost of a rerun. Keep committing them — they
+are evidence and they are cheap to keep — but the reason is convenience, not irreproducibility,
+and duplicates of an identical configuration are not worth carrying. Note the size difference
+before adding a sweep: an evaluation CSV is ~35 KB, a 40 000-episode training log is ~3 MB.
+
+**Seeding differs between training and measurement, on purpose.** `BombeRLeWorld.__init__`
+(`environment.py:335`) seeds the world RNG **once** and `build_arena` keeps drawing from it, so
+`main.py --seed S` gives a deterministic *sequence* of distinct arenas — variety for training,
+reproducible as a whole. `tools/evaluate.py` instead reseeds with `base_seed + round_index`
+**before every round**, so round *i* is the same arena for every agent ever measured at that
+seed. That is what makes `--compare` paired; `main.py --seed` alone is not sufficient for a
+measurement.
 
 ## Task ladder (subsets of each other)
 1. `coin-heaven`, no crates/opponents → efficient navigation to revealed coins.

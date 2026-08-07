@@ -160,12 +160,28 @@ best and worst seed at the peak checkpoint, and a factor of **16** at 40 000. Th
 the same way every bad seed on this project has failed since E04 — an absorbing 2-cycle — and at
 40 000 two of them enter it at step 0.
 
-This also puts the pre-declared shipping rule under real strain. The rule (E12: highest five-seed
-mean on the leading indicator, run index 0 within it) selects **s0 @10 000: 54.75 crates**, when
-s2 at the same checkpoint is at reference parity with 116.64. E06 faced a smaller version of this
-(50.0 against 49.15) and chose index 0 on principle. **The rule stands** — picking the best seed
-after seeing the results is cherry-picking, and the report would have to admit it. The correct
-response is to remove the variance so the rule stops costing 60 crates, not to weaken the rule.
+**Model selection, done by the agreed rule.** `experiments/task1.md` §5.8 — select on the
+held-out world seed 550731, report on 20260731 — applied to the five tables at the 10 000
+checkpoint:
+
+| | s0 | s1 | **s2** | s3 | s4 |
+|---|---|---|---|---|---|
+| `crates` @550731 (validation) | 56.76 | 62.52 | **117.14** | 85.77 | 93.76 |
+| `crates` @20260731 (reported) | 54.75 | 66.24 | **116.64** | 85.74 | 94.45 |
+
+The ranking is identical on both seeds and the values agree to within 4 %, so **the spread is a
+property of the tables, not of the arenas** — s2 is genuinely a better policy, not a luckier
+draw. §5.8 selects s2, and that table is now `agent_code/benedict_task2/q_table.npy`.
+
+I nearly got this wrong in the other direction: I had E06's "always ship run index 0" in mind,
+which §5.8 already superseded on rung 1 *because* index 0 turned out to be the worst of five
+there. Blind index 0 would have shipped 54.75 crates instead of 116.64. Selecting a model on
+held-out data and disclosing it is not cherry-picking; reporting the selection score as if it
+were an unbiased estimate would be. **The headline stays the five-seed distribution
+(83.56 ± 24.2); the shipped model's 116.64 is reported separately as a selected model.**
+
+None of which makes the variance acceptable — it is now the largest single source of uncertainty
+in the result, and it is what the next experiment attacks.
 
 ### Verdict
 
@@ -384,10 +400,12 @@ short of 33.32) and not 40 000 (which is actively harmful). Sweeps drop from ~27
 
 Second finding, and the one for the report: **on this rung, "train longer" is not free and the
 last checkpoint is not the best one.** The convention of shipping the final table is wrong here;
-what should ship is the best *measured* checkpoint, chosen the way E06 fixed the seed convention
-— by a rule declared in advance, not by picking the winner afterwards. Proposed rule, declared
-now: **ship the checkpoint with the highest five-seed mean on the rung's leading indicator, using
-run index 0 within that checkpoint.**
+what should ship is the best *measured* checkpoint. The team already has the rule for choosing
+among trained models — `experiments/task1.md` §5.8: **select on the held-out world seed 550731,
+report on 20260731, ties to the lowest index** — and it extends to checkpoints unchanged. Stated
+here in full because I had been carrying E06's superseded "always run index 0" in my head:
+**select the (checkpoint, seed) pair on 550731, report it on 20260731, and report the five-seed
+distribution beside it.**
 
 ### What I do next
 
