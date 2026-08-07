@@ -104,6 +104,9 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--cycle-width", type=int, default=2,
                         help="tiles a 'cycle' may span (default: 2)")
+    parser.add_argument("--stuck-before", type=float, default=0.9,
+                        help="a cycle only counts as a failure if it is entered "
+                             "within this fraction of the round (default: 0.9)")
     parser.add_argument("--min-tiles", type=int, default=2,
                         help="fail if the median round visits this many tiles "
                              "or fewer (default: 2)")
@@ -120,7 +123,13 @@ def main() -> int:
         all_actions.update(actions)
         steps.append(len(tiles))
 
-    stuck = [e for e in entries if e is not None]
+    # A round that settles onto two tiles at step 396 of 400 has not given up --
+    # it has finished. Only a cycle entered with real time left is a failure, so
+    # the count is restricted to the first `--stuck-before` fraction of the
+    # round. Without this the summary read "20/20 confined" for E13 tables that
+    # were in fact playing the whole round.
+    stuck = [e for e, n in zip(entries, steps)
+             if e is not None and e < args.stuck_before * n]
     median_tiles = int(np.median(per_round_tiles))
     total = sum(all_actions.values())
 
@@ -129,8 +138,8 @@ def main() -> int:
     print(f"steps per round      : median {int(np.median(steps))}")
     print(f"distinct tiles/round : median {median_tiles}  "
           f"(min {min(per_round_tiles)}, max {max(per_round_tiles)})")
-    print(f"rounds confined to <={args.cycle_width} tiles : "
-          f"{len(stuck)}/{args.rounds}", end="")
+    print(f"rounds confined to <={args.cycle_width} tiles before "
+          f"{args.stuck_before:.0%} of the round : {len(stuck)}/{args.rounds}", end="")
     if stuck:
         print(f", entering at step median {int(np.median(stuck))} "
               f"(min {min(stuck)}, max {max(stuck)})")

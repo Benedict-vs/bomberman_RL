@@ -79,7 +79,119 @@ the argument E10, E11 and E12 all lean on — is wrong about what the agent is a
 
 ### Result
 
-*(to be filled in after the run)*
+Five seeds × four checkpoints, 300 rounds each at ε = 0, seed 20260731:
+
+| checkpoint | `crates` | std | `score` | std | `suicides` | `survived` | crates/bomb |
+|---|---|---|---|---|---|---|---|
+| 5 000 | 80.61 | 29.85 | 5.773 | 2.28 | 0.008 | 0.992 | 2.44 |
+| **10 000** | **83.56** | 24.23 | **5.990** | 1.85 | 0.002 | 0.998 | 2.43 |
+| 20 000 | 63.94 | 36.77 | 4.565 | 2.77 | 0.002 | 0.998 | 2.89 |
+| 40 000 | 46.69 | 44.11 | 3.358 | 3.22 | 0.001 | 0.999 | 2.40 |
+
+Baseline (E12 at 20 000): 33.32 crates, 2.287 score. Reference (E08): 116.26 / 8.50.
+`think_max_ms` 0.272 against a 500 ms budget.
+
+**`crates` 33.32 → 83.56 and `score` 2.287 → 5.990, from one change to one digit.** That is 72 %
+of the reference on crates and 70 % on score, against 29 % and 27 % before.
+
+Paired, s0: E12 @20 000 → E13 @10 000, `crates` +18.677 [+13.193, +24.300] **BETTER**, `score`
++1.353 [+0.910, +1.790] **BETTER**.
+
+### One seed reaches the reference
+
+Seed 2 at 10 000 episodes, paired against `coin_collector_agent` over the same 300 arenas:
+
+| Metric | reference | s2 @10 000 | diff | 95 % CI | verdict |
+|---|---|---|---|---|---|
+| `score` | 8.500 | **8.513** | +0.013 | [−0.160, +0.170] | **no effect shown** |
+| `crates` | 116.26 | **116.64** | +0.377 | [−1.873, +2.363] | **no effect shown** |
+| `bombs` | 37.83 | 39.04 | +1.210 | [+0.450, +1.897] | BETTER |
+| `survived` | 1.000 | 0.997 | −0.003 | [−0.010, +0.000] | no effect shown |
+
+**A 12 800-row tabular Q-table is statistically indistinguishable from the reference agent on
+rung 2.** Not the mean of five seeds — one seed of five — which is the whole problem, below.
+
+### Predictions, scored
+
+1. **`crates` 55–85 — right.** 83.56 at the best checkpoint.
+2. **Loop probe: "median distinct tiles > 60" — right** (112 at 5 000, 107 at 10 000, from 25).
+   **"Fewer than 10 of 20 rounds confined" — unanswerable as written, because the metric was
+   wrong.** The probe counted a round as confined even when the cycle started at step 396 of
+   400, i.e. when the round had effectively ended, so it read 20/20 for tables that play the
+   whole round. Fixed afterwards (`--stuck-before`, default 0.9) and re-validated against a
+   known-bad table (E12 s2 @40 000: 19/20, entry step 4) and a known-good one (E13 s2 @10 000:
+   2/20, entry step 319). **Changing a metric after seeing the data is exactly the move that
+   invalidates a prediction**, so this half of prediction 2 does not count as confirmed, and the
+   fix has to earn its trust on E14 instead.
+3. **`score` 4–7 — right.** 5.990.
+4. **Regression guard `suicides` ≤ 0.01, `survived` ≥ 0.99 — right.** 0.002 / 0.998, despite the
+   agent now deliberately walking up to crates.
+5. **"The 20 000 → 40 000 degradation shrinks" — wrong, it grew.** E12 lost 7.1 crates (−21 %);
+   E13 loses 17.3 (−27 %), and the peak moved *earlier*, to 10 000. E12's mechanism claim is not
+   refuted — the collapsed seeds are still 2-cycles, and s1 and s4 at 40 000 are confined to two
+   tiles **from step 0** — but giving digit 6 a gradient does not prevent a row from acquiring an
+   argmax that closes a cycle. It only made the productive phase longer before it happens.
+6. **`table_check` finding 1 above 0–3, below 20, no frozen spawns — right.** 6–18 across all
+   checkpoints, every seed passing the spawn gate. The new hazard I predicted (digit 6 pointing
+   at a blocked crate) is real and small.
+7. **"crates per bomb stays at 1.8–2.0" — wrong.** 2.4–2.9, up from 1.91. **E13 and E14 are not
+   separable after all:** walking to crates does not only get the agent to more of them, it also
+   makes it bomb from denser positions. So part of the headroom I attributed to digit 7 has
+   already been collected, and E14's expected gain must be revised down before it is run.
+
+### The round count is a property of the configuration, not of the setup
+
+E12 concluded "20 000 rounds is the standard from E13 on". **One feature change moved the optimum
+to 10 000**, and 20 000 now costs 24 % of the crates. So that verdict was over-generalised: the
+optimal training length is not a constant of this project, it is a property of each
+configuration, and the only way to know it is to checkpoint and measure. The cost of getting this
+wrong is large and one-directional, so **checkpointing stays in every experiment from here on**
+rather than being replaced by a fixed round count.
+
+### Variance is now the binding constraint
+
+| checkpoint | s0 | s1 | s2 | s3 | s4 |
+|---|---|---|---|---|---|
+| `crates` @10 000 | 54.75 | 66.24 | **116.64** | 85.74 | 94.45 |
+| `crates` @40 000 | 98.64 | **10.82** | 28.35 | 89.41 | **6.23** |
+
+Identical code, identical world seed, different exploration RNG: a factor of **2.1** between the
+best and worst seed at the peak checkpoint, and a factor of **16** at 40 000. The bad seeds fail
+the same way every bad seed on this project has failed since E04 — an absorbing 2-cycle — and at
+40 000 two of them enter it at step 0.
+
+This also puts the pre-declared shipping rule under real strain. The rule (E12: highest five-seed
+mean on the leading indicator, run index 0 within it) selects **s0 @10 000: 54.75 crates**, when
+s2 at the same checkpoint is at reference parity with 116.64. E06 faced a smaller version of this
+(50.0 against 49.15) and chose index 0 on principle. **The rule stands** — picking the best seed
+after seeing the results is cherry-picking, and the report would have to admit it. The correct
+response is to remove the variance so the rule stops costing 60 crates, not to weaken the rule.
+
+### Verdict
+
+**BETTER, decisively, and rung 2 is within reach.** 83.56 crates / 5.990 score as a five-seed
+mean, with one seed at reference parity, from 33.32 / 2.287. Suicides and survival unchanged at
+0.002 / 0.998 — the E11 escape branch holds up under a policy that now seeks crates out.
+
+The remaining gap to the reference is no longer a feature gap. It is **run-to-run variance with
+an identified mechanism** (the 2-cycle), and that is what the next experiment has to attack.
+
+### What I do next
+
+1. **E14 is no longer digit 7.** Prediction 7 failed in a way that removes most of its expected
+   gain — crates/bomb is already 2.43 against the reference's 3.07. The gap that matters is
+   116.64 against 54.75 *between seeds of the same code*.
+2. **E14: D₄ canonicalization**, promoted from "later" on new evidence. Two independent reasons,
+   and the second is the one that changed my mind: it multiplies samples per row by up to 8, and
+   — because a corridor tile is self-symmetric under the horizontal flip — it forces
+   `Q(s, LEFT) = Q(s, RIGHT)` exactly, so `act` breaks that tie at random. **The deterministic
+   2-cycle becomes a random walk.** That is a direct attack on the mechanism behind the variance.
+   **Blocker, found while checking E13:** `bfs_first_step` scans `DELTAS` in a fixed order, so
+   among equidistant goals it prefers `UP`, then `RIGHT` (measured distribution 45.5 / 30.6 /
+   13.5 / 10.5 %). The feature map is therefore **not** exactly D₄-equivariant, and
+   canonicalization on top of it would be silently inconsistent. A symmetric tie-break inside the
+   BFS has to come first, and it is a change to the feature map, so it needs its own measurement.
+3. **Then the ablation panel**, which E10 owes and which is now cheap and meaningful.
 
 ---
 
