@@ -118,6 +118,9 @@ results/figures/
 
 final_project.pdf
 
+# stdout of parallel training sweeps; the training CSV is the record
+logs/*.out
+
 # scratchpad/<person>/ holds dev-only helper scripts (table dumps, policy replays).
 # Not part of the submission, but they produce numbers that end up in the report,
 # so they are versioned.
