@@ -143,7 +143,141 @@ sufficient on this rung, which is the more interesting result and the cheaper ag
 
 ### Result
 
-*(to be filled in after the run)*
+Commit `c188bb9`. 40 000 rounds per seed, 36 min wall clock for all five in parallel.
+Evaluation at ε = 0, 300 rounds, seed 20260731:
+
+| seed | `score` | `crates` | `bombs` | `suicides` | `survived` | `steps` | `invalid` |
+|---|---|---|---|---|---|---|---|
+| s0 | 0.213 | 4.69 | 2.91 | 0.063 | 0.937 | 376.9 | 0.08 |
+| s1 | 0.217 | 4.99 | **24.95** | 0.180 | 0.820 | 332.0 | 0.27 |
+| s2 | 0.053 | 1.21 | 0.59 | 0.020 | 0.980 | 392.5 | 0.00 |
+| s3 | **0.000** | **0.00** | **0.00** | 0.000 | 1.000 | 400.0 | 0.00 |
+| s4 | 0.060 | 1.18 | 0.50 | 0.003 | 0.997 | 398.7 | 0.06 |
+| **mean** | **0.109** ± 0.100 | **2.41** ± 2.27 | 5.79 ± **10.77** | 0.053 | 0.947 | — | — |
+
+`think_max_ms` 0.108–0.146 against a 500 ms budget. Target was 8.45 score / ~116 crates (E08).
+
+Paired against the E09 floor (s0, 300 rounds): `score` +0.213 [+0.157, +0.273] BETTER ·
+`crates` +4.693 [+3.947, +5.480] BETTER · `suicides` +0.063 WORSE · `survived` −0.063 WORSE.
+Against `random_agent`, s0 wins everything (`crates` +1.687 [+0.940, +2.477]) — but the
+**five-seed mean of 2.41 crates is below `random_agent`'s 3.01.** Tier 1 at best, and only on
+two seeds of five.
+
+### The mechanism: all five seeds park in an absorbing 2-tile cycle
+
+| seed | distinct tiles per round (median) | enters a 2-tile cycle at step | rounds affected |
+|---|---|---|---|
+| s0 | 2 | 4 | 20/20 |
+| s1 | 6 | 23 | 13/20 |
+| s2 | 2 | 0 | 19/20 |
+| s3 | **2** | **0** | 20/20 |
+| s4 | 2 | 0 | 20/20 |
+
+Seed 3 is the pure case: **10 distinct rows over 8000 steps**, action mix LEFT 32.5 % /
+RIGHT 32.5 % / UP 17.5 % / DOWN 17.5 % — a period-2 oscillation, in one of two orientations,
+from step 0 of every round. And in **100 %** of those steps a bomb dropped where it stands would
+have opened a crate. It never bombs.
+
+This is the **fourth** appearance of the same failure and the third distinct route to it: E04
+(loops from a scale-free feature), E05b/E06 arm A (loops from an unconverged learning rate),
+E09 (a fixed point from distribution shift), now E10.
+
+### Root cause: the crate fallback is dead for exactly the reason `NO_COIN` was dead
+
+`target_direction` returns `NO_TARGET` when the agent is *standing on* a target, mirroring the
+coin case. Measured over 200 generated arenas:
+
+| | share of free tiles from which a bomb opens ≥ 1 crate |
+|---|---|
+| fresh `classic` arena | **99.7 %** |
+| after 25 % of crates are cleared | 98.3 % |
+
+So digit 6 reads 0 at **99.7 %** of positions. The fallback I added to fix E09's frozen digit
+reproduces E09's frozen digit. The agent is running on digits 1–5 and 7, and in an open corridor
+with no live bomb nothing in those digits distinguishes left from right — so two mirror-image
+rows whose argmaxes point at each other are an absorbing 2-cycle, and the state never changes to
+break it.
+
+I wrote E09's verdict as *"`NO_COIN` must stop being a single state — it needs a target that is
+defined when no coin exists"*. I then defined that target so that it, too, is undefined almost
+everywhere. The requirement was met in letter and inverted in substance.
+
+### Why it will not bomb, even where BOMB is the obvious move
+
+`Q(best) − Q(BOMB)` in rows where a bomb would open a crate: median **0.617** (s0), **0.104**
+(s1), **0.610** (s3). The margin is small, and it is on the right side of zero for a reason
+that is not a bug:
+
+- a bomb opens ~2.5 crates → **+0.75**, discounted by γ⁴ = 0.66 across the four steps to
+  detonation → **≈ +0.50**;
+- `table_check` finding 3 says the escape policy fails in **27–33 %** of danger rows that have a
+  way out; at `KILLED_SELF` = −5 that is **≈ −1.5** in expectation.
+
+**The agent is correctly learning that bombing is negative-EV under its own escape policy.**
+That is the trap on this rung, and it is circular: it cannot learn to escape without bombing, and
+it will not bomb because it cannot escape. ε-exploration does not break it either — the training
+log shows s3 dropping 1.70 bombs per episode while its greedy policy drops **zero**.
+
+### Predictions, scored
+
+1. **`crates` 15–45 — wrong, and the refutation clause fired.** 2.41. I wrote that
+   `crates` < 5 with `bombs` ≈ 0 would mean "the agent learned not to bomb, and the cause is the
+   reward scale". Half right: it did learn not to bomb, and the +0.5-against-−5 arithmetic is
+   real. But the reward scale is the *second* cause; the first is a dead target digit, which I
+   did not consider at all.
+2. **`suicides` 0.5–1.0 — wrong.** 0.053. **My refutation condition for this prediction was
+   badly built**: I wrote that `suicides` < 0.2 would mean "escape is learnable from local danger
+   alone". It means nothing of the sort — the agent survives by never bombing. The condition
+   should have been *conditioned on* `crates` > 15. An unconditional survival threshold cannot
+   distinguish a competent agent from an inert one, which is the exact trap E08 documented for
+   completion rate and which I then walked into one experiment later.
+3. **`score` 0.3–2.5 — wrong.** 0.109.
+4. **Static gates: (a) right, (b) half, (c) right-but-meaningless.**
+   0 frozen spawns in all five, exit 0 (a). BOMB rows 34/18/17/17/27 against a predicted > 20 —
+   two of five (b). Finding 3 at 26.6–33.2 % against a predicted > 20 % (c) — but this
+   "confirmation" measures a situation the agent almost never enters.
+5. **Seed spread: `score` std 0.100 < 1.0 and `crates` std 2.27 < 8 — technically right, and
+   worthless.** The seeds agree because they all fail. Where it matters the spread is enormous:
+   `bombs` ranges 0.00 to 24.95, std 10.77.
+6. **`think_max_ms` < 5 — right.** 0.146.
+
+**The formal refutation condition did not fire, and that is the most useful thing in this
+entry.** I wrote: *"`crates` < 5 **and** fewer than 5 rows preferring `BOMB`"*. `crates` is 2.41,
+but every seed has 17–34 rows whose argmax is `BOMB`. The table can bomb; the greedy trajectory
+never arrives at those rows. **A count of rows in a table is not a visitation distribution** —
+which is precisely the error E09 caught me making with its 78.5 %-of-tiles figure, and I built it
+straight into the gate that was supposed to prevent a repeat.
+
+`table_check` also missed the cycle itself, for a concrete and fixable reason: it detects
+period-1 absorbing rows (an argmax into a wall). This cycle is **period 2** and made of perfectly
+legal moves. E06 already named 2-cycles as the failure class; I built a detector for the wrong
+period.
+
+### Verdict
+
+**Off the floor, and nowhere near a result.** 0.109 score against a reference of 8.45, 2.41
+crates against 116, and below `random_agent` on the leading indicator. The bundle is not refuted
+as a whole — the danger digits work (`suicides` 0.053, `survived` 0.947, and `invalid` fell to
+0.08 from E09's 290.7) — but the two components meant to make the agent *act* both fail:
+
+1. **Digit 6 is constant.** Fix: stop returning `NO_TARGET` when standing on a bombing spot.
+   Digit 7 already carries "bombing here pays off", so digit 6 is free to keep pointing at the
+   nearest crate and give the agent a gradient to follow. This is E11 and it is one change.
+2. **Bombing is negative-EV under the current escape policy.** Two candidate levers — the
+   `CRATE_DESTROYED` scale, and the escape feature that would move the 27–33 % failure rate.
+   These are E12 and E13, and they must not be bundled with E11: unlike the rung transition,
+   each of them *is* measurable on its own once the agent moves purposefully.
+
+### What I do next
+
+1. **E11: digit 6 always points at the nearest crate.** One change, five seeds, paired CI.
+   Prediction to be written before the run — but the loop probe above is the cheap gate, and it
+   should be run before any 300-round evaluation.
+2. **Add a period-2 cycle check to `table_check.py`**, or rather to the loop probe: median
+   distinct tiles per round is a one-line diagnostic that separated all five seeds here in
+   20 rounds and would have flagged this before the 36-minute training run finished.
+3. **Do not touch the danger digits.** They are the part of the bundle that worked, and E11 must
+   not confound its own measurement.
 
 ---
 
