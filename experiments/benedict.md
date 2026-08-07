@@ -21,6 +21,68 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E13 — Point digit 6 at the crate itself, not at a tile that can hit one
+
+- **Question:** E10 measured that 99.7 % of free tiles on a fresh `classic` arena are
+  crate-bombing positions, so `target_direction` — which returns `NO_TARGET` when the agent is
+  *standing on* a target — reads 0 almost everywhere while the agent is safe. Does making the
+  crate itself the goal restore the gradient, and how much of the remaining gap to the reference
+  does that close?
+- **Change from E11/E12:** exactly one. In the no-coins branch, the BFS goal becomes a **crate
+  tile** (`field == 1`) rather than a free tile from which a bomb would reach one. Crates stay
+  impassable — they are the goal, not the path — so the digit points *at* the crate the agent
+  should walk up to and bomb. Coin branch unchanged, except that an unreachable coin now falls
+  through to the crate branch instead of returning `NO_TARGET`. `FEATURE_SIZES`, the danger
+  branch from E11, and the rewards are all untouched.
+- **Agent:** `benedict_task2` · commit `<fill in>` · labels `benedict_q_e13_s{0..4}__ep*__task2`
+- **Training:** 40 000 rounds, five seeds, world seed 810731, checkpoints at
+  **5 000 / 10 000 / 20 000 / 40 000**. Trained past E12's 20 000-round optimum on purpose — see
+  prediction 5.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731, `--preset task2`, loop probe at every
+  checkpoint. Baseline is **E12 at 20 000**, the best measured table: `crates` 33.32 ± 4.90,
+  `score` 2.287, `suicides` 0.001, crates/bomb 1.91.
+
+### Prediction (written before the run)
+
+1. **`crates` 55–85**, five-seed mean, from 33.32. The bound: a bomb-and-escape cycle is ~7 steps,
+   so 400 steps allow ~57 bombs, and at the current 1.91 crates per bomb that is ~109 — the
+   agent is currently losing most of that to standing still, not to bombing badly.
+   **Refutation:** below 40 means walking to crates was not the binding constraint and digit 7's
+   inability to rank bombing spots (E14) dominates instead.
+2. **The loop probe is the mechanism check: median distinct tiles per round > 60** (E12 at
+   20 000: 25) and **fewer than 10 of 20 rounds confined to ≤ 2 tiles** (currently 20 of 20).
+   If `crates` rises but this does not, the gain came from somewhere I have not identified and
+   the entry's explanation is wrong even if its number is good.
+3. **`score` 4–7**, from 2.287. More crates opened means more coins revealed, and the coin branch
+   already works once they are visible.
+4. **Regression guard: `suicides` ≤ 0.01 and `survived` ≥ 0.99.** The agent will now deliberately
+   walk *up to* crates, so it spends far more time in dead ends and pockets — exactly the
+   geometry where the escape BFS returns `NO_TARGET`. `AGENTS.md`'s warning is that learning
+   aggression is when escape gets forgotten.
+5. **The 20 000 → 40 000 degradation shrinks: `crates` at 40 000 ≥ `crates` at 20 000 − 3**
+   (E12: −7.1, with four seeds of five worse). E12 attributed that decline to near-ties in the
+   safe-branch rows hardening into a 2-cycle. If that diagnosis is right, removing the constant
+   digit removes the degradation. **This is a test of E12's mechanism, not of E13's**, and it is
+   the reason this run goes to 40 000 rather than stopping at the known optimum.
+6. **New hazard, stated in advance: `table_check` finding 1 rises.** Digit 6 now points at a
+   *blocked* tile whenever the agent is adjacent to its target crate, so a row can learn "walk
+   into the crate" — invalid, state unchanged, absorbing. Predict finding 1 above E11's 0–3 but
+   below 20, and **zero frozen spawns**. If spawns freeze, this change is a net loss regardless
+   of what `crates` does.
+7. **crates per bomb stays at 1.8–2.0.** E13 changes *where the agent goes*, not *how well it
+   picks a spot*. Holding this constant is how I will know E13 and E14 are separable rather than
+   two descriptions of one effect.
+
+**Refutation condition for the whole entry:** `crates` < 40 *and* the loop probe unchanged. That
+means the change did not do the thing it was designed to do, and the 99.7 % diagnosis — which is
+the argument E10, E11 and E12 all lean on — is wrong about what the agent is actually missing.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E12 — A learning curve measured at ε = 0, and what the round count should be
 
 - **Question:** the E11 training curve rises to ~34 crates by episode 10 000 and then oscillates

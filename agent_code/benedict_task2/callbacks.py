@@ -127,35 +127,14 @@ def bomb_hits_crate(x: int, y: int, field: np.ndarray) -> bool:
     return any(field[cx, cy] == 1 for cx, cy in blast_coords(x, y, field))
 
 
-def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
-    """First step of a shortest path to whatever the agent is currently after.
+def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> int:
+    """First move of a shortest path to a tile satisfying `is_goal`.
 
-    Coins when any are visible; otherwise the nearest tile from which a bomb
-    would open a crate. The fallback is E09's requirement 1: on `classic` all
-    nine coins start under crates (`environment.py:377-386`), so a coin-only
-    target leaves this digit pinned at 0 for essentially the whole round and
-    the agent runs on the wall digits alone -- which is how the rung-1 model
-    came to freeze on its spawn tile in 300 rounds out of 300.
-
-    Crates are impassable here, as they are in the game. Cost is inverse to how
-    much is left to do: with crates everywhere the search stops after a handful
-    of nodes, and only floods the board once the arena is nearly cleared.
+    Breadth-first over free tiles. Goal tiles are *tested but never expanded*,
+    so the goal itself may be impassable -- a crate is a legitimate destination
+    even though the agent cannot stand on it.
     """
 
-    if coins:
-        targets = set(coins)
-
-        def is_target(pos: tuple[int, int]) -> bool:
-            return pos in targets
-    else:
-        def is_target(pos: tuple[int, int]) -> bool:
-            return bomb_hits_crate(pos[0], pos[1], field)
-
-    if is_target((x, y)):
-        return NO_TARGET        # standing on it: collect it, or bomb from here
-
-    # Each queue entry carries the first step that led to it, so the direction
-    # falls out of the search without reconstructing the path
     queue = [((x, y), None)]
     visited = {(x, y)}
     head = 0
@@ -169,15 +148,54 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
             nx, ny = cx + dx, cy + dy
             if not (0 <= nx < width and 0 <= ny < height):
                 continue
-            if (nx, ny) in visited or field[nx, ny] != 0:
+            if (nx, ny) in visited:
                 continue
+            # Each queue entry carries the first step that led to it, so the
+            # direction falls out of the search without reconstructing a path.
             step = action_idx if first is None else first
-            if is_target((nx, ny)):
+            if is_goal((nx, ny)):
                 return step + 1     # +1 because 0 is reserved for NO_TARGET
+            if field[nx, ny] != 0:
+                continue            # wall or crate: testable, not passable
             visited.add((nx, ny))
             queue.append(((nx, ny), step))
 
     return NO_TARGET
+
+
+def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
+    """First step of a shortest path to whatever the agent is currently after.
+
+    Coins while one is reachable, otherwise the nearest crate. The crate is the
+    *goal*, not somewhere to stand: E10 measured that on a fresh `classic` arena
+    99.7 % of free tiles are already within blast range of some crate, so the
+    older rule -- "head for a tile a bomb could hit a crate from" -- was
+    satisfied wherever the agent happened to be, and this digit read 0 almost
+    everywhere. With no gradient in the safe part of the state, two mirror-image
+    rows pointed at each other and the agent oscillated between two tiles in 20
+    rounds out of 20.
+
+    A visible but unreachable coin falls through to the crate branch instead of
+    returning NO_TARGET: a coin sealed in a pocket of crates is a reason to go
+    bombing, not a reason to have no objective at all.
+    """
+
+    coin_set = set(coins)
+    if (x, y) in coin_set:
+        return NO_TARGET            # standing on it; collected this step
+
+    def is_coin(pos: tuple[int, int]) -> bool:
+        return pos in coin_set
+
+    def is_crate(pos: tuple[int, int]) -> bool:
+        return field[pos] == 1
+
+    if coin_set:
+        step = bfs_first_step(x, y, field, is_coin)
+        if step != NO_TARGET:
+            return step
+
+    return bfs_first_step(x, y, field, is_crate)
 
 
 def escape_direction(x: int, y: int, field: np.ndarray, danger: np.ndarray,

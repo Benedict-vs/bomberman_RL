@@ -57,7 +57,7 @@ SAVE_EVERY = 100
 # curve can be measured at eps = 0 afterwards instead of read off the training
 # log. Learning is untouched -- these are extra writes, not extra updates, so
 # every checkpoint is exactly the table a run of that length would have left.
-CHECKPOINTS = (2_500, 5_000, 10_000, 20_000, 40_000)
+CHECKPOINTS = (5_000, 10_000, 20_000, 40_000)
 
 REWARDS = {
     e.COIN_COLLECTED: 5,
@@ -79,7 +79,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e12"
+EXPERIMENT = "e13"
 RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 
 
