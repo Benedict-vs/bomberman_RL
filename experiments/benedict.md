@@ -87,7 +87,99 @@ step cost, and the long-overdue `COIN_COLLECTED` +5 against +1 ablation goes wit
 
 ### Result
 
-*(to be filled in after the run)*
+Five seeds × four checkpoints, 300 rounds each at ε = 0, seed 20260731:
+
+| checkpoint | `crates` | std | `score` | `suicides` | `survived` | crates/bomb |
+|---|---|---|---|---|---|---|
+| 5 000 | 73.48 | **5.42** | 5.189 | 0.004 | 0.996 | 2.36 |
+| 10 000 | 73.88 | 26.76 | 5.243 | 0.003 | 0.997 | 2.48 |
+| **20 000** | **83.86** | 15.37 | **6.091** | **0.035** | **0.965** | 2.69 |
+| 40 000 | 63.61 | 24.33 | 4.545 | 0.001 | 0.999 | 2.77 |
+
+Baseline **E13 @10 000: 83.56 ± 24.23 crates, 5.990 score, 2.43 crates/bomb.** Reference:
+116.26 / 8.50 / 3.07. `think_max_ms` 0.202.
+
+**The mean did not move: 83.86 against 83.56.** The spread fell (15.37 against 24.23, and 5.42 at
+the 5 000 checkpoint), and the ceiling came down with it — E13's best seed reached 116.64,
+reference parity; E14's best single table is 106.63. On the validation seed 550731, every E14
+table loses to the incumbent:
+
+| | best E14 @5 000 | best E14 @20 000 | **E13 s2 @10 000 (shipped)** |
+|---|---|---|---|
+| `crates` @550731 | 78.9 | 103.2 | **117.1** |
+
+**Verdict: not demonstrated on the primary metric, and the shipped model does not change.**
+
+### The intervention worked on the table and not on the behaviour
+
+The mechanism it was aimed at moved, and moved a lot. `table_check` finding 7 — the margin
+between the best legal move and `BOMB` where a bomb pays off:
+
+| | E13 | E14 |
+|---|---|---|
+| median margin, across seeds | 0.006 – 0.207 | **0.11 – 0.21** |
+| share decided by less than 0.01 | 5 – 56 % | **2 – 14 %** |
+
+The collapsed-seed regime — half of all bombing decisions settled by a coin flip — is gone. And
+`crates`/bomb went 2.43 → 2.69. **A 10 % gain, against the 2.9–3.4 predicted.** The agent became
+*decisive* without becoming *selective*.
+
+**Why, and this is the finding worth keeping.** A local count tells the agent how good *here* is.
+It does not tell it that *there* is better. Digit 6 still targets the **nearest crate**, so the
+agent walks to the nearest crate and the count only lets it decide whether to bomb once it has
+arrived. To act on the observation that prompted this experiment — walk one tile further and
+catch three crates instead of one — the agent has to be *sent* to the denser spot. That is a
+property of the target digit, not of the count. I put the fix in the wrong digit.
+
+### Predictions, scored
+
+1. **`crates` 95–120 — wrong.** 83.86, and the refutation clause I wrote ("below 85") fires by
+   1.1 crates.
+2. **"std < 12" — half right, and the half that held is the informative one.** 5.42 at 5 000
+   (mean 73.48), 15.37 at the best checkpoint. I wrote: *"if the mean rises and the spread does
+   not, I have bought crates without fixing the mechanism."* **The exact opposite happened** —
+   the spread collapsed and the mean stood still, which says the mechanism moved and was not the
+   thing holding the mean down.
+3. **crates/bomb 2.9–3.4 — wrong.** 2.36–2.77.
+4. **Margin > 0.15 in every seed, under 15 % noise — half right.** The noise half holds
+   everywhere except s2 @40 000 (30.1 %); the median half holds only at 5 000, and only for four
+   seeds of five.
+5. **Loop probe under 5/20 confined — wrong.** 4–20 of 20 depending on seed and checkpoint.
+6. **Regression guard — failed at one checkpoint, and it is the best one.** 0.004 / 0.996 at
+   5 000 and 0.001 / 0.999 at 40 000, but **0.035 suicides and 0.965 survival at 20 000, driven
+   by s3 at 0.140 / 0.860** — the same seed that tops the crate count at 106.63. The most
+   productive table is also the one that dies in one round in seven. That is the aggression /
+   safety trade `AGENTS.md` warns about arriving a rung earlier than expected.
+7. **"The optimum moves later, to 20 000" — right**, on both `crates` and `score`. Worth noting
+   because I talked myself out of it after seeing the margin gate peak at 5 000 and said so
+   before the evaluations: the static gate pointed at the wrong checkpoint, the measurement
+   pointed at the right one. **The gate ranks tables, it does not rank policies.**
+
+The whole-entry refutation condition (`crates` < 85 **and** std > 20) does not fire: the crates
+half does, the variance half does not.
+
+### Verdict
+
+**Not demonstrated.** 83.86 ± 15.37 against 83.56 ± 24.23 is no improvement in the mean, it costs
+a doubled table, and it loses the reference-parity seed. Negative result, stays in the report —
+and it is a useful one, because it separates two things that looked like one: the flat `BOMB`
+margin was real and is now fixed, and it was **not** what was capping the crate count.
+
+### What I do next
+
+1. **E15: digit 6's crate branch targets the densest reachable bombing spot**, not the nearest
+   crate — the fix for the observation E14 was supposed to address, in the digit that actually
+   controls where the agent goes. This needs care about the "feature returns the best action"
+   rule and the argument has to be made explicitly in the report: it is a pathfinding feature
+   with a value criterion, and the agent still has to learn *when* to bomb, when to run, and when
+   to chase a coin instead.
+2. **Run E15 as two arms**, because whether E14 is worth keeping is now an open question rather
+   than a settled one: arm A on the E13 base (binary digit 7), arm B on the E14 base (counted
+   digit 7). If the count only pays off once the agent is *sent* to dense spots, arm B wins and
+   E14 was a prerequisite rather than a failure. If the arms tie, digit 7 reverts to binary and
+   the table halves. Two arms × 5 seeds run concurrently in the same wall clock.
+3. **Watch `suicides` at every checkpoint from now on, not just at the reported one.** Prediction
+   6 held at three checkpoints of four and failed at the one that mattered.
 
 ---
 
