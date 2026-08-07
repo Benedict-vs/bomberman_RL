@@ -48,11 +48,10 @@ EPS_END = 0.02
 
 REWARDS = {
     e.COIN_COLLECTED: 5,
+    e.CRATE_DESTROYED: 0.3,
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
     e.KILLED_SELF: -5,
-    # TODO task 2: CRATE_DESTROYED, and finally ablate the coin reward against
-    # the game's actual +1 -- open since the first experiment.
 }
 
 # --- Experiment switches --------------------------------------------------
@@ -84,8 +83,9 @@ def setup_training(self):
     self.trainlog = TrainLogger(
         agent=AGENT_NAME,
         run=RUN_NAME,
-        # Rung-2 logs go beside the rung-2 evaluations; see AGENTS.md. Relative
-        # to the cwd, which for training is always the repo root.
+        # Rung-2 logs go beside the rung-2 evaluations; see AGENTS.md.
+        # TrainLogger anchors a relative out_dir to the repo root -- agents.py
+        # chdirs into this folder around every callback, so the cwd is not it.
         out_dir="results/train/task2_crates",
         hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_exp": ALPHA_EXP,
                      "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END,
@@ -95,7 +95,9 @@ def setup_training(self):
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
                      "n_states": len(self.q),
-                     "features": "4 wall bits + BFS direction to nearest coin"},
+                     "features": "4 neighbour states (blocked/lethal/in-blast/clear) "
+                                 "+ own grace period + BFS direction to coin-or-crate "
+                                 "+ bomb-here-pays-off"},
         extra_columns=["td_error"],
     ) if TrainLogger else None
     self.episode_events = []

@@ -21,6 +21,132 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E10 — A rung-2 feature map: danger, crates as crates, and a target that exists
+
+- **Question:** E09 measured the floor at 0.000 and named three requirements for the rung-2
+  state. Do they, together, get an agent off that floor — and if it still dies, *which* of the
+  two jobs (bombing, escaping) is the one the features fail to support?
+- **Agent:** `benedict_task2` · commit `<fill in from .meta.json>` · labels
+  `benedict_q_e10_s{0..4}__task2`
+- **Training:** 40 000 rounds, `classic`, no opponents, world seed **810731**, five runs at
+  `BM_RUN_INDEX` 0–4. Per-cell α, ε decay, γ = 0.9 — all unchanged from rung 1.
+- **Measurement:** `results/eval/task2_crates/benedict_q_e10_s{0..4}__task2.csv`, 300 rounds
+  each, seed 20260731, `--preset task2`. Compared against E09 (floor) and E08 (reference).
+
+### Why this entry changes more than one thing
+
+Every previous entry moved one knob. This one cannot, and the reason is worth recording rather
+than apologising for: **on this rung the components are not individually measurable.** A danger
+feature with `BOMB` unrewarded is never exercised — the agent behaves exactly as in E09. A
+rewarded `BOMB` without danger features is the 100 % `KILLED_SELF` result already in `AGENTS.md`.
+A crate-target digit without bombing walks the agent to a crate, where it stands. Each of those
+is a five-seed training run whose result I can write down in advance, and all three are zero.
+
+So E10 is declared as a rung transition, and the obligation it takes on is to **decompose the
+bundle by ablation afterwards** (E11), from a working agent rather than from a broken one. That
+ordering is not a convenience: E09 is the proof that a component's contribution depends entirely
+on the context it sits in — the same table scored 49.15 coins on `coin-heaven` and 0.000 on
+`classic`.
+
+What buys back the attribution in the meantime are three gates that are *not* 300-round
+evaluations, so a broken bundle is diagnosed before it costs a measurement: `table_check.py` on
+each trained table, the training curve on `CRATE_DESTROYED` and `KILLED_SELF`, and one replay.
+
+### The change
+
+| digit | values | meaning |
+|---|---|---|
+| 1–4 | 4 each | per direction: **0** blocked (wall, crate, bomb, agent) · **1** lethal at the end of this step · **2** covered by a live bomb · **3** clear |
+| 5 | 5 | own tile: **0** safe, else moves left *including this one* (a bomb seen at timer `t` leaves `t+1`) |
+| 6 | 5 | BFS first step to the nearest **coin**, falling back to the nearest **crate-bombing position** |
+| 7 | 2 | a bomb dropped here opens ≥ 1 crate **and** I have one to drop |
+
+4⁴ × 5 × 5 × 2 = **12 800 rows**, from 80. Rewards gain `CRATE_DESTROYED = +0.3`; everything
+else is untouched.
+
+Three notes on the design, because each answers one of E09's requirements:
+
+1. **Digits 1–4 are quaternary, not the ternary I first drew up.** Collapsing "lethal now" and
+   "in a blast" into one "unsafe" value fails precisely where the rung lives: while escaping its
+   own bomb the agent is *surrounded* by blast tiles and must cross them, and the difference
+   between "three moves on the clock" and "walking into fire" is the whole decision.
+2. **Digit 7 folds in `bomb_possible`.** Without it, "crate in range, no bomb left" is the same
+   row as "crate in range, bomb ready"; the argmax is `BOMB`; the action is invalid; the state
+   does not change. That is E09's absorbing row rebuilt in a new place.
+3. **No escape feature, deliberately.** "Is there a route out of the blast within the grace
+   period" is the natural next digit and the one that comes closest to handing the model the
+   answer. Leaving it out is what makes prediction 2 below falsifiable, and it is E11's single
+   change if the prediction holds.
+
+### Evidence going in
+
+A 3000-round pilot (`BM_RUN_INDEX=98`, same world seed), and a probe that maps
+`rule_based_agent`'s own trajectories through this feature map:
+
+| | first 500 episodes | last 500 |
+|---|---|---|
+| ε | 0.177 | 0.051 |
+| steps | 15.5 | **71.2** |
+| `CRATE_DESTROYED` | 4.36 | **6.73** |
+| `KILLED_SELF` | 1.00 | **0.99** |
+| `INVALID_ACTION` | 2.78 | 1.76 |
+
+Rows a competent agent visits: **451 of 12 800**, with 146 covering 90 % of its steps. The table
+is large but cheap — its size is not its sample cost.
+
+The pilot already separates the two jobs: it is learning to bomb (crates rising, episodes
+lengthening 4.6×) and it is **not** learning to survive (0.99 suicides at ε = 0.05).
+
+### Prediction (written before the run)
+
+1. **`crates` comes off the floor decisively: 15–45 per round** at ε = 0 — above `random_agent`'s
+   3.01, far below the reference's 116. **Refutation:** `crates` < 5 with `bombs` ≈ 0 means the
+   agent learned *not* to bomb, and the cause would be the reward scale rather than the features:
+   a bomb opens ~2.5 crates for +0.75, discounted by γ⁴ = 0.66 across the four steps to
+   detonation, i.e. **≈ +0.5 against a −5 death** — which only pays if the agent believes it dies
+   less than one time in ten. At the pilot's 0.99 it does not. If that is what the numbers say,
+   E11 is the `CRATE_DESTROYED` scale, not the escape feature.
+2. **Central prediction: `suicides` stays high — 0.5–1.0 per round, `survived` < 0.5.** The
+   mechanism is specific and follows from what was left out: digits 1–4 describe the *adjacent*
+   tile, and say nothing about whether the corridor beyond it leads out within the grace period.
+   A three-tile dead end and a genuine escape route are the same row at the moment of decision.
+   **Refutation, and the outcome I would rather have:** `suicides` < 0.2 means escape *is*
+   learnable from local danger alone, E11's escape feature is unnecessary, and multi-step credit
+   assignment is doing far more work than I credit it with.
+3. **`score` 0.3–2.5** — non-zero, unlike E09, and nowhere near 8.45. The agent opens crates and
+   reveals coins, then dies before collecting them. Per E08 `score` is the outcome metric and not
+   the progress signal on this rung; I expect it to lag both other numbers.
+4. **The static gates, all checkable in one second per seed and *before* any evaluation:**
+   - `table_check` finding 2: **0 frozen spawns, exit 0, in all five seeds.** The rung-1 table
+     fails this at 100 %. If E10 also fails it, nothing else in this entry is worth reading.
+   - finding 5 (rows preferring `BOMB`): **> 20.** Zero means prediction 1 is already dead.
+   - finding 3 (in a blast, a way out exists, the argmax does not take it): **> 20 % of trained
+     danger rows.** This is prediction 2's static signature. If the two disagree, the diagnostic
+     is wrong rather than the agent, and that is worth knowing before I trust it again.
+5. **Spread over the five seeds: `score` std < 1.0, `crates` std < 8.** Per-cell α removed the
+   6.98-coin spread on rung 1 (E06); a 160× larger table is exactly where that would stop
+   holding. **Refutation:** larger spreads mean 40 000 rounds is too few for 12 800 rows, and the
+   round count — not the feature map — is what the next experiment changes.
+6. **`think_max_ms` < 5.** The crate BFS floods once the arena is nearly cleared, which is the
+   mirror image of rung 1's coin BFS (cheap late, expensive early).
+
+**Refutation condition for the whole entry:** `crates` < 5 *and* fewer than 5 rows preferring
+`BOMB`. That combination means the bundle failed at the reward rather than at the state, and no
+amount of feature work is the fix.
+
+### What I do with the answer
+
+Prediction 2 is the branch point. If it holds, E11 adds the escape feature as a genuine single
+change with a paired CI, and the ablation panel follows it. If it fails — the agent survives
+without one — then E11 *is* the ablation panel, and the finding is that local danger digits are
+sufficient on this rung, which is the more interesting result and the cheaper agent.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E09 — Transfer floor: the rung-1 agent, unchanged, on `classic`
 
 - **Question:** what does the task-1 agent actually *do* when crates appear? This is the

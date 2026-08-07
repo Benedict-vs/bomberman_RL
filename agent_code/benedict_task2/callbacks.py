@@ -1,23 +1,35 @@
 """Tabular Q-learning agent — task 2 (`classic`, no opponents).
 
-Forked unchanged from `agent_code/tabular_q_task1/`, the agreed rung-1 baseline,
-which was itself merged from two independently developed coin collectors after
-both solved rung 1 (50.00 +- 0.00 coins over 300 rounds each). What came from
-where, and why, is in `experiments/task1.md` section 7:
+Forked from `agent_code/tabular_q_task1/`, the agreed rung-1 baseline, and
+rebuilt for rung 2 in E10. The rung-1 feature map transferred *nothing*: on
+`classic` it scored 0.000 and never took a single step in 300 rounds, because
+"no coin is visible" -- the normal condition on this rung, where all nine coins
+start under crates -- was a state it had only ever met at the end of a won
+round (`experiments/benedict.md` E09).
 
-- BFS direction to the nearest coin  (from Maxi's agent)
-- random tie-breaking among equal-value actions  (from Maxi's agent)
-- per-cell learning rate, full six-action set, dense mixed-radix table,
-  seeded RNGs and the measurement harness  (from Benedict's agent)
+Carried over from rung 1: the dense mixed-radix table, random tie-breaking
+among equal-value actions, the per-cell learning rate and the seeded RNGs.
+What E10 changes:
 
-State: 4 wall bits + BFS direction to the nearest coin -> 16 x 5 = 80 rows.
-Deliberately small: task 2 multiplies this by the danger features, and the
-reachable-row count is only a useful correctness check while it stays countable.
+- crates stop being collapsed into "wall". A neighbour is blocked, lethal
+  this step, covered by a live bomb, or clear.
+- the target digit falls back to the nearest crate-bombing position when no
+  coin is visible, so it carries information for the whole round instead of
+  being pinned at 0.
+- the own tile carries a grace period, counted in moves rather than in bomb
+  timer units.
+- one bit for "a bomb dropped here would open a crate, and I have one to drop".
+
+State: 4 neighbour states + grace + target direction + bomb payoff
+-> 4^4 x 5 x 5 x 2 = 12 800 rows. Large but cheap to fill: a competent agent
+visits 451 of them, and 146 cover 90 % of its steps.
 """
 
 import os
 
 import numpy as np
+
+import settings as s    # BOMB_POWER / BOMB_TIMER
 
 # Training-only escape hatch: parallel training runs would otherwise all write
 # the same file. Unset -- every normal game, and the tournament -- this is
@@ -32,39 +44,118 @@ ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 # (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
 DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
 
-# Digit 5 of the feature vector: 0 = no coin reachable, 1..4 = ACTIONS[0..3].
-NO_COIN = 0
+# Digits 1-4, one per direction. Ordered so a larger value is never a worse tile
+# to step onto, which makes a printed row readable without decoding it.
+NB_BLOCKED = 0      # wall, crate, bomb or other agent -- invalid move
+NB_LETHAL = 1       # free, but blast lands here at the end of the step
+NB_IN_BLAST = 2     # free and survivable this step, but a live bomb covers it
+NB_CLEAR = 3        # free and outside every blast
 
-# 4 wall bits (U, R, D, L) + BFS direction to the nearest coin
-FEATURE_SIZES = (2, 2, 2, 2, 5)
+# Digit 6: 0 = nothing reachable, 1..4 = ACTIONS[0..3].
+NO_TARGET = 0
+
+# 'danger' entry for a tile no bomb reaches.
+SAFE = s.BOMB_TIMER + 1
+
+# 4 neighbour states + steps of grace on my own tile + target direction
+# + a bomb here would pay off
+FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2)
 N_STATES = int(np.prod(FEATURE_SIZES))
 
-# Ties are broken at random, so evaluation would stop being reproducible
-# without a fixed seed here. Chosen once and never varied -- unlike the
-# training seed, this one ships.
 POLICY_SEED = 20260731
 
 
-def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
-    """Index into ACTIONS of the first step on a shortest path to a coin.
+def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
+    """Tiles a bomb at (x, y) covers. Mirrors `items.py:Bomb.get_blast_coords`.
 
-    Breadth-first, so the first coin reached is a nearest one *by path*, which
-    Manhattan distance is not -- it cannot see that a wall is in the way.
-    Returns NO_COIN when there is no coin or none is reachable.
-
-    Cost scales inversely with coin density: the search stops at the first coin
-    found, so it expands a handful of nodes with 50 coins on the board and
-    floods it when one distant coin is left (0.002 ms vs 0.12 ms measured).
+    Stone walls stop the blast, crates do **not** -- `items.py:56` breaks on -1
+    only -- which is why one bomb in a dense corridor clears several crates.
+    The blast does not turn corners. No bounds check is needed: the arena is
+    walled all round, so the -1 test always fires before an index goes negative.
     """
-    if not coins:
-        return NO_COIN
 
-    targets = set(coins)        # set, not list: this is tested at every node
-    if (x, y) in targets:
-        return NO_COIN          # standing on it; it is collected this step
+    coords = [(x, y)]
+    for dx, dy in DELTAS:
+        for i in range(1, s.BOMB_POWER + 1):
+            nx, ny = x + dx * i, y + dy * i
+            if field[nx, ny] == -1:
+                break
+            coords.append((nx, ny))
+    return coords
+
+
+def danger_map(game_state: dict) -> np.ndarray:
+    """Steps of grace per tile: 0 = deadly at the end of *this* step, SAFE = free.
+
+    The timing comes straight out of `environment.py:166-173`, which runs the
+    agents first and only then counts bombs down and evaluates explosions. So a
+    bomb the agent sees at timer `t` kills at the end of step `now + t`, and a
+    tile with `explosion_map > 0` is still burning when this step is evaluated.
+    Both are therefore expressed in the same unit and can be minimised over.
+    """
+
+    field = game_state['field']
+    danger = np.full(field.shape, SAFE, dtype=np.int8)
+    danger[game_state['explosion_map'] > 0] = 0
+
+    for (bx, by), timer in game_state['bombs']:
+        for (cx, cy) in blast_coords(bx, by, field):
+            if timer < danger[cx, cy]:
+                danger[cx, cy] = timer
+    return danger
+
+
+def neighbour_status(x: int, y: int, field: np.ndarray, danger: np.ndarray,
+                     occupied: set) -> tuple[int, ...]:
+    """Digits 1-4: what happens if I step in each direction."""
+
+    status = []
+    for dx, dy in DELTAS:
+        nx, ny = x + dx, y + dy
+        if field[nx, ny] != 0 or (nx, ny) in occupied:
+            status.append(NB_BLOCKED)
+        elif danger[nx, ny] == 0:
+            status.append(NB_LETHAL)
+        elif danger[nx, ny] < SAFE:
+            status.append(NB_IN_BLAST)
+        else:
+            status.append(NB_CLEAR)
+    return tuple(status)
+
+
+def bomb_hits_crate(x: int, y: int, field: np.ndarray) -> bool:
+    return any(field[cx, cy] == 1 for cx, cy in blast_coords(x, y, field))
+
+
+def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
+    """First step of a shortest path to whatever the agent is currently after.
+
+    Coins when any are visible; otherwise the nearest tile from which a bomb
+    would open a crate. The fallback is E09's requirement 1: on `classic` all
+    nine coins start under crates (`environment.py:377-386`), so a coin-only
+    target leaves this digit pinned at 0 for essentially the whole round and
+    the agent runs on the wall digits alone -- which is how the rung-1 model
+    came to freeze on its spawn tile in 300 rounds out of 300.
+
+    Crates are impassable here, as they are in the game. Cost is inverse to how
+    much is left to do: with crates everywhere the search stops after a handful
+    of nodes, and only floods the board once the arena is nearly cleared.
+    """
+
+    if coins:
+        targets = set(coins)
+
+        def is_target(pos: tuple[int, int]) -> bool:
+            return pos in targets
+    else:
+        def is_target(pos: tuple[int, int]) -> bool:
+            return bomb_hits_crate(pos[0], pos[1], field)
+
+    if is_target((x, y)):
+        return NO_TARGET        # standing on it: collect it, or bomb from here
 
     # Each queue entry carries the first step that led to it, so the direction
-    # falls out of the search without reconstructing the path.
+    # falls out of the search without reconstructing the path
     queue = [((x, y), None)]
     visited = {(x, y)}
     head = 0
@@ -81,12 +172,12 @@ def coin_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
             if (nx, ny) in visited or field[nx, ny] != 0:
                 continue
             step = action_idx if first is None else first
-            if (nx, ny) in targets:
-                return step + 1         # +1 because 0 is reserved for NO_COIN
+            if is_target((nx, ny)):
+                return step + 1     # +1 because 0 is reserved for NO_TARGET
             visited.add((nx, ny))
             queue.append(((nx, ny), step))
 
-    return NO_COIN
+    return NO_TARGET
 
 
 def state_to_features(game_state: dict) -> int:
@@ -97,14 +188,31 @@ def state_to_features(game_state: dict) -> int:
 
     field = game_state['field']     # indexing is field[x, y]
     x, y = game_state['self'][3]
+    have_bomb = game_state['self'][2]
 
-    # free tiles are 0, stone is -1, crates are 1; != 0 already covers task 2.
-    # TODO task 3+: `others` is not in here, so the agent walks into opponents
-    # (environment.py:121 counts them as blocking). Measured cost on rung 1
-    # in a two-agent game: 11.5 invalid actions per round.
-    blocked = tuple(int(field[x + dx, y + dy] != 0) for dx, dy in DELTAS)
+    danger = danger_map(game_state)
 
-    return encode(blocked + (coin_direction(x, y, field, game_state['coins']),))
+    # environment.py:121-126: bombs and other agents block a move exactly like
+    # walls do. That belongs in "can I go there", not in "will I die there".
+    occupied = {pos for pos, _ in game_state['bombs']}
+    occupied.update(other[3] for other in game_state['others'])
+
+    # Digit 5, in moves rather than in timer units: 0 = safe, otherwise how many
+    # moves are left *including this one*. A bomb seen at t leaves t+1 moves.
+    own_danger = 0 if danger[x, y] >= SAFE else int(danger[x, y]) + 1
+
+    # Digit 7 folds in `bomb_possible` deliberately. Without it the agent sits
+    # in a "crate in range" row with no bomb left, picks BOMB, gets
+    # INVALID_ACTION -- and an invalid action leaves the state unchanged, which
+    # is the absorbing-row failure of E09 in a new place.
+    bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field))
+
+    features = neighbour_status(x, y, field, danger, occupied) + (
+        own_danger,
+        target_direction(x, y, field, game_state['coins']),
+        bomb_useful,
+    )
+    return encode(features)
 
 
 def encode(features: tuple[int, ...]) -> int:
