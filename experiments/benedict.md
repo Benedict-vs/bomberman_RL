@@ -21,6 +21,74 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E16 — The reward scale at γ = 0.99, and the coin ablation six experiments late
+
+- **Question:** with the variance closed by E15, the mean is a hard ceiling — every γ, every
+  checkpoint, five seeds, 80 to 93 crates against the reference's 116.26. Is that ceiling set by
+  the reward function or by the feature map? And, finally: is `COIN_COLLECTED = 5` better than
+  the game's own +1?
+- **Change:** no feature change. `COIN_COLLECTED` and `CRATE_DESTROYED` become environment
+  switches and are swept 2 × 2. γ = 0.99, ε floor 0.02 (E15's settings), five seeds per cell —
+  **20 runs**. `STEP_COST`, `INVALID_ACTION` and `KILLED_SELF` held fixed.
+
+  | | `CRATE_DESTROYED` 0.3 | `CRATE_DESTROYED` 1.0 |
+  |---|---|---|
+  | `COIN_COLLECTED` 5 | E15's winner (baseline cell) | |
+  | `COIN_COLLECTED` 1 | the game's own value | |
+
+- **Agent:** `benedict_task2` · commit `<fill in>` · labels
+  `benedict_q_e16_c{1,5}_k{03,10}_s{0..4}__ep*__task2`
+- **Training:** **100 000 rounds**, world seed 810731, checkpoints 20 000 / 40 000 / 70 000 /
+  100 000. Longer than every previous entry because E15's addendum showed γ = 0.99 is still
+  improving at 40 000 and has no peak to find.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731. Baseline **γ = 0.99 @40 000: 92.80 ± 9.47
+  crates, 6.671 score**. Reference 116.26 / 8.50.
+
+### Why the rewards are now *unknown* rather than merely untuned
+
+`COIN_COLLECTED = 5` and `CRATE_DESTROYED = 0.3` were both guessed — the coin value in E01, the
+crate value in E10 — and neither has ever been tested. E15 then multiplied the effective horizon
+by ten, which rescales every reward against the per-step cost by the same factor. Whatever
+balance those guesses happened to strike at γ = 0.9, it is not the balance in force now.
+
+### Prediction (written before the run)
+
+1. **`CRATE_DESTROYED` is the live knob and 1.0 beats 0.3: `crates` 100–115** in the winning
+   cell, from 92.80. The gap to the reference is entirely in crates opened, not in coins
+   collected — see prediction 2 — so the term that pays for opening them is where the ceiling
+   should move. **Refutation:** if `crates` stays inside 88–97 for all four cells, the ceiling is
+   the feature map and not the reward, and the next experiments are the densest-spot target and
+   E14's counted digit 7 retested.
+2. **`COIN_COLLECTED` shows no effect: |Δ| under 4 crates and under 0.4 score, CI containing
+   zero.** Our crates are 74 % of the reference and our score is 73 % — they track almost
+   exactly, which says the agent already converts revealed coins about as well as the reference
+   does and the coin term is not what is binding. **A null here is the result**, and it closes an
+   item deferred in E01, E05 and E07.
+3. **No interaction.** The 2 × 2 should be additive to within noise; the two rewards act on
+   different parts of the round. If they interact, the likely reason is that a larger crate
+   reward changes how much time is left for coin collection, and that would be worth its own
+   entry.
+4. **Regression guard: `suicides` ≤ 0.02, `survived` ≥ 0.98 in every cell.** A larger crate
+   reward is a direct incentive to bomb more and stand closer, and E14 already produced a
+   0.140-suicide seed at the checkpoint with the most crates.
+5. **The curve is still monotone at 100 000** in the baseline cell, or peaks between 40 000 and
+   100 000. If it is still rising at 100 000, the round count stops being an experiment
+   parameter and becomes a compute budget, and that should be said plainly in the report rather
+   than reported as "converged".
+6. **Larger rewards shrink nothing.** `crates` std stays in E15's range (3–10); the variance was
+   a discounting artefact and the reward scale should not touch it. If the spread moves, γ was
+   not the whole story.
+
+**Refutation condition for the whole entry:** all four cells within noise of each other. That
+would mean the reward scale is irrelevant over this range, the ceiling is representational, and
+the remaining work on rung 2 is feature engineering rather than tuning.
+
+### Result
+
+*(to be filled in after the run)*
+
+---
+
 ## E15 — The first hyperparameter sweep: γ × ε floor, factorial
 
 - **Question:** every feature change so far has produced the same side effect — performance peaks
@@ -151,12 +219,32 @@ The whole-entry refutation condition (no cell beats the baseline by more than fi
 technically fires *on the mean* — 86.10 against 83.56 is nothing. It does not fire on the metric
 that turned out to matter, which I had listed as prediction 2 rather than as the headline.
 
+### Addendum: γ = 0.99 never peaks
+
+The 5 000 and 40 000 checkpoints of the winning cell were evaluated after the fact (they were
+already on disk). The curve is **monotone increasing through the whole run**:
+
+| ep | 5 000 | 10 000 | 20 000 | 40 000 |
+|---|---|---|---|---|
+| `crates` | 80.25 ± 4.59 | 84.34 ± 10.47 | 86.10 ± 2.93 | **92.80 ± 9.47** |
+| `score` | 5.712 | 6.052 | 6.179 | **6.671** |
+
+So 20 000 was not the optimum — it was the better of the two checkpoints I happened to evaluate,
+and picking the best of a *subset* is how a boundary value gets reported as a maximum. E12 warned
+about exactly this and I did it anyway.
+
+At γ = 0.99 there is no peak to find: the optimum is at or beyond 40 000, and the round count is
+now an open question rather than a settled one. The variance win is also partly checkpoint-bound
+— std 2.93 at 20 000 but 9.47 at 40 000 — though both are far below γ = 0.9's 24–37.
+
 ### Verdict
 
-**γ = 0.99 with ε floor 0.02, at 20 000 episodes.** The mean is unchanged; the standard deviation
-falls from 24.23 to 2.93 and the worst case from 29.70 to 82.07. Since E10 every result has been
-a distribution with a long bad tail, and this closes it. It also explains, and removes, a
-degradation that three previous entries wrongly attributed to their own feature changes.
+**γ = 0.99 with ε floor 0.02, trained to at least 40 000 episodes.** At 40 000: 92.80 ± 9.47
+crates and 6.671 score, against the baseline's 83.56 ± 24.23 and 5.990. The spread falls by a
+factor of 2.6 at the matched checkpoint and by 8.3 at 20 000, and the worst seed goes from 29.70
+to 82.07. Since E10 every result has been a distribution with a long bad tail; this closes it.
+It also explains, and removes, a degradation that three previous entries wrongly attributed to
+their own feature changes.
 
 **The shipped model does not change.** E13 s2 still reaches 116.64 where γ = 0.99's best seed
 manages 90.02, and §5.8 selects on validation and ships one table, so the ceiling is what ships.
@@ -171,15 +259,14 @@ property of the feature map and the reward function, not of luck.
 
 ### What I do next
 
-1. **Loose end from this entry, and cheap: evaluate the γ = 0.99 cell at 5 000 and 40 000.** Its
-   curve was still rising at 20 000 (84.34 → 86.10), so 20 000 may not be its optimum. Ten
-   evaluations, two minutes, and the checkpoints are already on disk.
-2. **E16: the reward scale, at γ = 0.99.** Necessary rather than optional now — moving γ from
-   0.9 to 0.99 multiplies the effective horizon by ten, which changes the weight of every reward
-   relative to the step cost by the same factor, and the reward table was never tuned even at
-   γ = 0.9. It is also where the `COIN_COLLECTED` +5 against the game's +1 ablation finally
-   belongs, six experiments after it was first deferred.
-3. **Then retest E14's counted digit 7 on the tuned hyperparameters.** Its only measured benefit
+1. **E16: the reward scale, at γ = 0.99, trained to 100 000 episodes.** Necessary rather than
+   optional now — moving γ from 0.9 to 0.99 multiplies the effective horizon by ten, which
+   changes the weight of every reward relative to the step cost by the same factor, and the
+   reward table was never tuned even at γ = 0.9. It is also where the `COIN_COLLECTED` +5 against
+   the game's +1 ablation finally belongs, six experiments after it was first deferred. The
+   round-count question folds into it for free: the baseline cell of the 2×2 *is* the γ = 0.99
+   configuration, so its curve out to 100 000 answers where the optimum is.
+2. **Then retest E14's counted digit 7 on the tuned hyperparameters.** Its only measured benefit
    was variance reduction, which γ now provides for free; whether it buys *selectivity* is
    untested and is the question its own entry failed to answer.
 

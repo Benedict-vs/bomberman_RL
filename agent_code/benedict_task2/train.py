@@ -39,7 +39,10 @@ except ImportError:     # tools/ is not part of the submission
 AGENT_NAME = "benedict_task2"
 
 STEP_COST = -0.1    # encourages shorter paths
-GAMMA = float(os.environ.get("BM_GAMMA", 0.9))
+# 0.99, not the 0.9 carried since E01: E15 measured the crate std falling from
+# 24.2 to 2.9 and the peak-then-decay of E12/E13/E14 disappearing. At gamma=0.9
+# the horizon is ~10 steps, shorter than the distance to most BFS targets.
+GAMMA = float(os.environ.get("BM_GAMMA", 0.99))
 
 ALPHA = 0.1         # only used when ALPHA_MODE == "const"
 ALPHA_EXP = 0.7     # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
@@ -57,11 +60,14 @@ SAVE_EVERY = 100
 # curve can be measured at eps = 0 afterwards instead of read off the training
 # log. Learning is untouched -- these are extra writes, not extra updates, so
 # every checkpoint is exactly the table a run of that length would have left.
-CHECKPOINTS = (5_000, 10_000, 20_000, 40_000)
+CHECKPOINTS = (20_000, 40_000, 70_000, 100_000)
 
+# The two swept in E16. Both were guesses -- the coin in E01, the crate in E10 --
+# and E15's change of gamma rescaled every reward against the step cost by a
+# factor of ten, so the balance they struck at gamma=0.9 no longer holds.
 REWARDS = {
-    e.COIN_COLLECTED: 5,
-    e.CRATE_DESTROYED: 0.3,
+    e.COIN_COLLECTED: float(os.environ.get("BM_COIN", 5)),
+    e.CRATE_DESTROYED: float(os.environ.get("BM_CRATE", 0.3)),
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
     e.KILLED_SELF: -5,
@@ -79,7 +85,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e15"
+EXPERIMENT = "e16"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
