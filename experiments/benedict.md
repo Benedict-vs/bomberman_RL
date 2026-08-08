@@ -85,7 +85,109 @@ the remaining work on rung 2 is feature engineering rather than tuning.
 
 ### Result
 
-*(to be filled in after the run)*
+20 runs at 100 000 episodes (~80 min each, two batches), 80 evaluations at ε = 0, 300 rounds,
+seed 20260731. `crates`, five-seed mean ± std:
+
+| `COIN` | `CRATE` | @20 000 | @40 000 | @70 000 | @100 000 |
+|---|---|---|---|---|---|
+| **5** | **0.3** | 86.10 ± 2.9 | 92.80 ± 9.5 | 94.36 ± 11.1 | **97.31 ± 12.5** |
+| 5 | 1.0 | 36.67 ± 7.1 | 40.78 ± 12.3 | 45.82 ± 21.1 | 50.59 ± 22.0 |
+| 1 | 0.3 | 52.32 ± 35.5 | 49.94 ± 37.6 | 51.74 ± 37.0 | 29.21 ± 12.0 |
+| 1 | 1.0 | 42.06 ± 13.2 | 40.02 ± 14.9 | 44.42 ± 6.5 | 41.64 ± 10.0 |
+
+Marginals at each cell's best checkpoint: **`CRATE` 0.3 → 1.0 costs 74.81 → 47.51**;
+**`COIN` 5 → 1 costs 73.95 → 48.37**. Regression guard at those checkpoints:
+
+| `COIN` | `CRATE` | `suicides` | `survived` |
+|---|---|---|---|
+| 5 | 0.3 | 0.002 | 0.998 |
+| 5 | 1.0 | **0.071** | 0.929 |
+| 1 | 0.3 | 0.003 | 0.997 |
+| 1 | 1.0 | **0.081** | 0.919 |
+
+**The reward table that was never tuned is the best of the four, and both alternatives are
+roughly half as good.** But the entry is not a null: it settles two things that were open, and it
+corrects E15.
+
+### Both main predictions were inverted, and the reasons differ
+
+**Raising `CRATE_DESTROYED` buys recklessness, not crates.** Suicides go 0.002 → 0.071 and
+survival 0.998 → 0.929; a dead agent stops opening crates, so the metric being rewarded harder
+*falls*. I predicted suicides ≤ 0.02 and got 3.5× that. The guard fired and it was the
+explanation, not a footnote.
+
+**Lowering `COIN_COLLECTED` to the game's +1 costs 45 crates**, where I predicted no effect at
+all — my most confident prediction in the entry. The argument behind it was that our crates are
+74 % of the reference and our score 73 %, so the coin term could not be what binds. That reasons
+about *outcomes*; the reward acts on the *value function*. A 16.7 : 1 coin-to-crate ratio gives
+the table far more dynamic range than 3.3 : 1, and the E13 post-mortem already established that
+this policy is an argmax over near-ties — bigger rewards mean bigger margins mean fewer decisions
+settled by noise. **`COIN_COLLECTED = 5` is not an over-weighted coin, it is what keeps the value
+function separated.**
+
+That also explains why the two knobs interact strongly (prediction 3, wrong): the coin effect is
++45 crates at `CRATE` 0.3 and +6 at `CRATE` 1.0. With the crate reward already destabilising the
+policy, the coin term has nothing left to hold together. A factorial was the right design and two
+sequential sweeps would have missed this.
+
+### This revises E15
+
+E15 concluded that the peak-then-decay and the long variance tail were **discounting** artefacts.
+The `COIN` 1 / `CRATE` 0.3 cell runs at **γ = 0.99 and still has std 35.5**, the worst spread
+anywhere in this ledger. So the correct statement is narrower and more useful:
+
+> The variance is set by the **size of the margins the argmax is decided by**. γ and the reward
+> scale both control that, and either one being wrong brings the long tail back.
+
+γ = 0.99 was necessary and is not sufficient.
+
+### Predictions, scored
+
+1. **"`CRATE` 1.0 wins, 100–115 crates" — inverted.** 47.51 against 74.81.
+2. **"`COIN` shows no effect, |Δ| under 4 crates" — inverted, by 45 crates.**
+3. **"No interaction" — wrong.** +45 against +6 depending on the crate reward.
+4. **Regression guard `suicides` ≤ 0.02 — failed in both `CRATE` 1.0 cells** (0.071, 0.081), and
+   the failure *is* the mechanism behind prediction 1.
+5. **"Still monotone at 100 000" — right.** 86.10 → 92.80 → 94.36 → 97.31, still climbing.
+6. **"The reward scale will not touch the variance" — wrong**, see above.
+
+The whole-entry refutation condition (all four cells within noise) does not fire; the cells differ
+by more than a factor of two.
+
+### Verdict
+
+**Status quo confirmed, and two open items closed.**
+
+- **The `COIN_COLLECTED` +5 versus the game's +1 ablation is settled**, six experiments after it
+  was first deferred in E01 and dodged in E05 and E07: **+5 is better by ~45 crates**, and the
+  reason is dynamic range rather than coin-seeking.
+- **The reward is not the ceiling.** No cell in the grid beat the incumbent values, so the
+  remaining gap to the reference is representational or a matter of training length.
+- **100 000 episodes beats 40 000**: 97.31 ± 12.5 crates and 7.04 score, against 92.80 and 6.671
+  — **84 % and 83 % of the reference**, from 29 % and 27 % at E10.
+
+Per seed at 100 000: 107.98 · 82.21 · 112.37 · 90.60 · 93.38.
+
+**Caveat carried from the snapshot-noise finding:** the ~7-crate checkpoint term applies to every
+number here, so `c1_k03 s2` topping the single-table list at 115.32 is not distinguishable from
+`c5_k03 s2`'s 112.37, and neither is separable from the shipped E13 s2 at 116.64. The shipped
+model does not change, but it is now matched rather than ahead.
+
+### What I do next
+
+1. **Extend the winning cell to 200 000 episodes.** The curve is still rising at 100 000, so what
+   I have been calling a ceiling may simply be an unfinished run. Five runs, one batch, ~2.7 h,
+   and it decides whether the remaining 19 % gap is representational at all. **This has to be
+   answered before any more feature work**, because every feature experiment since E13 has been
+   measured against a number that was still moving.
+2. **Then the ablation panel E10 owes**, which is the backbone of the report's most-weighted
+   section and is now cheap: remove the escape branch, the crate target, `CRATE_DESTROYED`, and
+   the danger digits, one at a time, from a configuration that works.
+3. **Then rung 3.** `state_to_features` still has no opponent information — the `TODO task 3+` in
+   `callbacks.py` is untouched — and that is where the tournament is decided.
+4. **Deprioritised: the densest-spot target and E14's counted digit 7.** Both aim at the mean,
+   and with the best seed already within noise of the reference the honest description of the
+   remaining gap is reliability, not capability.
 
 ---
 
