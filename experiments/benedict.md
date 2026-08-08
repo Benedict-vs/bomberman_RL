@@ -83,11 +83,105 @@ signature.
 
 ### Result
 
-*(to be filled in after the run)*
+30 runs (69 min, three batches of ten), 60 evaluations at ε = 0, 300 rounds, seed 20260731.
+`crates`, five-seed mean ± std:
 
----
+| γ | ε floor | @10 000 | @20 000 |
+|---|---|---|---|
+| 0.90 | 0.02 | 83.56 ± 24.23 | 63.94 ± 36.77 |
+| 0.90 | 0.10 | 36.99 ± 12.78 | 25.82 ± 10.38 |
+| 0.95 | 0.02 | 80.25 ± 27.39 | 87.02 ± 11.21 |
+| 0.95 | 0.10 | 40.36 ± 17.52 | 36.90 ± 11.78 |
+| 0.99 | 0.02 | 84.34 ± 10.47 | **86.10 ± 2.93** |
+| 0.99 | 0.10 | 48.58 ± 16.37 | 39.80 ± 12.07 |
 
-## E14 — Digit 7 counts the crates instead of just noticing them
+`score` follows the same shape: 5.990 ± 1.845 at the baseline cell, **6.179 ± 0.255** at
+γ = 0.99 / 20 000. `suicides` ≤ 0.013 and `survived` ≥ 0.987 in every cell.
+
+Per seed, the two cells that matter:
+
+| cell | s0 | s1 | s2 | s3 | s4 | mean | std | worst |
+|---|---|---|---|---|---|---|---|---|
+| γ 0.90 @10 000 *(= E13)* | 54.75 | 66.24 | **116.64** | 85.74 | 94.45 | 83.56 | 24.23 | 54.75 |
+| γ 0.90 @20 000 | 29.70 | 38.70 | 114.86 | 90.22 | 46.19 | 63.94 | 36.77 | 29.70 |
+| **γ 0.99 @20 000** | 85.65 | 82.07 | 85.30 | 90.02 | 87.47 | 86.10 | **2.93** | **82.07** |
+
+**Same mean, 8.3× less spread, and the worst seed goes from 29.70 to 82.07.** Paired on the worst
+seed of each cell: `crates` +55.95 [+49.88, +61.62], `score` +4.293 [+3.860, +4.713].
+
+A free reproducibility check fell out of the design: the γ = 0.9 / ε = 0.02 cell at 10 000 is the
+E13 configuration, and it reproduces to three decimals (83.561 ± 24.226 against 83.56 ± 24.23).
+
+### Peak-then-decay was a discounting artefact
+
+| γ | 10 000 → 20 000 |
+|---|---|
+| 0.90 | 83.56 → 63.94  (**−23.5 %**) |
+| 0.95 | 80.25 → 87.02  (**+8.4 %**) |
+| 0.99 | 84.34 → 86.10  (**+2.1 %**) |
+
+The phenomenon that survived three separate feature maps — E12 −21 %, E13 −44 %, E14 −24 % —
+disappears at γ = 0.99 and reverses at γ = 0.95. It was never about the representation. The
+argument for looking here was precisely that *a phenomenon invariant to the feature map is
+probably not caused by the feature map*, and that reasoning is the most transferable thing in
+this entry.
+
+Why: at γ = 0.9 the horizon is ~10 steps, so a target 10–30 steps away is discounted into the
+noise and the ordering of actions is decided by whatever the last few updates did. Lengthening
+the horizon gives distant outcomes enough weight to separate states that were previously ties —
+the same flatness that let `BOMB` lose by 0.006 in the E13 post-mortem.
+
+### Predictions, scored
+
+1. **"γ = 0.95 wins, 95–115 crates; γ = 0.99 worse" — wrong twice.** γ = 0.99 is the best cell,
+   and **no cell moved the mean out of the low 80s.** I predicted a mean effect and got a
+   variance effect.
+2. **"std below 12 in the winning cell" — right, and by a wide margin.** 2.93 against a predicted
+   12 and a baseline of 24.23. This was the entry's central prediction.
+3. **"Decay under 20 % at the winning γ" — right.** It reverses sign.
+4. **"A higher ε floor costs a little mean and buys spread" — badly wrong.** ε = 0.10 roughly
+   halves the crate count at every γ (36.99 against 83.56 at γ = 0.9) and is the worst setting in
+   the grid. Its only defence is that it also shrinks the spread — of a much worse policy, which
+   is not a trade worth making. **E07's open question is now answered for rung 2: the ε floor
+   should stay at 0.02, and raising it is actively harmful.**
+5. **"Suicides do not rise" — held.** 0.006 at γ = 0.99, survival ≥ 0.99 throughout.
+6. **`think_max_ms` unchanged — held.**
+
+The whole-entry refutation condition (no cell beats the baseline by more than five-seed noise)
+technically fires *on the mean* — 86.10 against 83.56 is nothing. It does not fire on the metric
+that turned out to matter, which I had listed as prediction 2 rather than as the headline.
+
+### Verdict
+
+**γ = 0.99 with ε floor 0.02, at 20 000 episodes.** The mean is unchanged; the standard deviation
+falls from 24.23 to 2.93 and the worst case from 29.70 to 82.07. Since E10 every result has been
+a distribution with a long bad tail, and this closes it. It also explains, and removes, a
+degradation that three previous entries wrongly attributed to their own feature changes.
+
+**The shipped model does not change.** E13 s2 still reaches 116.64 where γ = 0.99's best seed
+manages 90.02, and §5.8 selects on validation and ships one table, so the ceiling is what ships.
+That is worth flagging as a genuine tension rather than settling quietly: one configuration is a
+coin flip between 29.70 and 116.64, the other is 82–90 every time. For a report, the second is
+the better result; for a single-table tournament submission with a validation-seed selection, the
+first still wins. It matters more from rung 4 on, when a bad draw cannot be re-rolled.
+
+**The mean is now the binding constraint, and it is a hard ceiling**: every γ, every checkpoint,
+five seeds — 80 to 87 crates, against the reference's 116.26. With the variance gone, that is a
+property of the feature map and the reward function, not of luck.
+
+### What I do next
+
+1. **Loose end from this entry, and cheap: evaluate the γ = 0.99 cell at 5 000 and 40 000.** Its
+   curve was still rising at 20 000 (84.34 → 86.10), so 20 000 may not be its optimum. Ten
+   evaluations, two minutes, and the checkpoints are already on disk.
+2. **E16: the reward scale, at γ = 0.99.** Necessary rather than optional now — moving γ from
+   0.9 to 0.99 multiplies the effective horizon by ten, which changes the weight of every reward
+   relative to the step cost by the same factor, and the reward table was never tuned even at
+   γ = 0.9. It is also where the `COIN_COLLECTED` +5 against the game's +1 ablation finally
+   belongs, six experiments after it was first deferred.
+3. **Then retest E14's counted digit 7 on the tuned hyperparameters.** Its only measured benefit
+   was variance reduction, which γ now provides for free; whether it buys *selectivity* is
+   untested and is the question its own entry failed to answer.
 
 - **Question:** the E13 post-mortem traced the 2-cycle to a margin: in the seeds that collapse,
   half of all bombing opportunities are decided by less than 0.01 between `BOMB` and walking on,
