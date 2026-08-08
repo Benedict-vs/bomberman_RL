@@ -116,6 +116,15 @@ replays/
 # Figures are pure functions of the CSVs, so they are not worth versioning.
 results/figures/
 
+# Rung-2 training logs. Committed up to 29e56be, then removed: a 100 000-episode
+# sweep is ~140 MB and they are reproducible from the commit plus the BM_* arm
+# variables (E12 verified this by rerunning a sweep to identical results). The
+# evaluations -- 35 KB each, and the actual evidence -- stay versioned.
+# `results/train_local/` is the untracked archive of what was removed.
+results/train_local/
+results/train/task2_crates/*.csv
+results/train/task2_crates/*.meta.json
+
 final_project.pdf
 
 # stdout of parallel training sweeps; the training CSV is the record

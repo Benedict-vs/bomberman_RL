@@ -172,15 +172,23 @@ Opponent presets for `--opponents`: `none`, `random`, `peaceful`, `coin_collecto
 committed — they are the evidence for the report's most important chapter. Figures stay ignored:
 they are pure functions of the CSVs.
 
-*Amended 2026-08-07.* This section used to say a lost training log "cannot be reproduced, only
-replaced by a different one", because `--seed` fixes the arenas but not the agent's exploration
-RNG. **That has not been true since the exploration RNG was seeded in `setup_training`**
-(`np.random.default_rng(TRAIN_SEED + RUN_INDEX)`); `experiments/benedict.md` E12 confirmed it by
-rerunning a 40 000-round sweep and getting round-for-round identical evaluation results. Training
-logs are reproducible from commit + seeds, at the cost of a rerun. Keep committing them — they
-are evidence and they are cheap to keep — but the reason is convenience, not irreproducibility,
-and duplicates of an identical configuration are not worth carrying. Note the size difference
-before adding a sweep: an evaluation CSV is ~35 KB, a 40 000-episode training log is ~3 MB.
+*Amended 2026-08-07, revised 2026-08-08.* This section used to say a lost training log
+"cannot be reproduced, only replaced by a different one", because `--seed` fixes the arenas but
+not the agent's exploration RNG. **That has not been true since the exploration RNG was seeded in
+`setup_training`** (`np.random.default_rng(TRAIN_SEED + RUN_INDEX)`); `experiments/benedict.md`
+E12 confirmed it by rerunning a 40 000-round sweep and getting round-for-round identical
+evaluation results.
+
+**`results/train/task2_crates/` is therefore no longer committed** (`.gitignore`, from
+2026-08-08). It had reached 282 MB: an evaluation CSV is ~35 KB, but a 100 000-episode training
+log is ~7 MB and a 20-run sweep is 140 MB, which every collaborator would clone. They are
+reproducible from the commit plus the `BM_*` arm variables recorded in each run's `.meta.json`.
+Logs written before the change stay in the history — removing them from the index stops the
+growth, it does not shrink an existing clone.
+
+`results/train/task1_coin_collectors/` is untouched: it is Maxi's and Ben's and it is 21 MB.
+**`results/eval/` stays committed in full** — it is small and it is what every number in the
+report is computed from.
 
 **Seeding differs between training and measurement, on purpose.** `BombeRLeWorld.__init__`
 (`environment.py:335`) seeds the world RNG **once** and `build_arena` keeps drawing from it, so
