@@ -39,6 +39,27 @@ MODEL_FILE = os.path.join(
     f"q_table{os.environ.get('BM_MODEL_SUFFIX', '')}.npy",
 )
 
+# E17 ablation switch, same environment-variable pattern as BM_MODEL_SUFFIX.
+# Each arm pins one feature component to a constant, so the table keeps its
+# 12 800 rows and only the information content changes -- rows collapse, they
+# do not disappear. Unset -- every normal game, and the tournament -- the full
+# map is active. The switch must be set for training AND for evaluating an
+# ablated table: the shapes match either way, so a mismatch would not crash,
+# it would silently measure a table through features it was never trained on.
+#
+#   escape       -- digit 6 no longer switches to the way out while in a blast
+#   crate_target -- digit 6 goes silent when no coin is visible (the E11 map)
+#   danger       -- digits 1-4 collapse to blocked/clear, digit 5 pinned at 0.
+#                   Digit 5 = 0 also means the escape branch never fires, so
+#                   this arm removes escape AS WELL -- the components nest.
+#   bomb_digit   -- digit 7 pinned at 0
+ABLATE = os.environ.get("BM_ABLATE", "")
+if ABLATE not in ("", "escape", "crate_target", "danger", "bomb_digit"):
+    raise ValueError(
+        f"BM_ABLATE={ABLATE!r} is not an ablation arm. A typo here would "
+        "silently train the full agent under an arm's label -- fail instead."
+    )
+
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 # (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
@@ -114,6 +135,8 @@ def neighbour_status(x: int, y: int, field: np.ndarray, danger: np.ndarray,
         nx, ny = x + dx, y + dy
         if field[nx, ny] != 0 or (nx, ny) in occupied:
             status.append(NB_BLOCKED)
+        elif ABLATE == "danger":
+            status.append(NB_CLEAR)     # E17: lethal and in-blast read as clear
         elif danger[nx, ny] == 0:
             status.append(NB_LETHAL)
         elif danger[nx, ny] < SAFE:
@@ -195,6 +218,9 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
         if step != NO_TARGET:
             return step
 
+    if ABLATE == "crate_target":
+        return NO_TARGET    # E17: the E11 behaviour -- no target without a coin
+
     return bfs_first_step(x, y, field, is_crate)
 
 
@@ -264,17 +290,21 @@ def state_to_features(game_state: dict) -> int:
     # Digit 5, in moves rather than in timer units: 0 = safe, otherwise how many
     # moves are left *including this one*. A bomb seen at t leaves t+1 moves.
     own_danger = 0 if danger[x, y] >= SAFE else int(danger[x, y]) + 1
+    if ABLATE == "danger":
+        own_danger = 0
 
     # Digit 7 folds in `bomb_possible` deliberately. Without it the agent sits
     # in a "crate in range" row with no bomb left, picks BOMB, gets
     # INVALID_ACTION -- and an invalid action leaves the state unchanged, which
     # is the absorbing-row failure of E09 in a new place.
     bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field))
+    if ABLATE == "bomb_digit":
+        bomb_useful = 0
 
     # Digit 6 is "the direction that matters right now". While a bomb covers the
     # agent's tile that is the way out, and nothing else is worth encoding --
     # a coin four tiles away is irrelevant if the agent is dead in three.
-    if own_danger:
+    if own_danger and ABLATE != "escape":
         target = escape_direction(x, y, field, danger, occupied)
     else:
         target = target_direction(x, y, field, game_state['coins'])

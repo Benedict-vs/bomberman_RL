@@ -21,6 +21,81 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E17 — The ablation panel E10 has owed since the rung transition
+
+- **Question:** E10 changed five things at once and took on the obligation to decompose the
+  bundle afterwards, "from a working agent rather than from a broken one". Seven experiments
+  later the agent works and the configuration is settled (E16). What does each component
+  actually contribute — and is any of them dead weight riding along since the transition?
+- **Change:** none to the shipped agent. `BM_ABLATE` becomes an environment switch in
+  `callbacks.py` (same pattern as `BM_MODEL_SUFFIX`: unset = the full map, the tournament path
+  is untouched, an unknown arm name fails loudly). Each arm pins one component to a constant,
+  so the table keeps its 12 800 rows and only the information content changes — table size is
+  not a confound. Five removal arms, retrained from scratch:
+
+  | arm | what is removed |
+  |---|---|
+  | `danger` | digits 1–4 collapse to blocked/clear, digit 5 pinned 0 — **nests: escape cannot fire either** |
+  | `escape` | digit 6 no longer switches to the way out in a blast (digit 5 stays) |
+  | `crate_target` | digit 6 silent without a visible coin (the E11 map) |
+  | `bomb_digit` | digit 7 pinned 0 |
+  | `nocrate` | `CRATE_DESTROYED = 0` (`BM_CRATE=0`, no code — the reward arm) |
+
+- **Agent:** `benedict_task2` · the switch and this entry are one commit, so the hash every
+  eval `.meta.json` stamps *is* the code under test · labels
+  `benedict_q_e17_{danger,escape,crate_target,bomb_digit,nocrate}_s{0..4}__ep*__task2`
+- **Training:** 100 000 rounds, five seeds, world seed 810731, γ = 0.99, ε floor 0.02,
+  `COIN` 5 / `CRATE` 0.3 except in `nocrate` — the E16 winning cell minus one component each.
+  Same seeds and world seed as E16, so every arm is seed-paired with the baseline.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731, checkpoints 40 000 and 100 000.
+  **The four code arms are evaluated with `BM_ABLATE` set** — the shapes match either way, so
+  forgetting it would not crash, it would silently measure an ablated table through the full
+  map. Contributions via `analyze.py --ablation` (removal mode), per seed, against
+  **c5_k03 @100 000: 97.31 ± 12.5 crates, 7.04 score**. Reference 116.26 / 8.50.
+
+### Prediction (written before the run)
+
+1. **`danger` is the largest contribution: crates < 15, suicides > 0.3.** Without danger
+   digits nothing separates "three moves on the clock" from "walking into fire", and the
+   nested loss of escape puts this near the E10 floor regime. **Refutation:** crates > 40
+   means survival is learnable from the terminal −5 alone at γ = 0.99, and the E10 EV
+   arithmetic was wrong about why the bundle was needed.
+2. **`escape` collapses bombing, not survival: crates 5–30, bombs low, suicides < 0.1.**
+   E10 measured this trap exactly — with danger digits but no way out, the agent learns
+   bombing is negative-EV and survives by not playing (2.41 crates, γ = 0.9).
+   **Refutation:** crates > 60 means the danger digits alone carry escape at γ = 0.99 and
+   E11's attribution ("the binding constraint was the escape") was γ-specific.
+3. **`crate_target`: crates 25–50, and the 2-cycle returns** (loop probe: most rounds
+   confined again). E11 measured 26.19 without it at γ = 0.9. **Refutation:** crates > 70
+   means the longer horizon substitutes for the target gradient — E15's tie-separation
+   argument reaching further than I currently believe — and E13's "decisively better"
+   was partly γ's work.
+4. **`bomb_digit` is the arm I am least sure of: crates 60–85, `invalid` rises above 1.**
+   Digit 7's load-bearing half may be the folded-in `bomb_possible` (E10's absorbing-row
+   argument), not the crate information. **A null here is a good result, not a failure:**
+   within noise of 97.31 means digit 7 is redundant given digit 6 and the reward, and the
+   table halves for free.
+5. **`nocrate`: crates 40–75.** Pre-run arithmetic worth recording: a random crate hides a
+   coin with p ≈ 9/123, worth 5 · γ^~15 ≈ 4.3 by the time it is collected, so the *expected
+   instrumental* value of opening a crate is ≈ 0.3 — the untuned `CRATE_DESTROYED` constant
+   is almost exactly the expected discounted coin behind the crate. Removing it leaves that
+   signal concentrated in the ~7 % of crates that actually pay, which should slow learning
+   badly but not zero it.
+6. **The ordering: `danger` < `escape` < `crate_target` < `nocrate` < `bomb_digit` ≤ full.**
+   This is the entry's strongest falsifiable claim — five arms give 5! orderings and I am
+   naming one.
+7. **Guards, in the arms that keep the escape machinery** (`crate_target`, `bomb_digit`,
+   `nocrate`): suicides ≤ 0.02, survived ≥ 0.98. In `danger` and `escape` the suicide rate
+   is a finding, not a guard.
+8. **`think_max_ms` unchanged (~0.2–0.3).** Every arm removes computation; none adds any.
+
+**Refutation condition for the whole entry:** all five arms within five-seed noise of
+97.31. That would mean no single component earns its place — the performance lives in the
+reward scale and γ alone — and the feature-attribution story running from E10 to E16 is
+wrong from the start.
+
+---
+
 ## E16 — The reward scale at γ = 0.99, and the coin ablation six experiments late
 
 - **Question:** with the variance closed by E15, the mean is a hard ceiling — every γ, every
