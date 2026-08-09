@@ -21,6 +21,65 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E18 — Train longer, and the ε floor below 0.02
+
+- **Question:** two loose ends, one batch. (1) The winner's curve at 100 000 is "still
+  rising" only as a point estimate — per-seed diffs 40 k → 100 k are [+13.4, 0.0, +4.8,
+  −1.0, +5.4], t = 1.76, not demonstrated. Where is the optimum, and does brute force fix
+  the frozen seed? The s1 diagnosis makes that concrete: its corner-spawn row 3007 holds
+  `RIGHT` over its own target `DOWN` by a margin that shrank 0.35 → 0.13 over the last
+  80 000 episodes — does it flip by 200 000? (2) E15 measured the ε floor one-sidedly:
+  0.10 is harmful, 0.02 untested downwards. Q-learning is off-policy, so ε only shapes the
+  data distribution; GLIE wants ε → 0 *slowly*, and the hot rows are frozen by per-cell α
+  long before ε matters — the open question is whether the residual 0.64 training
+  deaths/episode at the 0.02 floor cost anything, and whether rare rows starve at 0.
+- **Change:** none to the agent. `CHECKPOINTS` gains 140 000 / 200 000. Three arms:
+
+  | arm | rounds | `EPS_END` |
+  |---|---|---|
+  | `ext` | 200 000 | 0.02 (incumbent) |
+  | `eps0005` | 100 000 | 0.005 |
+  | `eps0` | 100 000 | 0 — exponential decay all the way; ε < 10⁻⁶ from ~25 000 on |
+
+- **Agent:** `benedict_task2`, E16's winning cell otherwise · entry and `CHECKPOINTS`
+  change are one commit · labels `benedict_q_e18_{ext,eps0005,eps0}_s{0..4}__ep*__task2`
+- **Training:** five seeds, world seed 810731. Determinism makes `ext`'s first 100 000
+  episodes byte-identical to E16's c5_k03 runs, so its ≤ 100 k checkpoints need no
+  evaluation — only 140 k and 200 k are new numbers (and a hash comparison of the 100 k
+  checkpoint against E16's is a free replication check).
+- **Measurement:** 300 rounds, ε = 0, seed 20260731. `ext` at 140 k / 200 k; ε arms at
+  40 k / 100 k. Baseline **c5_k03 @100 k: 97.31 ± 12.5 crates, 7.04 score**.
+
+### Prediction (written before the run)
+
+1. **`ext` @200 k: 99–107 crates**, a decelerating rise (92.80 → 97.31 over the last
+   60 k). **Refutation:** above 110 means the curve is not decelerating and every
+   "ceiling" statement since E15 was premature; below 92.8 means peak-then-decay is back
+   at γ = 0.99 and E15's central conclusion falls.
+2. **s1 flips row 3007 and jumps to ≥ 95.** The RIGHT−DOWN gap closed 0.35 → 0.13 while
+   the row's values tripled; another 100 k should close it. **Refutation:** s1 still at
+   82 ± 3 with the row unflipped — then the argmax starves its alternative of data at the
+   ε floor, "train longer" is not a variance cure, and the structural fixes (E19 shaping,
+   D₄) are the only routes to the worst seed.
+3. **The ε floor is a plateau below 0.02: both ε arms within five-seed noise of 97.31 at
+   100 k.** This completes E15's one-sided curve (0.10 harmful, 0.02 ↔ 0 flat). I expect
+   `eps0` slightly lower with **at least one seed below 80** — a cycle-prone seed that
+   greedy-only training never rescues. **Refutation:** `eps0` *beating* 0.02 by more than
+   10 crates means late-training exploration noise was actively harmful, and the floor
+   goes to 0 for rung 3.
+4. **Mechanism read, from the training log alone:** `eps0`'s KILLED_SELF over the last
+   10 000 episodes falls below 0.05 (0.02 floor: 0.64) — the behaviour policy converges to
+   the greedy one it is measured as.
+5. **Guards:** suicides ≤ 0.02, survived ≥ 0.98 at every reported checkpoint, all arms.
+6. **`think_max_ms` unchanged** — nothing in the evaluation path changes.
+
+**Refutation condition for the whole entry:** `ext` regresses below 92.8 *and* both ε arms
+land within noise — training length and the floor both dead knobs, meaning the remaining
+variance and the 19-crate gap are entirely structural (features/shaping), and E19 becomes
+the only live lever on this rung.
+
+---
+
 ## E17 — The ablation panel E10 has owed since the rung transition
 
 - **Question:** E10 changed five things at once and took on the obligation to decompose the
