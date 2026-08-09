@@ -94,6 +94,111 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 reward scale and γ alone — and the feature-attribution story running from E10 to E16 is
 wrong from the start.
 
+### Result
+
+25 runs (3 h 15 min in three batches), 50 evaluations at ε = 0, 300 rounds, seed 20260731,
+plus a loop probe per arm on s2. Five-seed means at the 100 000 checkpoint:
+
+| arm | `crates` | std | `score` | `bombs` | `suicides` | `survived` | `steps` | probe: tiles/round |
+|---|---|---|---|---|---|---|---|---|
+| **full (E16)** | **97.31** | 12.5 | 7.04 | 38.2 | 0.002 | 0.998 | 399 | 127 |
+| `crate_target` | 21.17 | 10.3 | 1.505 | 27.9 | 0.025 | 0.975 | 394 | 6 |
+| `escape` | 13.77 | 4.4 | 0.727 | 4.8 | **0.399** | 0.601 | 256 | 5 |
+| `danger` | 3.25 | 0.5 | 0.003 | 1.1 | **0.995** | 0.005 | **7.6** | 2 |
+| `bomb_digit` | 3.22 | 0.1 | 0.009 | 2.9 | **0.878** | 0.122 | 53 | 1 |
+| `nocrate` | **0.50** | 0.5 | 0.010 | **0.18** | 0.000 | 1.000 | 400.0 | 3 |
+
+(The full-map tiles/round figure is the shipped table's probe from the E13 era; the arms were
+probed now, same seeds 810731–810750.)
+
+**Removing any single component costs 78–99 % of the crates, and every arm fails in a
+different way.** Paired per-seed contributions on s2: +98.0 to +111.2 crates, every CI far
+from zero. The wiring hazard declared above was checked, not assumed: the `bomb_digit` s2
+evaluation re-run with the switch set is round-for-round identical to the recorded one, and
+the deliberately mis-wired control (switch unset) differs — 3.28 against 6.72 crates — so
+these numbers measure the arms, not a feature mismatch.
+
+The failure modes, from the probes:
+
+- **`nocrate` is E10's inert regime, exactly.** 0.18 bombs, zero deaths, 400.0 steps,
+  a 3-tile oscillation from step 1. It learned *never to bomb*.
+- **`danger`** drops one bomb and stands in it: WAIT is 48 % of its actions, median round
+  5 steps. Suicides *rose* with training, 0.868 → 0.995 from 40 000 to 100 000.
+- **`bomb_digit`** is the surprise, and the checkpoints tell the story: at 40 000 it
+  oscillates over two tiles and rarely bombs (2.8 % of actions, 400-step rounds, 0.115
+  suicides); at 100 000 it runs the *same* oscillation with 10.4 % bombing and dies at
+  step 5 (0.878). Training raised `Q(BOMB)` until the agent bombs inside its own loop.
+- **`escape`** keeps bombing and cannot get out — 0.399 suicides, 256-step rounds.
+- **`crate_target`** is the mildest removal and reproduces E11 (21.17 now, 26.19 then at
+  γ = 0.9): it bombs where it stands (27.9 bombs) but travels 6 tiles a round.
+
+### Two findings worth the panel's price
+
+**`CRATE_DESTROYED = 0.3` is not reward shaping — it is the bootstrap through the death
+barrier.** The `nocrate` agent's collapse is not weakness, it is the E10 circular trap
+closing again: early bombs kill (escape not yet learned), so bombing goes negative-EV and
+is abandoned *before a single coin payoff is ever sampled* — and with no bombs, no coin
+ever becomes visible, so nothing remains to learn toward. The prediction-5 arithmetic
+(expected instrumental value ≈ 0.3 per crate exists in principle) was right about the
+signal and wrong about *reachability*: the agent never survives long enough to collect it.
+Together with E16 this brackets the crate reward: 0 fails inert, 1.0 fails reckless, 0.3
+works. The constant that was never tuned sits in the one window that functions.
+
+**Training entrenches the broken configurations.** `danger` 0.868 → 0.995 suicides and
+`bomb_digit` 0.115 → 0.878 from 40 000 to 100 000 — the E06/E12 pattern ("more training
+makes an already-wrong policy permanent") in two new costumes. A report reader should take
+from this that checkpointed measurement is not a luxury: the 40 000 numbers alone would
+have ranked `bomb_digit` two tiers higher.
+
+### Predictions, scored
+
+1. **`danger`: crates < 15, suicides > 0.3 — right on both** (3.25, 0.995). "Largest
+   contribution" — **wrong**: `nocrate` is larger.
+2. **`escape`: crates 5–30 — right** (13.77). **The mechanism was inverted:** I predicted
+   the E10 outcome — abstains and survives, suicides < 0.1 — and at γ = 0.99 it *keeps
+   bombing and dies*, 0.399. The refutation clause (> 60) does not fire; E11's attribution
+   stands.
+3. **`crate_target`: 25–50 — near miss low** (21.17). The γ-substitution refutation (> 70)
+   does not fire; E13's necessity claim stands.
+4. **`bomb_digit`: 60–85 — wrong by a factor of 25** (3.22). I flagged it least-sure and
+   still failed to imagine the failure. "A null here is a good result" got its answer:
+   digit 7 is near-load-bearing and the table cannot halve.
+5. **`nocrate`: 40–75 — wrong by a factor of ~100** (0.50). The worst prediction in this
+   ledger, and the most instructive: I priced the signal and forgot to ask whether the
+   agent would live to see it.
+6. **The ordering — wrong at both ends, right in the middle.** Measured: `nocrate` 0.50 <
+   `bomb_digit` 3.22 ≈ `danger` 3.25 < `escape` 13.77 < `crate_target` 21.17. The three
+   feature-branch arms landed in the predicted order; the two arms I placed *closest* to
+   the full agent are the two on the floor.
+7. **Guards:** `nocrate` 0.000 ✓; `crate_target` 0.025 — a marginal fail of the ≤ 0.02
+   threshold; `bomb_digit`'s guard is moot, the arm collapsed outright.
+8. **`think_max_ms` ~0.2–0.3 — held in substance, missed as written:** worst step 5.2 ms
+   across all 50 evaluations — a scheduler outlier, ~1 % of budget, and no arm adds
+   computation.
+
+The whole-entry refutation condition does not fire — by two orders of magnitude.
+
+### Verdict
+
+**Every component earns its place, and E10's bundling is vindicated by measurement.** The
+rung-transition argument — "on this rung the components are not individually measurable,
+each alone is a five-seed zero" — was made from necessity in E10 and is now a measured
+fact: five removals, five distinct collapses, 78–99 % of the performance gone each time.
+The feature map carries no dead weight, which also means the remaining gap to the
+reference (97.31 against 116.26) will not come from pruning — it has to come from what the
+map does *not yet* encode, or from the seeds that converge badly.
+
+### What I do next
+
+1. **Diagnose the frozen seed before touching the model.** The winner's s1 has sat at
+   82.1 ± 0.2 crates from 20 000 through 100 000 while s0/s2 rose 25 crates — a specific,
+   findable defect (`cycle_dump`, finding-7 margins against s2). What it turns out to be
+   decides between D₄ canonicalisation and the densest-spot target as the next change.
+2. **Background batch: 200 000-round extension of the winner, plus the ε-floor arms**
+   (0.005 and decay-to-0) — settles "still rising at 100 000" honestly and closes the
+   ε question with a measurement instead of an argument. Prediction before the run.
+3. **Then rung 3.** `GOT_KILLED` enters the reward table before any opponent training.
+
 ---
 
 ## E16 — The reward scale at γ = 0.99, and the coin ablation six experiments late
