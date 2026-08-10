@@ -99,6 +99,111 @@ both 1 and 2 → neither route fills the finer map, E20's measured resolution ga
 reachable in practice, and rung 2 is done: the incumbent ships and the next work is rung 3
 (`GOT_KILLED` into the reward table, then the transfer floor against `peaceful_agent`).
 
+### Result (measured 2026-08-10)
+
+| arm | 20 k | 40 k | 70 k | 100 k | 150 k | 200 k |
+|---|---|---|---|---|---|---|
+| incumbent `c5_k03` | 86.10 | 92.80 | 94.36 | **97.31 ± 12.54** | — | — |
+| `dist` (E20) | 55.40 | 76.87 | 82.26 | 91.92 ± 20.38 | — | — |
+| `ext` | *(= `dist`)* | | | | 90.61 ± 22.12 | 83.57 ± 19.96 |
+| `warm` | 103.25 ± 15.29 | **106.67 ± 9.70** | 93.78 ± 19.14 | 82.53 ± 32.69 | — | — |
+
+**Both arms decay.** `ext` falls 91.92 → 90.61 → 83.57; `warm` peaks at 40 000 and loses 24
+crates by 100 000. Per seed, `warm` collapses spectacularly in places — s2 runs
+114.7 → 115.2 → 80.5 → **24.9**, while s0 climbs 77.0 → 91.8 → **113.2** → 103.0 over the
+same episodes. The seeds wander in and out of good policies *independently*.
+
+**Finding 1 — the E20 s0 diagnosis was wrong, and this run refutes it.** I concluded that
+s0's deficit was unfilled rows (477 of 851) and predicted a warm start would fix it by filling
+them. The filling worked far beyond the prediction — **2 206–2 358 rows** carry value against
+the ≥ 780 I asked for, three times the threshold, from episode zero — and the arm still
+decays. Rows filled stay flat across the whole curve (s0: 2 275 → 2 286; s2: 2 354 → 2 358)
+while crates swing by 90. **Filling the table is neither the deficit nor the fix.**
+
+**Finding 2 — what governs performance is margin decisiveness, and it tracks almost
+perfectly.** The fraction of well-posed rows decided by |margin| < 0.2, against crates, same
+tables:
+
+| checkpoint | s0 thin | s0 crates | s2 thin | s2 crates |
+|---|---|---|---|---|
+| 20 k | 24.5 % | 77.0 | 1.1 % | 114.7 |
+| 40 k | 4.4 % | 91.8 | 1.5 % | 115.2 |
+| 70 k | 1.1 % | **113.2** | 3.7 % | 80.5 |
+| 100 k | 1.5 % | 103.0 | **15.1 %** | **24.9** |
+
+The follow-digit-6 rate meanwhile sits at 62–65 % throughout and explains nothing. It is not
+*what* the rows say, nor *how many* of them say anything — it is whether they say it
+decisively.
+
+**Finding 3 — the arithmetic of why it never settles.** At the end of training a busy cell has
+N ≈ 5 000 visits, so α = 1/N^0.7 ≈ 0.0026, and the mean |TD error| in the last 10 000 episodes
+is ≈ 0.30. **Each remaining update therefore moves a Q-value by ≈ 0.0008 — and the margin
+deciding s0's corner cycle was 0.001.** The table is still stepping by roughly the size of the
+decisions it is making. That is the whole pathology, it explains E18 (200 k re-rolled the
+incumbent) and both arms here, and it says the fine map is worse only because more rows share
+the same data, so more decisions live at that scale.
+
+**Finding 4 — `warm` @40 k is the best configuration measured on this rung, and it survives a
+held-out arena set.** 106.67 ± 9.70 on the evaluation seed; re-measured on **550731**, which
+has never been used to choose anything, it gives **106.39 ± 10.02** against the incumbent's
+95.61 there. The peak's *location* transfers too: 40 k > 70 k on both seed sets.
+
+    warm @40k vs incumbent @100k, paired over 5 training seeds
+      20260731 : +9.36   t = +1.20    -16.2 / +30.6 /  +2.8 / +11.4 / +18.2
+      550731   : +10.78  t = +1.17    -19.3 / +33.2 /  +1.8 / +13.2 / +25.0
+
+**Not demonstrated**, on both arena sets, for the same reason both times: four seeds gain 2–33
+crates and s0 loses 19–20. A sign test on 4/5 does not reach 0.05 either. The effect is large,
+reproducible across arenas, and still not established at n = 5 training seeds.
+
+#### Predictions scored
+
+1. **CONFIRMED.** `ext` does not rescue s0: 59.9 → 55.0 → **48.2**, worse, not better.
+2. **FAILED, refutation fired.** s2/s3/s4 average 93.8 at 200 k against the ≥ 110 predicted and
+   103.7 they started from — they *fell*. As the clause says: the fine map has E18's
+   re-rolling pathology too, and 100 000 was already past its optimum.
+3. **CONFIRMED, emphatically and uselessly.** 2 206–2 358 rows filled against ≥ 780 asked. See
+   finding 1 — the prediction was right and the reasoning behind it was wrong.
+4. **FAILED on both moments.** 82.53 ± 32.69 against ≥ 100 and sd < 10.
+5. **Refutation fired, but the clause was mis-specified and its inference does not follow.**
+   `warm` @100 k is 82.53, below the 97.31 line, which by the letter of the entry means "rung 2
+   feature work is finished and the incumbent ships". But I pinned the comparison to 100 000
+   *before* seeing that the arm peaks at 40 000, and at its own best checkpoint it beats the
+   incumbent by ~10 crates on two independent arena sets. The honest reading is that the
+   prediction tested the wrong point on the curve. **This is the third entry running in which
+   a prediction was mis-specified rather than merely wrong** — E19's 4/5 dead zone, E20's
+   corner row sized on the greedy instead of the training distribution, and now a checkpoint
+   fixed before the curve's shape was known. The pattern is that I pin thresholds to numbers
+   chosen from the *previous* experiment's geometry.
+6. **CONFIRMED, emphatically.** `warm` @40 k = 106.67 against `dist` @70 k = 82.26.
+7. **CONFIRMED.** All five `ext` tables byte-identical to `dist` at 100 000 — checkpoints are
+   extra writes, not extra updates, and the curves in this ledger are safe from that.
+8. **Guards: `warm` VIOLATED, `ext` clean.** `warm` runs suicides 0.043–0.053 against the
+   ≤ 0.02 guard and survival 0.947–0.957 against ≥ 0.98 — inherited from a coarse parent whose
+   own suicide rate is 0.003, so the transfer makes it *bolder* than its parent, which is not
+   something the entry anticipated and is not yet explained. `ext` is spotless: 0.000 suicides,
+   1.000 survival. `think_max_ms` ≤ 0.11 everywhere.
+
+**Whole-entry refutation did not fire** — it required `ext` to fail predictions 1 *and* 2, and
+1 was confirmed. Rung 2 is therefore not declared finished on these numbers.
+
+**Verdict: nicht gezeigt — and the target has moved.** Neither longer training nor a warm start
+demonstrably beats the incumbent at n = 5. But the question worth asking is no longer "does the
+distance digit pay"; it is **"can this table be made to settle at all"**. Finding 3 says the
+residual update size and the decisive margin are the same order of magnitude, which makes every
+checkpoint on this map a sample from a random walk — and makes both "train longer" and "start
+better" beside the point.
+
+**Next — E22, the α exponent.** `ALPHA_EXP` has sat at 0.7 since rung 1, chosen because
+(0.5, 1] is where L26's two convergence conditions both hold; it has never been swept. At 1.0,
+α = 1/N and the residual update at N = 5 000 falls from 0.0008 to 0.00006 — thirteen times
+smaller than the margins that are currently being re-rolled — while Σα = ∞ and Σα² < ∞ still
+hold, so it is not a hack but the other end of the same admissible interval. That is a
+one-constant experiment against a mechanism measured to three significant figures, and it
+applies to the incumbent map as much as to the fine one, which makes it the first thing since
+E15 that could move *both*. `warm` @40 k should be carried along as a second arm, since it is
+the best table on the board and the α change is exactly what might let it hold its 40 k policy.
+
 ---
 
 ## E20 — The target distance as a feature digit
