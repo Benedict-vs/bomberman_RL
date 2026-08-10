@@ -45,7 +45,7 @@ STEP_COST = -0.1    # encourages shorter paths
 GAMMA = float(os.environ.get("BM_GAMMA", 0.99))
 
 ALPHA = 0.1         # only used when ALPHA_MODE == "const"
-ALPHA_EXP = 0.7     # in (0.5, 1]: where sum(a)=inf and sum(a^2)<inf both hold (L26)
+ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP", 0.7))     # in (0.5, 1]
 
 EPS_START = 0.2
 EPS_END = float(os.environ.get("BM_EPS_END", 0.02))
@@ -105,7 +105,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e21"
+EXPERIMENT = "e22"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 

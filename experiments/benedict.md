@@ -21,6 +21,94 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E22 — The α exponent, the one constant never swept
+
+- **Question:** E21 finding 3 said the table never settles because the residual update and the
+  deciding margin are the same size. Worked out properly, that has a crossover: a cell moves by
+  |TD| / N^`ALPHA_EXP` per visit, the mean |TD| in late training is 0.31, and the margin that
+  decided s0's corner cycle was 0.001, so
+
+  | `ALPHA_EXP` | a cell keeps moving by more than 0.001 until |
+  |---|---|
+  | **0.7** (every experiment so far) | **N = 3 623 visits** |
+  | 0.85 | N = 853 |
+  | 1.0 | N = 310 |
+
+  And the budget per cell over 100 000 episodes (~25 M updates) is **8 790** on the coarse map's
+  474 used rows but only **4 960** on the fine map's 840. So at 0.7 the coarse map's busy cells
+  finish well past the crossover and settle, while a large share of the fine map's are still
+  above it when the run stops — which is a quantitative account of why the fine map churns and
+  the coarse one did not, and of why E18 needed 200 000 to make the coarse map churn at all.
+  `ALPHA_EXP` has been 0.7 since rung 1, picked because (0.5, 1] is where L26's two conditions
+  both hold, and **never swept**. At 1.0 the crossover falls to 310 visits and essentially every
+  used cell settles, with Σα = ∞ and Σα² < ∞ still satisfied — the other end of the same
+  admissible interval, not a hack.
+
+- **Change:** one constant becomes a switch. `ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP",
+  0.7))`; it is already in the `TrainLogger` hyperparameters, so the metadata needs nothing.
+  Three arms, all at exponent 1.0, all 100 000 episodes, five seeds, each paired against a run
+  that already exists:
+
+  | arm | switches | measured against |
+  |---|---|---|
+  | `a10` | `BM_ALPHA_EXP=1.0` | E20 `dist` (fine map, cold) |
+  | `a10warm` | `BM_ALPHA_EXP=1.0`, `BM_WARM=...` | E21 `warm` (fine map, warm start) |
+  | `a10coarse` | `BM_ALPHA_EXP=1.0`, `BM_ABLATE=target_dist` | the incumbent `c5_k03` |
+
+  `a10coarse` reuses what E20 proved about `distnull`: pinning digit 8 is a *bijective
+  relabeling*, so that arm is the incumbent's 12 800-row map exactly, and the α change can be
+  measured on it without a second code state. The control that was worthless as a
+  sample-dilution test is exactly the right tool here.
+
+- **Agent:** `benedict_task2`, otherwise E21's cell · entry and the one-line change are one
+  commit · suffixes `_e22_{a10,a10warm,a10coarse}_s<i>`.
+- **Training:** 15 jobs × 100 000, world seed 810731 — about 4 h 45 at E20's throughput.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731, at 20 000 / 40 000 / 70 000 / 100 000.
+  References: `dist` @100 k **91.92 ± 20.38**, `warm` @40 k **106.67 ± 9.70** (its peak) and
+  @100 k **82.53 ± 32.69**, incumbent @100 k **97.31 ± 12.54**.
+
+### Prediction (written before the run)
+
+1. **Mechanism, static and decidable before any evaluation: `a10` ends with ≤ 5 % thin margins
+   on 5/5 seeds** (`dist` @100 k: 17.4 / 3.9 / 6.2 / 1.9 / 2.6 %). **Refutation:** any seed
+   above 10 % → the residual update is not what leaves margins thin, and E21's finding 3 falls
+   with it.
+2. **The decay stops.** `a10` at 100 000 ≥ its own 70 000 value on 5/5 seeds, and `a10warm`
+   holds its peak: |100 k − 40 k| ≤ 10 crates on 5/5 (E21's `warm` lost 24 on the mean and 90
+   on s2). **Refutation:** still decaying on two or more seeds → the instability has another
+   cause, and the practical answer for this rung is early stopping rather than α.
+3. **It will be slower early, and I say so in advance.** α = 1/N is the sample-average rule,
+   which is right for a stationary target and too slow for a bootstrapped one: at N = 100 it is
+   0.0031 against 0.0123 at exponent 0.7, four times smaller. **`a10` @40 k below `dist`'s
+   76.87.** **Refutation:** `a10` is *faster* early too → α was never the binding constraint and
+   the framing is wrong in both directions.
+4. **`a10warm` @100 k ≥ 100** — the first configuration to still hold a good policy at 100 000.
+   **Refutation:** below 92.
+5. **`a10coarse` lands within ±6 of 97.31, with sd ≤ 12.54.** The incumbent's cells finish at
+   8 790 visits, well past even the 0.7 crossover, so α should barely matter there. This arm is
+   the safety control. **Refutation:** worse by more than 10 → exponent 1.0 is harmful in
+   general, and arms 1–2 are confounded by that rather than informative about the fine map.
+6. **Guards: `a10` and `a10coarse` clean (suicides ≤ 0.02, survived ≥ 0.98); `a10warm`
+   violates them anyway.** E21's `warm` ran 0.043–0.053 suicides from a parent at 0.003, and
+   that breach came from the transfer, not from α, so it should survive the α change unchanged.
+   Predicting a guard *failure* on purpose — if `a10warm` comes back clean, the breach was an
+   α interaction after all and E21's unexplained boldness has its answer.
+7. **`a10warm` at its best checkpoint ≥ 106.67**, and it must reproduce on the held-out seed
+   550731 (where `warm` @40 k gave 106.39) before it is claimed as anything.
+
+**Fallback, decided in advance so it is not a post-hoc rescue:** if prediction 3 overshoots and
+1.0 is so slow that `a10` is still climbing steeply at 100 000, the next value is **0.85**, not
+a return to 0.7 — its crossover is 853 visits, still far below the fine map's 4 960 budget,
+while allowing four times the early movement of 1.0.
+
+**Refutation condition for the whole entry:** `a10` still decays **and** its thin margins do not
+fall → the residual-update account is wrong, α is not the lever, and rung 2's answer is the one
+E21 already produced empirically: take `warm` at 40 000, whose 106.39 on the held-out seed 550731
+is the best validated number on this rung, accept that the checkpoint is a hyperparameter chosen
+on held-out data, and move to rung 3.
+
+---
+
 ## E21 — Is s0 slow or stuck? Longer training against a warm start
 
 - **Question:** E20 left the finer map unconverged at 100 000 and its five seeds split into two
