@@ -53,8 +53,11 @@ MODEL_FILE = os.path.join(
 #                   Digit 5 = 0 also means the escape branch never fires, so
 #                   this arm removes escape AS WELL -- the components nest.
 #   bomb_digit   -- digit 7 pinned at 0
+#   target_dist  -- E20: digit 8 pinned at 0. Same information as the pre-E20
+#                   map in a table of the same 64 000 rows, so it prices the
+#                   sample dilution on its own, with no new information at all.
 ABLATE = os.environ.get("BM_ABLATE", "")
-if ABLATE not in ("", "escape", "crate_target", "danger", "bomb_digit"):
+if ABLATE not in ("", "escape", "crate_target", "danger", "bomb_digit", "target_dist"):
     raise ValueError(
         f"BM_ABLATE={ABLATE!r} is not an ablation arm. A typo here would "
         "silently train the full agent under an arm's label -- fail instead."
@@ -79,8 +82,8 @@ NO_TARGET = 0
 SAFE = s.BOMB_TIMER + 1
 
 # 4 neighbour states + steps of grace on my own tile + target direction
-# + a bomb here would pay off
-FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2)
+# + a bomb here would pay off + how far the target is
+FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2, 5)
 N_STATES = int(np.prod(FEATURE_SIZES))
 
 POLICY_SEED = 20260731
@@ -150,21 +153,26 @@ def bomb_hits_crate(x: int, y: int, field: np.ndarray) -> bool:
     return any(field[cx, cy] == 1 for cx, cy in blast_coords(x, y, field))
 
 
-def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> int:
-    """First move of a shortest path to a tile satisfying `is_goal`.
+def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> tuple[int, int]:
+    """First move of a shortest path to a tile satisfying `is_goal`, and its length.
 
     Breadth-first over free tiles. Goal tiles are *tested but never expanded*,
     so the goal itself may be impassable -- a crate is a legitimate destination
     even though the agent cannot stand on it.
+
+    Returns `(direction, distance)`, `(NO_TARGET, 0)` when nothing is reachable.
+    E20 needs the distance as a digit of its own; taking it from this traversal
+    rather than a second one keeps the two digits describing one objective by
+    construction, so they cannot drift apart.
     """
 
-    queue = [((x, y), None)]
+    queue = [((x, y), None, 0)]
     visited = {(x, y)}
     head = 0
     width, height = field.shape
 
     while head < len(queue):
-        (cx, cy), first = queue[head]
+        (cx, cy), first, depth = queue[head]
         head += 1
 
         for action_idx, (dx, dy) in enumerate(DELTAS):
@@ -177,16 +185,16 @@ def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> int:
             # direction falls out of the search without reconstructing a path.
             step = action_idx if first is None else first
             if is_goal((nx, ny)):
-                return step + 1     # +1 because 0 is reserved for NO_TARGET
+                return step + 1, depth + 1      # +1: 0 is reserved for NO_TARGET
             if field[nx, ny] != 0:
                 continue            # wall or crate: testable, not passable
             visited.add((nx, ny))
-            queue.append(((nx, ny), step))
+            queue.append(((nx, ny), step, depth + 1))
 
-    return NO_TARGET
+    return NO_TARGET, 0
 
 
-def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
+def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> tuple[int, int]:
     """First step of a shortest path to whatever the agent is currently after.
 
     Coins while one is reachable, otherwise the nearest crate. The crate is the
@@ -205,7 +213,7 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
 
     coin_set = set(coins)
     if (x, y) in coin_set:
-        return NO_TARGET            # standing on it; collected this step
+        return NO_TARGET, 0            # standing on it; collected this step
 
     def is_coin(pos: tuple[int, int]) -> bool:
         return pos in coin_set
@@ -214,12 +222,12 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> int:
         return field[pos] == 1
 
     if coin_set:
-        step = bfs_first_step(x, y, field, is_coin)
+        step, dist = bfs_first_step(x, y, field, is_coin)
         if step != NO_TARGET:
-            return step
+            return step, dist
 
     if ABLATE == "crate_target":
-        return NO_TARGET    # E17: the E11 behaviour -- no target without a coin
+        return NO_TARGET, 0    # E17: the E11 behaviour -- no target without a coin
 
     return bfs_first_step(x, y, field, is_crate)
 
@@ -269,6 +277,30 @@ def escape_direction(x: int, y: int, field: np.ndarray, danger: np.ndarray,
 
     return NO_TARGET
 
+# Digit 8 (E20): 0 = not applicable (no target, or the danger branch), else the
+# bucket from `distance_bucket`.
+DIST_NONE = 0
+
+
+def distance_bucket(distance: int) -> int:
+    """How far away digit 6's target is, in four buckets.
+
+    The boundaries are measured rather than guessed. Over 40 greedy rounds of
+    the incumbent the target distance spends 26.4 % of its steps at 1, 23.2 % at
+    2, 28.8 % at 3-4 and 21.6 % at 5+, and splitting there cuts the within-row
+    spread of the distance from 1.28 tiles to 0.48. A uniform {1,2,3,4+} costs
+    the same number of rows and only reaches 0.64 -- the distance is not
+    concentrated near 1, which is what makes the wide top bucket the cheap one.
+    """
+
+    if distance <= 0:
+        return DIST_NONE
+    if distance <= 2:
+        return distance         # 1 and 2 are each their own bucket
+    if distance <= 4:
+        return 3
+    return 4
+
 
 def state_to_features(game_state: dict) -> int:
     """Map a game state onto a row index of the Q-table."""
@@ -306,13 +338,21 @@ def state_to_features(game_state: dict) -> int:
     # a coin four tiles away is irrelevant if the agent is dead in three.
     if own_danger and ABLATE != "escape":
         target = escape_direction(x, y, field, danger, occupied)
+        # E20: digit 8 is the *target* distance, and there is no target here.
+        # Digit 5 already carries the scarce resource while escaping.
+        target_dist = DIST_NONE
     else:
-        target = target_direction(x, y, field, game_state['coins'])
+        target, distance = target_direction(x, y, field, game_state['coins'])
+        target_dist = distance_bucket(distance)
+
+    if ABLATE == "target_dist":
+        target_dist = DIST_NONE
 
     features = neighbour_status(x, y, field, danger, occupied) + (
         own_danger,
         target,
         bomb_useful,
+        target_dist,
     )
     return encode(features)
 
