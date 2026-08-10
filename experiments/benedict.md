@@ -147,6 +147,141 @@ designed) but prediction 3 fails on *both* clauses (mean and spread unmoved) →
 rows were never the mechanism behind the seed spread, E18's diagnosis was a correlation
 mistaken for a cause, and reward shaping is not the lever for the remaining variance.
 
+### Result (measured 2026-08-10)
+
+The no-op control passed first: `BM_SHAPE` unset for 20 000 episodes reproduced
+`q_table_e16_c5_k03_s0__ep20000.npy` **byte for byte**, so the switch is inert and no
+pre-E19 number is affected by this commit.
+
+| arm | crates @40 k | crates @100 k | worst seed | bombs | crates/bomb | suicides | survived | think_max |
+|---|---|---|---|---|---|---|---|---|
+| baseline `c5_k03` | 92.80 ± 9.47 | **97.31 ± 12.54** | 82.21 | 38.23 | 2.55 | 0.003 | 0.997 | 0.14 |
+| `shape02` | 91.76 ± 7.33 | 88.13 ± 7.90 | 74.31 | 29.42 | 3.00 | 0.033 | 0.967 | 0.10 |
+| `shape10` | 15.63 ± 3.41 | 11.47 ± 2.14 | 8.04 | 3.64 | 3.15 | 0.190 | 0.810 | 0.02 |
+
+Per seed at 100 k — `shape02` 93.2 · 93.2 · **74.3** · 90.7 · 89.4 against the baseline's
+108.0 · 82.2 · **112.4** · 90.6 · 93.4. Seed-paired: `shape02` **−9.17, t = −1.10**
+(*not demonstrated*, and note the sign), `shape10` **−85.83, t = −13.87** (worse, decisively).
+
+**Finding 1 — the loss is entirely a bomb-rate loss, and it is unanimous.** `crates =
+bombs × crates-per-bomb` splits it cleanly: the bomb rate falls in **5/5** seeds (−5.5 % to
+−39.1 %) while crates-per-bomb *rises* in **5/5** (2.36–2.75 → 2.81–3.13). The shaped agent
+places better bombs and drops far fewer of them. Two unanimous 5/5 splits in opposite
+directions is a stronger statement than the insignificant mean.
+
+**Finding 2 — the potential fights the escape, and it is priced against the crate.**
+Read-only rollout of the *baseline* greedy policy, accumulating F = γΦ(s′) − Φ(s) at
+`BM_SHAPE` = 0.2 and bucketing by what the step did (60 rounds, seed 550731):
+
+| step type | n | mean F | F < 0 on |
+|---|---|---|---|
+| escaping (in a blast) | 6 674 | **−0.1155** | 66.8 % |
+| crate destroyed | 2 350 | **−0.2545** | 77.0 % |
+| plain safe step | 14 976 | **+0.0992** | 14.2 % |
+
+Per round that is −12.8 levied on being in a blast (against `KILLED_SELF` = −5, so **2.5
+deaths' worth of discouragement per round**) and −10.0 on the very steps that pay
+`CRATE_DESTROYED` = +0.3 — roughly a third of the crate reward cancelled at the moment it
+is earned. It telescopes globally, exactly as the theorem says; what it does *not* do is
+telescope back into the same rows. The entry's design note — "danger states keep the same Φ,
+because escaping is priced by `KILLED_SELF`" — was **wrong**, and this is the error worth
+keeping: Φ being unchanged *in* danger states does not make shaping absent *on* danger
+transitions. F fires on every step, and escaping means walking away from the crate you just
+bombed.
+
+**Finding 3 — shaping injects within-row noise of exactly the size it was meant to remove.**
+This is the general lesson. Q′(s,a) = Q(s,a) − Φ(s), so the offset cancels between actions
+**within a state** — that is the invariance argument. A *row* of this table is not a state,
+it is a bucket of states, and Φ varies inside the bucket. Measured over 40 rounds on the
+rows visited ≥ 30 times: the within-row sd of the BFS distance is **0.91 tiles**
+(visit-weighted), so the injected noise is `BM_SHAPE` × 0.91 =
+
+- **0.18 at `shape02`** — the same size as the median action margin (+0.15…+0.39) the
+  experiment set out to widen, and
+- **0.91 at `shape10`** — two to six times it, which is why 67–77 % of `shape10`'s
+  well-posed rows collapse to |margin| < 0.2 against 8–20 % in the baseline.
+
+The design was self-defeating in its own currency: every unit of margin the shaping adds
+between actions, it also adds as noise between the states sharing the row.
+
+**Finding 4 — the period-2 cycle E13 removed is back.** `loop_probe`, 20 rounds, greedy:
+baseline 1/20 and 3/20 rounds confined to ≤ 2 tiles (and those entered at step 296 — that is
+finishing, not giving up); `shape02` **17/20** and 10/20, entered at step 249 and 147;
+`shape10` **20/20 from step 14**. The action mix carries the signature — baseline is
+balanced (21/21/21/20 %), `shape02` runs UP+DOWN at 61 % against LEFT+RIGHT at 27 %, and
+`shape10` is a pure left–right oscillation (38.6 % / 38.3 %, `BOMB` 0.6 %). Flattened
+margins plus aliasing is precisely E13's mirror-image failure, re-created by the fix.
+
+#### Predictions scored
+
+1. **FAILED, refutation fired.** Follow rate 69.0 / 68.1 / 70.8 / 73.7 / 69.6 % — all five
+   below the 75 % refutation line, nowhere near the predicted ≥ 85 % (baseline 56–68 %).
+   The thin-margin fraction did fall (8–20 % → 1.8–10.6 %) but only s3 met the < 5 % clause.
+   By its own written terms: the shaping does not reach the rows the variance lives in.
+2. **Neither confirmed nor refuted — the clause was written badly.** Row 3007 follows DOWN
+   in **4/5** `shape02` seeds (s4 still overrides, and its margin got *worse*, −0.381 →
+   −0.518). I predicted 5/5 and set refutation at ≤ 3/5, leaving 4/5 in a dead zone. That is
+   a drafting fault, not a result. It is moot anyway: `shape10` gets **5/5** on this row and
+   is the worst agent ever measured on this rung, which severs the link between "row 3007
+   follows digit 6" and performance more decisively than any `shape02` number could.
+3. **FAILED; the mean clause's refutation fired.** 88.13 at 100 k, below the 92.8 line →
+   shaping costs crates. The variance clause did *not* refute (sd 7.90 < 10, down from
+   12.54) but the narrowing is the wrong kind: it pulled the **top** down, not the bottom
+   up. s1, the frozen seed, gained +11.0 — the one thing E18's diagnosis predicted — while
+   s2, the champion, lost **−38.1**. Worst seed 74.31, below the baseline's own 82.21.
+   Regression to the mean by destroying what the good seeds had learned.
+4. **CONFIRMED, by an order of magnitude.** 11.47 vs 88.13.
+5. **Mechanism CONFIRMED, threshold WRONG — and the refutation fired.** I predicted the
+   crate-consumption penalty would bite at 1.0 but not at 0.2, with the refutation line at
+   `shape02` bombs < 30. Measured **29.42**. It bit at both scales; I called the direction
+   and missed the magnitude. `shape10` bombs 3.64, as predicted (< 30).
+6. **Guards VIOLATED.** Suicides 0.033 (`shape02`) and 0.190 (`shape10`) against a ≤ 0.02
+   guard; survived 0.967 and 0.810 against ≥ 0.98. Both follow from finding 2 —
+   this is the first arm since E10 to make the agent worse at staying alive.
+   `think_max_ms` unchanged (0.10 / 0.02 vs 0.14), as expected: `callbacks.py` untouched.
+7. **CONFIRMED.** Byte-identical no-op control.
+
+**Whole-entry refutation:** did not fire as written (it required prediction 1 to *hold*),
+but the outcome is worse than the condition it described — prediction 1 failed *and* 3
+failed, so shaping moved neither the rows nor the result in the intended direction.
+
+**Verdict: SCHLECHTER — potential-based shaping on digit 6's goal is rejected at both
+scales.** `shape10` is decisively worse (t = −13.87); `shape02` is not demonstrated as worse
+on the mean (t = −1.10) but is worse on the worst seed, on suicides, on survival, on the
+bomb rate in 5/5 seeds, and on cycling in the rollout probe. Nothing here recommends
+carrying it forward. The incumbent stands: **`c5_k03` at 100 000 episodes, 97.31 ± 12.54.**
+
+**What E19 is worth keeping for.** The negative result is more useful than the positive one
+would have been, because finding 3 is a *design rule* rather than a fact about this
+potential: **in an aliased tabular learner, any state-dependent shaping term is only safe
+while its within-row variation stays below the action margins it is meant to widen.** Here
+sd(Φ)/SHAPE = 0.91 tiles against margins of 0.15–0.39, so no scale of `BM_SHAPE` could have
+worked — too small to matter, or large enough to drown the row. That kills shaping on *any*
+distance-like potential for this feature map, not just this one.
+
+It also points at the successor. If the problem is that Φ varies inside a row, the fix is to
+stop hiding it: put a coarse distance-to-target digit **in the state** (0 / 1 / 2 / 3+),
+which cuts the buckets along exactly the dimension Φ varies on, costs a factor of 4 in table
+size (12 800 → 51 200), and needs no reward change at all. That is E20, and it is a better
+motivated experiment than the D₄ canonicalisation E18 left on the list — D₄ merges states to
+fight sample efficiency, whereas the measured problem here is that states are merged *too
+aggressively already*.
+
+#### Hazard found while analysing this run (no result affected)
+
+A diagnostic that drives `BombeRLeWorld` with `train=True` while `BM_MODEL_SUFFIX` names a
+**real** checkpoint will silently overwrite that checkpoint: `setup_training` registers
+`atexit.register(save_table, self)`, and `MODEL_FILE` resolves to the named table. It
+happened to `q_table_e16_c5_k03_s2__ep100000.npy` during this analysis. Restored from
+`q_table_e18_ext_s2__ep100000.npy` — E18's `ext` arm is a byte-identical replica of
+`c5_k03` at 100 k, verified here on the four untouched seeds (s0, s1, s3, s4 all `cmp`-clean)
+— and confirmed end-to-end by re-running the 300-round evaluation: **112.37 crates, 40.90
+bombs, round-for-round identical to the committed CSV in 300/300 rounds**. No recorded number
+changed. The general lesson is the same shape as E18's: the training path writes to disk by
+default, so a *probe* must either use a scratch suffix or `train=False`. A guard worth
+adding: refuse to `save_table` onto a path that already existed at `setup_training` time and
+was not created by this run.
+
 ---
 
 ## E18 — Train longer, and the ε floor below 0.02
