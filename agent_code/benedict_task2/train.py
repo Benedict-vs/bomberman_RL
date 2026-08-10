@@ -28,7 +28,7 @@ from typing import List
 import numpy as np
 
 import events as e
-from .callbacks import state_to_features, ACTIONS, MODEL_FILE, N_STATES
+from .callbacks import state_to_features, ACTIONS, MODEL_FILE, N_STATES, DELTAS
 
 try:
     from tools.trainlog import TrainLogger
@@ -80,12 +80,20 @@ RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 0))
 ALPHA_MODE = os.environ.get("BM_ALPHA", "visit")    # "visit" | "const"
 EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const"
 
+# E19: potential-based shaping, F = γ·Φ(s') − Φ(s), with Φ(s) = −BM_SHAPE · (BFS
+# distance to the nearest reachable coin, else the nearest crate) -- digit 6's goal
+# set, safe branch. Ng et al. 1999: a state-only potential leaves the optimal policy
+# unchanged; the γ inside F is the one the L26 board dropped, and Φ(terminal) = 0 is
+# what keeps the telescope exact in episodic play. 0 -- the default, and every
+# experiment before E19 -- skips all of it, including the BFS.
+SHAPE = float(os.environ.get("BM_SHAPE", 0))
+
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
 TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e17"
+EXPERIMENT = "e19"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
@@ -97,6 +105,7 @@ def setup_training(self):
     self.eps = EPS_START
     self.gamma = GAMMA
     self.visits = np.zeros((N_STATES, len(ACTIONS)), dtype=np.int64)
+    self.last_phi = None
 
     # Per-episode accumulators for the learning curve. evaluate.py measures the
     # finished agent; this is what shows whether it converged, and when.
@@ -110,7 +119,7 @@ def setup_training(self):
         hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_exp": ALPHA_EXP,
                      "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END,
                      "eps_decay": EPS_DECAY,
-                     "gamma": GAMMA,
+                     "gamma": GAMMA, "shape": SHAPE,
                      "train_seed": TRAIN_SEED + RUN_INDEX, "run_index": RUN_INDEX,
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
@@ -164,7 +173,17 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     s_next = state_to_features(new_game_state)
     a = ACTIONS.index(self_action)
 
-    td_target = reward + self.gamma * np.max(self.q[s_next])
+    # E19: shaping enters the update only, never the logged reward. The cache saves
+    # one BFS per step: last step's new state is this step's old state.
+    shaping = 0.0
+    if SHAPE:
+        phi_old = self.last_phi if self.last_phi is not None else phi(old_game_state)
+        phi_new = phi(new_game_state)
+        self.last_phi = phi_new
+        shaping = self.gamma * phi_new - phi_old
+
+    td_target = reward + shaping + self.gamma * np.max(self.q[s_next])
+
     td_error = td_target - self.q[s, a]
     self.q[s, a] += learning_rate(self, s, a) * td_error
 
@@ -178,12 +197,23 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     a = ACTIONS.index(last_action)
     reward = reward_from_events(self, events)
 
-    # Q(terminal, .) = 0, so no bootstrap term. Leaving it in would teach the
-    # agent that dying is as good as surviving -- step (0) of L26's algorithm.
-    td_target = reward
+    # E19: transition into terminal -- Phi(terminal) = 0, so F = -Phi(s_last).
+    # Recomputed, never taken from the cache. The cache is correct exactly when
+    # the agent *died*: `send_game_events` (environment.py:468) skips a dead
+    # agent, so no step update fired and it still holds Phi of the state this
+    # update touches. On a *surviving* round the step update did fire and left
+    # Phi of the post-step state behind, while the cell updated here is the
+    # pre-step one. Probed over 40 rounds with a trained table: exact on 23/23
+    # deaths, wrong on 16 of 17 survivals, by up to 0.4 at SHAPE = 0.2 -- and
+    # survival is the common case (>= 0.987), so this was the usual path.
+    shaping = -phi(last_game_state) if SHAPE else 0.0
+    self.last_phi = None
+
+    td_target = reward + shaping
+
     td_error = td_target - self.q[s, a]
     self.q[s, a] += learning_rate(self, s, a) * td_error
-    
+
     round_no = last_game_state["round"]
     if round_no % SAVE_EVERY == 0:
         save_table(self)
@@ -222,3 +252,45 @@ def learning_rate(self, s: int, a: int) -> float:
 
 def reward_from_events(self, events: List[str]) -> float:
     return sum(REWARDS.get(ev, 0.0) for ev in events) + STEP_COST
+
+def _bfs_distance(x: int, y: int, field, is_goal) -> int | None:
+    """Steps until `is_goal` fires. Goals are tested but not expanded, the same
+    rule `callbacks.bfs_first_step` uses, so a crate is a valid destination.
+    No bounds check: only free tiles are expanded and the arena is walled all
+    round, so the search never reaches an index off the board. Only differences
+    of Phi enter the update, so the unit (steps) needs no normalisation."""
+
+    queue = [(x, y, 0)]
+    visited = {(x, y)}
+    head = 0
+    while head < len(queue):
+        cx, cy, d = queue[head]
+        head += 1
+        for dx, dy in DELTAS:
+            nx, ny = cx + dx, cy + dy
+            if (nx, ny) in visited:
+                continue
+            if is_goal((nx, ny)):
+                return d + 1
+            if field[nx, ny] != 0:
+                continue
+            visited.add((nx, ny))
+            queue.append((nx, ny, d + 1))
+    return None
+
+
+def phi(game_state: dict) -> float:
+    """−SHAPE · distance to digit 6's goal. Deliberately the safe branch only --
+    danger states keep the same Φ (any state function is a valid potential; the
+    escape behaviour is priced by KILLED_SELF, not by shaping)."""
+    x, y = game_state["self"][3]
+    field = game_state["field"]
+    coins = set(game_state["coins"])
+    if (x, y) in coins:
+        return 0.0
+    d = None
+    if coins:
+        d = _bfs_distance(x, y, field, lambda p: p in coins)
+    if d is None:
+        d = _bfs_distance(x, y, field, lambda p: field[p] == 1)
+    return -SHAPE * (d or 0)

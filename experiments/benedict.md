@@ -21,6 +21,134 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E19 — Potential-based shaping on digit 6's own goal
+
+- **Question:** E17 showed that no feature is redundant, E18 that neither more episodes nor
+  a lower ε floor closes the 12.5-crate seed spread — 200 000 episodes *re-rolled* the
+  near-tie rows instead of settling them (best seed 112 → 5). What is left to change is the
+  shape of the reward, not the length of the run. Made concrete: in the **512 rows where
+  the question is well posed** (safe, digit 6 points somewhere, that neighbour reads
+  `NB_CLEAR`, so the move is legal), the greedy action follows digit 6 in only **56–68 %**
+  of the rows the run ever touched, and 8–20 % of those rows are decided by a margin below
+  0.2 — the noise the per-cell α leaves behind at the end of training. Does a potential
+  shaped on digit 6's *own* goal set widen those margins, and does that convert into crates?
+
+  Baseline, the incumbent `e16_c5_k03` at 100 000 episodes (static table statistics, no new
+  games; `scratchpad/benedict/target_follow.py`):
+
+  | seed | crates | follows digit 6 | mean margin | thin (\|m\| < 0.2) | row 3007 |
+  |---|---|---|---|---|---|
+  | s0 | 107.98 | 68.1 % | +0.034 |  8.0 % | DOWN ✓ (+1.441) |
+  | s1 |  82.21 | 56.0 % | −0.115 | 19.8 % | RIGHT ✗ (−0.127) |
+  | s2 | 112.37 | 63.8 % | −0.372 |  8.6 % | DOWN ✓ (+0.092) |
+  | s3 |  90.60 | 58.3 % | −0.332 | 14.8 % | DOWN ✓ (+0.438) |
+  | s4 |  93.38 | 62.6 % | −0.039 | 11.3 % | RIGHT ✗ (−0.381) |
+
+  Row 3007 = (UP `BLOCKED`, RIGHT `CLEAR`, DOWN `CLEAR`, LEFT `BLOCKED`, safe, target DOWN,
+  bomb useful): the top-left corner spawn from the E18 diagnosis, entered in ~21 % of
+  rounds. The two seeds that override it are the two weakest. Across the five seeds the
+  follow rate and the crate count correlate at **r = 0.86 (t = 2.94, df = 3)** — that is
+  *below* the 95 % threshold, so it is the motivation for this experiment, not evidence for
+  its conclusion.
+
+- **Change:** training only. `BM_SHAPE` (default 0 — every experiment before this one,
+  bit-for-bit, including the BFS which is then never called) adds
+  **F = γ·Φ(s′) − Φ(s)** to the TD target, with
+
+  > Φ(s) = −`BM_SHAPE` · (BFS steps to the nearest reachable coin, else to the nearest
+  > crate),
+
+  i.e. the same goal set and the same "goals are tested but never expanded" rule
+  `target_direction` uses, evaluated on the *safe* branch only — danger states keep the
+  same Φ, because escaping is priced by `KILLED_SELF` and not by shaping. Φ(terminal) = 0,
+  so the terminal update gets F = −Φ(s_last). Shaping enters the **update only**; the
+  logged episode reward stays unshaped, so the learning curves remain comparable with
+  E10–E18. `callbacks.py` is untouched — nothing in the evaluated path changes.
+
+  Two bugs found and fixed before the run, both worth recording because both were invisible
+  by reading:
+
+  1. The terminal term was first written to reuse the cached Φ of the previous step. That
+     cache is correct exactly when the agent **dies** — `send_game_events`
+     (`environment.py:468`) skips a dead agent, so no step-update fires and the cache still
+     holds Φ of the state `end_of_round` updates. On a *surviving* round the step-update
+     does fire and leaves the cache holding Φ of the **post**-step state, while the cell
+     being updated is the pre-step one. Probed on 40 rounds with a trained table: exact on
+     23/23 deaths, **wrong on 16 of 17 survivals**, by up to 0.4 at `BM_SHAPE` = 0.2 — and
+     survival is the common case here (≥ 0.987). Φ is now recomputed in `end_of_round`.
+  2. `BM_SHAPE` was missing from the `TrainLogger` hyperparameters, so the arm's defining
+     parameter would not have appeared in any `.meta.json` — the one thing that makes a
+     training log reproducible from the commit.
+
+- **Honesty note on the theorem.** Ng et al. 1999 guarantees policy invariance *for the MDP
+  the agent learns in*. This agent learns in a 12 800-row aliasing of the game, where
+  genuinely different situations share a row; there the guarantee does **not** hold and the
+  shaping *does* move the fixed point. That is the entire hypothesis — it should move it
+  towards digit 6 — but it means E19 has to be argued as a deliberate bias, not as free
+  acceleration. If crates rise, the defensible sentence is "shaping biased the aliased
+  solution towards the BFS target and that was worth N crates", never "shaping only sped up
+  convergence to the same policy".
+
+- **Agent:** `benedict_task2`, otherwise E16's winning cell (coin 5, crate 0.3, γ = 0.99,
+  ε floor 0.02, 100 000 episodes) · entry, switch and both fixes are **one commit**, so the
+  hash every eval `.meta.json` stamps *is* the code under test.
+- **Training:** two arms × five seeds × 100 000 episodes, world seed 810731, plus a
+  20 000-episode no-op control. Measured cost of the extra BFS: 65 → **67 µs per step
+  (+3 %)** — on `classic` the crate branch terminates after one or two expansions — so the
+  batch should cost about what E18's did (~3 h 15).
+
+  | arm | `BM_SHAPE` | reasoning |
+  |---|---|---|
+  | `shape02` | 0.2 | a step towards the goal nets ≈ +0.2, twice the step cost and above every bad margin in the table (0.127 / 0.381) |
+  | `shape10` | 1.0 | deliberately over-strong: ≈ ±1.0 per step, more than three times the crate reward — brackets the sweet spot from above |
+  | `noop`    | unset | 20 000 episodes, s0 — must reproduce `q_e16_c5_k03_s0__ep20000` byte for byte |
+
+- **Measurement:** 300 rounds, ε = 0, seed 20260731, at 40 000 and 100 000. Labels
+  `benedict_q_e19_{shape02,shape10}_s{0..4}__ep{40000,100000}__task2`.
+  Baseline **c5_k03 @100 k: 97.31 ± 12.54 crates, 7.04 score**.
+
+### Prediction (written before the run)
+
+1. **The follow rate rises to ≥ 85 % in all five `shape02` seeds** (baseline 56–68 %) and
+   the thin-margin fraction drops below 5 % (baseline 8–20 %). This is a *static* check on
+   the tables, decidable before a single evaluation round is played. **Refutation:** any
+   seed still below 75 % → the shaping never reaches the rows the variance lives in, the
+   margin theory of the spread dies with it, and D₄ canonicalisation (E20) becomes the next
+   lever instead of shaping.
+2. **Row 3007 follows DOWN in 5/5 seeds** (baseline 3/5). The weaker, one-row version of 1,
+   on the row E18 pinned. **Refutation:** ≤ 3/5.
+3. **Crates, `shape02`: 100–110 with sd < 5** (baseline 97.31 ± 12.54) and **worst seed
+   ≥ 90** (baseline 82.21). The claim is about the *spread* first and the mean second.
+   **Refutation of the variance claim:** sd ≥ 10. **Refutation of the mean claim:** below
+   92.8, i.e. shaping costs crates outright.
+4. **`shape10` ≤ `shape02`.** At Φ-scale 1.0 the shaping dominates every real reward except
+   the coin, so the aliased fixed point is dictated by the BFS rather than by what bombing
+   pays. **Refutation:** `shape10` beats `shape02` by more than 5 crates → the sweet spot
+   lies above 1.0 and the margin-scale argument that picked 0.2 was wrong.
+5. **The crate-consumption discontinuity is the main risk, and I predict it bites at 1.0
+   but not at 0.2.** Blowing up the crate you were walking towards moves Φ from −0.2·1 to
+   −0.2·d′; at d′ = 3 that is F = −0.394 on exactly the step that pays +0.3 per crate. In
+   the true MDP it is repaid while walking to the next crate — that *is* the telescope —
+   but the repayment accrues to *other* rows, and under aliasing it need not route back to
+   the row that chose `BOMB`. Operational form: **bombs/episode ≥ 35 in `shape02`**
+   (baseline 33.1–41.7), and **below 30 in `shape10`**. **Refutation:** `shape02` below 30
+   → the potential is punishing the action it was built to support, and E20 has to give Φ a
+   term in the remaining crate count rather than abandon shaping.
+6. **Guards:** suicides ≤ 0.02, survived ≥ 0.98 at every reported checkpoint, both arms.
+   **`think_max_ms` unchanged** — `callbacks.py` is not touched, so any movement here means
+   something leaked into the evaluation path.
+7. **No-op control:** `BM_SHAPE` unset, 20 000 episodes, s0 → a table byte-identical to
+   `q_table_e16_c5_k03_s0__ep20000.npy`. **Refutation:** any difference at all → the switch
+   is not inert and every pre-E19 number is in question. This is the check the E18 incident
+   would have failed.
+
+**Refutation condition for the whole entry:** prediction 1 holds (the follow rate rises as
+designed) but prediction 3 fails on *both* clauses (mean and spread unmoved) → the near-tie
+rows were never the mechanism behind the seed spread, E18's diagnosis was a correlation
+mistaken for a cause, and reward shaping is not the lever for the remaining variance.
+
+---
+
 ## E18 — Train longer, and the ε floor below 0.02
 
 - **Question:** two loose ends, one batch. (1) The winner's curve at 100 000 is "still
