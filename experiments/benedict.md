@@ -21,6 +21,86 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E21 — Is s0 slow or stuck? Longer training against a warm start
+
+- **Question:** E20 left the finer map unconverged at 100 000 and its five seeds split into two
+  populations. s2/s3/s4 filled ~800 of their ~840 used rows and are still climbing; s0 and s1
+  filled ~485 — about what the *coarse* map fills — and s0 has 17.4 % near-ties, a curve that
+  rose and fell (65.8 → 57.8 → 59.9), and a greedy cycle that turns on a **0.001** margin. Two
+  different fixes follow from that, and they make different predictions, so this entry runs
+  both: **more episodes** (if the empty rows are merely unvisited) against **a better
+  starting point** (if they are visited but stuck in a near-tie the per-cell α can no longer
+  move).
+- **Change:** `train.py` only; `callbacks.py` is untouched, so the evaluated path is identical
+  to E20's.
+
+  | arm | switch | rounds |
+  |---|---|---|
+  | `ext` | — | 300 000 → checkpoints to **200 000** |
+  | `warm` | `BM_WARM=_e16_c5_k03_s<i>__ep100000` | 100 000 |
+
+  `warm` initialises every fine row from the coarse row it was split from. The distance digit
+  is the least significant, so the children of parent *i* are rows 5*i*…5*i*+4 and `np.repeat`
+  is exactly the right map — verified on 20 000 random states, `encode(f + (d,)) ==
+  encode_coarse(f) · 5 + d` without exception. Each seed warm-starts from **its own** coarse
+  seed, keeping the pairing intact (note s0 inherits from the coarse map's *best* seed, 108.0).
+
+  **The pseudo-count is not optional.** α = 1/N(s,a)^0.7 is exactly **1** on a cell's first
+  update, so a transferred value would be overwritten outright the first time the cell is
+  touched and the arm would be a no-op with extra I/O. `BM_WARM_N` (default 100) credits the
+  transferred cells with 100 prior visits, i.e. α starts at 0.0398 instead of 1. Only rows
+  whose *parent* carried value are credited — 2 360 of 64 000 — so genuinely new rows keep a
+  cold start and are not slowed to a twenty-fifth of their learning rate.
+
+- **Agent:** `benedict_task2`, otherwise E20's cell exactly · entry and code are one commit.
+- **Training:** five seeds, world seed 810731, new suffixes (`_e21_ext_s<i>`, `_e21_warm_s<i>`)
+  — the E20 tables are not overwritten, and the new `save_table` guard would refuse anyway.
+  Roughly 15 job-units of 100 000 against E20's 10, so ~5 h.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731. `ext` at 150 000 and 200 000 (≤ 100 000 is
+  a byte-identical rerun of E20 and needs no evaluation); `warm` at 20 000 / 40 000 / 70 000 /
+  100 000. References: **`dist` @100 k 91.92 ± 20.38** (per seed 59.9 · 88.5 · 93.3 · 104.3 ·
+  113.6) and the **incumbent `c5_k03` @100 k 97.31 ± 12.54**.
+
+### Prediction (written before the run)
+
+1. **`ext` does *not* rescue s0: below 80 at 200 000** (it is at 59.9). The diagnosis says its
+   rows are decided by margins of 0.001–0.05, and re-rolling those is a coin flip however long
+   it runs. **Refutation:** s0 ≥ 90 → it was slow rather than stuck, the half-filled-table
+   reading is wrong, and episode count is the whole story.
+2. **`ext` keeps paying on s2/s3/s4: their mean ≥ 110 at 200 000** (now 103.7). **Refutation:**
+   they *fall* → the fine map has E18's re-rolling pathology too, 100 000 was already near its
+   optimum, and "unconverged, not worse" was the wrong reading of E20.
+3. **`warm` fills the table — static check, decidable before any evaluation.** Rows with
+   |Q|max > 2 ≥ 780 on 5/5 seeds at 100 000 (`dist`: 477 · 495 · 810 · 788 · 811).
+   **Refutation:** any seed below 600 → the transfer did not take, and the first suspect is
+   `BM_WARM_N` being too small to survive the ε = 0.2 phase.
+4. **`warm` @100 k beats `dist` @100 k on both moments: mean ≥ 100 and sd < 10** (91.92 ±
+   20.38), because the seeds that gain are the two that were half-empty. **Refutation:** mean
+   below 92 → warm-starting does not help and the empty-row diagnosis is wrong.
+5. **The decisive one: `warm` @100 k ≥ 97.31, the coarse table it started from.** If a map that
+   is strictly finer, handed its parent's converged values, still cannot beat the parent, then
+   the distance digit does not pay for itself under any training budget and the E20 line ends
+   here. **Refutation:** below 97.31 → rung 2 feature work is finished and the incumbent ships.
+6. **`warm` converges faster: `warm` @40 k ≥ `dist` @70 k (82.26).**
+7. **Replication:** `q_table_e21_ext_s<i>__ep100000.npy` byte-identical to
+   `q_table_e20_dist_s<i>__ep100000.npy`. Checkpoints are extra writes, not extra updates, so a
+   longer run must reproduce a shorter one exactly. **Refutation:** any difference → the
+   checkpoint machinery perturbs learning and every curve in this ledger is suspect.
+8. **Guards:** suicides ≤ 0.02, survived ≥ 0.98, `think_max_ms` ≤ 0.30 on every reported
+   checkpoint of both arms.
+
+**Known risk, stated in advance:** `warm` still starts at ε = 0.2 and decays on the same
+schedule, so the transferred values face 20 % random actions while α is at its smallest. That
+is deliberate — changing ε as well would make a null result unattributable — but if
+prediction 3 fails, the ε schedule is the second suspect after `BM_WARM_N`.
+
+**Refutation condition for the whole entry:** `warm` fails prediction 5 **and** `ext` fails
+both 1 and 2 → neither route fills the finer map, E20's measured resolution gain is not
+reachable in practice, and rung 2 is done: the incumbent ships and the next work is rung 3
+(`GOT_KILLED` into the reward table, then the transfer floor against `peaceful_agent`).
+
+---
+
 ## E20 — The target distance as a feature digit
 
 - **Question:** E19's finding 3 was that Φ varies *inside* a row — visit-weighted sd **1.28

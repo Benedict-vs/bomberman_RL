@@ -60,7 +60,7 @@ SAVE_EVERY = 100
 # curve can be measured at eps = 0 afterwards instead of read off the training
 # log. Learning is untouched -- these are extra writes, not extra updates, so
 # every checkpoint is exactly the table a run of that length would have left.
-CHECKPOINTS = (20_000, 40_000, 70_000, 100_000)
+CHECKPOINTS = (20_000, 40_000, 70_000, 100_000, 150_000, 200_000, 300_000)
 
 # The two swept in E16. Both were guesses -- the coin in E01, the crate in E10 --
 # and E15's change of gamma rescaled every reward against the step cost by a
@@ -88,12 +88,24 @@ EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const"
 # experiment before E19 -- skips all of it, including the BFS.
 SHAPE = float(os.environ.get("BM_SHAPE", 0))
 
+# E21: coarse-to-fine value transfer. Names a table the way BM_MODEL_SUFFIX does;
+# empty -- the default, and every experiment before E21 -- starts from zero.
+WARM_SUFFIX = os.environ.get("BM_WARM", "")
+
+# Pseudo-visits the transferred cells are credited with. Not optional: alpha =
+# 1/N^0.7 is exactly 1 on a cell's first update, so without this the first visit
+# would overwrite the transferred value outright and the arm would be a no-op
+# with extra I/O. 100 puts the starting alpha at 0.0398.
+WARM_N = int(os.environ.get("BM_WARM_N", 100))
+
+
+
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
 TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e20"
+EXPERIMENT = "e21"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
@@ -105,6 +117,8 @@ def setup_training(self):
     self.eps = EPS_START
     self.gamma = GAMMA
     self.visits = np.zeros((N_STATES, len(ACTIONS)), dtype=np.int64)
+    if WARM_SUFFIX:
+        warm_start(self)
     self.last_phi = None
     
     # E20 post-mortem: a diagnostic that drives BombeRLeWorld with train=True
@@ -129,6 +143,7 @@ def setup_training(self):
                      "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END,
                      "eps_decay": EPS_DECAY,
                      "gamma": GAMMA, "shape": SHAPE,
+                     "warm": WARM_SUFFIX, "warm_n": WARM_N,
                      "train_seed": TRAIN_SEED + RUN_INDEX, "run_index": RUN_INDEX,
                      "step_cost": STEP_COST,
                      "rewards": {k: v for k, v in REWARDS.items()},
@@ -267,6 +282,38 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # After logging, so the recorded epsilon is the one that generated the episode.
     self.eps = max(EPS_END, self.eps * EPS_DECAY)
+
+
+def warm_start(self) -> None:
+    """Initialise this table from a coarser one, each row from its parent.
+
+    E20 measured the deficit this addresses: the distance digit splits every old
+    row into five, and on two seeds of five the run filled only ~485 of its ~840
+    used rows -- a 64 000-row map carrying the information of a 12 800-row one.
+    The coarse table already knows what those states are worth up to the
+    distinction the new digit draws, so a child starts from its parent rather
+    than from zero.
+
+    The new digit is the least significant, so the children of parent i are rows
+    5i..5i+4 and `np.repeat` is exactly that map. Only cells whose parent carried
+    value get the pseudo-count: crediting the rest would start genuinely new rows
+    at a twenty-fifth of their learning rate for nothing.
+    """
+
+    coarse_file = os.path.join(os.path.dirname(MODEL_FILE),
+                               f"q_table{WARM_SUFFIX}.npy")
+    coarse = np.load(coarse_file)
+    factor, remainder = divmod(N_STATES, len(coarse))
+    if remainder:
+        raise ValueError(
+            f"{coarse_file} has {len(coarse)} rows, which does not divide the "
+            f"current {N_STATES} -- it is not a parent of this feature map.")
+
+    self.q[:] = np.repeat(coarse, factor, axis=0)
+    self.visits[np.repeat(np.abs(coarse).sum(axis=1) > 0, factor)] = WARM_N
+    self.logger.info(f"Warm start from {coarse_file}: {len(coarse)} rows -> "
+                     f"{N_STATES}, {int((np.abs(coarse).sum(axis=1) > 0).sum())} "
+                     f"parents with value, pseudo-count {WARM_N}")
 
 
 def learning_rate(self, s: int, a: int) -> float:
