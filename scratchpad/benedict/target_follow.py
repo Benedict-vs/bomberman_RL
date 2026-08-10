@@ -39,12 +39,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from agent_code.benedict_task2.callbacks import (  # noqa: E402
-    ACTIONS, FEATURE_SIZES, NB_CLEAR, NO_TARGET,
+    ACTIONS, FEATURE_SIZES, NB_BLOCKED, NB_CLEAR, NO_TARGET,
 )
 
-# The row E18 pinned: top-left corner spawn (UP and LEFT walled), safe, a crate
-# in bomb range, digit 6 pointing DOWN. Entered in ~21 % of rounds.
-CORNER_ROW = 3007
+# The state E18 pinned: top-left corner spawn (UP and LEFT walled), safe, a
+# crate in bomb range, digit 6 pointing DOWN. Entered in ~21 % of rounds. Given
+# as digits rather than as the index 3007 it had before E20 -- appending the
+# distance digit multiplied every index by 5, and a hardcoded number would have
+# gone on decoding to something plausible instead of failing.
+CORNER_DIGITS = (NB_BLOCKED, NB_CLEAR, NB_CLEAR, NB_BLOCKED, 0, 3, 1)
 
 BASELINE = "agent_code/benedict_task2/q_table_e16_c5_k03_s{i}__ep100000.npy"
 
@@ -67,10 +70,15 @@ def well_posed_rows() -> np.ndarray:
 
     rows = []
     for index in range(int(np.prod(FEATURE_SIZES))):
-        *neighbours, danger, target, _bomb = decode(index)
+        digits = decode(index)
+        neighbours, danger, target = digits[:4], digits[4], digits[5]
         if danger != 0 or target == NO_TARGET:
             continue
         if neighbours[target - 1] != NB_CLEAR:
+            continue
+        # E20 appended a distance digit; 0 there means "no target", which
+        # contradicts target != NO_TARGET and marks an unreachable row.
+        if len(FEATURE_SIZES) > 7 and digits[7] == 0:
             continue
         # `bfs_first_step` returns action_idx + 1, so target - 1 indexes both
         # the neighbour digits and ACTIONS -- DELTAS and ACTIONS share an order.
@@ -91,13 +99,20 @@ def report(path: str, rows: np.ndarray) -> dict:
     others[np.arange(len(indices)), targets] = -np.inf
     margin = target_q - others.max(axis=1)
 
-    corner = q[CORNER_ROW]
-    corner_target = decode(CORNER_ROW)[5] - 1
+    corner_rows = [i for i in range(int(np.prod(FEATURE_SIZES)))
+                   if decode(i)[:7] == CORNER_DIGITS
+                   and (len(FEATURE_SIZES) == 7 or decode(i)[7] != 0)]
+    # Pick the busiest variant: before E20 there is one row, after it there is
+    # one per distance bucket and the agent is at d = 2 in ~78 % of visits.
+    corner_row = max(corner_rows, key=lambda i: np.abs(q[i]).sum())
+    corner = q[corner_row]
+    corner_target = CORNER_DIGITS[5] - 1
     corner_rest = corner.copy()
     corner_rest[corner_target] = -np.inf
 
     return {
         "name": Path(path).stem.replace("q_table_", ""),
+        "corner_row": corner_row,
         "touched": len(indices),
         "follows": float((margin > 0).mean() * 100),
         "mean_margin": float(margin.mean()),
@@ -142,7 +157,8 @@ def main() -> int:
                   f"mean margin {r['mean_margin']:+7.3f}  "
                   f"median {r['median_margin']:+7.3f}  "
                   f"thin {r['thin']:5.1f} %  "
-                  f"row3007 {r['corner_action']:5s} ({r['corner_margin']:+.3f})")
+                  f"corner[{r['corner_row']:5d}] {r['corner_action']:5s} "
+                  f"({r['corner_margin']:+.3f})")
 
     follows = [r["follows"] for r in results]
     print(f"\nfollow rate: min {min(follows):.1f} %  max {max(follows):.1f} %  "

@@ -122,6 +122,108 @@ the within-row spread E19 measured is not load-bearing, and feature work on this
 done. In that case the next move is not another digit but **rung 3** — `GOT_KILLED` into the
 reward table and the transfer floor against `peaceful_agent`.
 
+### Result (measured 2026-08-10)
+
+**The arm is not converged at 100 000, and that is the finding.** Crates per seed along the
+whole curve (20 k and 70 k evaluated after the fact, the checkpoints were already on disk):
+
+| episodes | s0 | s1 | s2 | s3 | s4 | mean |
+|---|---|---|---|---|---|---|
+| 20 000 | 4.7 | 43.2 | 86.4 | 54.3 | 88.4 | 55.40 ± 34.53 |
+| 40 000 | 65.8 | 80.9 | 87.2 | 66.9 | 83.6 | 76.87 ± 9.89 |
+| 70 000 | 57.8 | 71.2 | 79.6 | 97.9 | 104.8 | 82.26 ± 19.25 |
+| **100 000** | **59.9** | **88.5** | **93.3** | **104.3** | **113.6** | **91.92 ± 20.38** |
+| baseline @100 k | 108.0 | 82.2 | 112.4 | 90.6 | 93.4 | 97.31 ± 12.54 |
+
+Paired against the baseline at 100 k: **−5.39, t = −0.43 — not demonstrated**, with the
+per-seed diffs running −48.1 / +6.3 / −19.1 / +13.7 / +20.2. Guards all held: suicides
+≤ 0.013, survived ≥ 0.987, `think_max_ms` ≤ 0.09 (the table is 3.1 MB and costs nothing).
+The bomb rate recovered to 39.17 against the baseline's 38.23 — E19's collapse does not
+recur, as expected, since nothing about the reward changed.
+
+**Finding 1 — the predicted data-hunger signature is exactly right, and it has not
+finished.** `dist` starts far below the incumbent (76.87 vs 92.80 at 40 k) and gains
+**+15.05** from 40 k to 100 k where the incumbent gains **+4.51**; the last 30 000 episodes
+alone are worth +9.7. Four of five seeds are still climbing at the point the run stops, and
+**s4 reaches 113.6 — above the best single table ever measured on this rung** (the
+incumbent's s2 at 112.4) and within three crates of `rule_based_agent`'s 116.4. Stopping at
+100 000 was a decision inherited from E16's *converged* map; it is the wrong stopping rule
+for this one.
+
+**Finding 2 — `distnull` was not a control, and it could not have been.** It reproduced the
+incumbent **exactly**, all five seeds, every metric. That is not a coincidence and not a
+bug: pinning digit 8 to 0 maps index → 5 · index, a bijection, so the table is five times
+larger and the other four fifths are *never touched*. Verified directly —
+`q_e20_distnull_s{i}[::5]` equals `q_e16_c5_k03_s{i}` element for element, and the remaining
+rows sum to exactly 0.0. **Unused rows cost nothing**; dilution comes only from *splitting*
+rows that were previously merged, which is what `dist` does and what `distnull` by
+construction cannot. The reasoning behind prediction 3 — "same information, 5× the rows, so
+it pays the dilution" — was simply wrong, and no run could have rescued it. What the arm
+does buy is a bit-exact wiring check: the `bfs_first_step` refactor changed the return type
+of a function on the evaluated path and introduced **zero** behavioural change. That is
+worth having, but it must be reported as what it is.
+
+**Finding 3 — s0 is a single broken seed carrying the whole deficit.** 4.7 → 65.8 → 57.8 →
+59.9: it stalls after 40 000 while the others climb. It also has the most near-ties of any
+seed (17.4 % of well-posed rows below 0.2, against 1.9–6.2 % for s1–s4) and the worst
+rollout (`loop_probe` 12/20 rounds confined to ≤ 2 tiles, entered at step median **17** —
+early, so genuinely giving up rather than finishing). Excluding it the arm averages 99.9
+against the incumbent's 94.6 on the same four seeds. That is not a licence to drop it — it
+is the reason the mean is where it is, and the thing to fix.
+
+#### Predictions scored
+
+1. **FAILED, refutation fired — but only just.** 91.92 against a refutation line of 92.8, a
+   gap of 0.88 crates, which is one twentieth of the arm's own sd (20.38). It fired on the
+   written rule; treating it as a decisive negative would be over-reading it.
+2. **CONFIRMED on the claim, missed on the level.** The ordering held in both halves — 40 k
+   at or below the baseline, and a larger 40 k → 100 k gain (+15.05 vs +4.51). I predicted
+   88–94 at 40 k and it came in at 76.87, so I understated how much the finer map costs
+   early.
+3. **FAILED, and the control was invalid by construction** (finding 2). The written
+   refutation clause — "`distnull` ≥ `dist` → the gain came from table size" — does fire
+   arithmetically, but the inference behind it is void: `distnull` cannot separate
+   information from table size because it is the incumbent under a different set of row
+   labels. A valid control would have to *split* rows on something uninformative — a random
+   hash digit of the same base — and that is what the next such experiment should use.
+4. **Band missed, refutation not fired.** 832–851 rows used against a predicted 500–650
+   (refutation > 900). The band was anchored to the 262 rows I measured on the *greedy*
+   trajectory; a trained table is touched by 100 000 episodes of ε-exploration and uses 474
+   even without the new digit. Against that the fragmentation is **×1.77**, close to the
+   ×2.09 the design measurement predicted — the ratio was right, my baseline for it was not.
+5. **Refutation fired.** Confined rounds 12 / 8 / 5 / 1 / 3 out of 20, i.e. two seeds above
+   the ≤ 5 line. Read with the entry steps it is less uniform than the count suggests: s1's
+   cycles start at step median 290, which is finishing, while s0's start at 17. The honest
+   version is that cycling did not get worse *in general* but did get much worse *on s0*.
+6. **Refutation fired — I was wrong, and instructively.** The corner spawn now follows
+   digit 6 in **5/5** seeds at margins of +1.53 to +2.29, against 3/5 at −0.38 to +1.44
+   before. I predicted it would not resolve, from an on-policy measurement showing the
+   agent in that state at d = 2 in 78 % of visits with sd 0.47. The busiest variant in the
+   trained tables is **d = 1**, not d = 2: the ε-exploring *training* distribution over that
+   state is not the greedy *rollout* distribution, and I sized the prediction on the wrong
+   one. The same trap as "static counts are not visitation", one level up.
+7. **CONFIRMED.** All guards held, think time fell if anything.
+
+**Whole-entry refutation: did not fire.** It required the gain signature to be absent, and
+the signature is the clearest thing in the run. Feature work on this rung is not finished.
+
+**Verdict: nicht gezeigt — and the experiment is incomplete rather than negative.** At a
+matched 100 000 episodes the finer map is 5.39 crates behind (t = −0.43), so nothing is
+demonstrated and the incumbent stands. But the comparison is not the one the entry set out
+to make: it matches *episodes*, and the two maps are at different points on their curves —
+one flat, one climbing at +9.7 per 30 000. The right question, which this run cannot answer,
+is what `dist` is worth at convergence.
+
+**Next — E21, and the E18 objection does not transfer.** Extend `dist` to 200 000 and
+300 000 on the same five seeds. E18 measured that 200 000 *hurt* the incumbent (97.31 →
+62.85, re-rolling near-tie rows), and that is the obvious objection to running longer — but
+it was measured on a map that had already flattened, where extra episodes only churn settled
+rows. This map is still climbing on 4/5 seeds, and its near-ties are concentrated in the one
+seed that stalled. Falsifiable form: if `dist` at 200 000 behaves like E18's `ext` did, the
+"unconverged, not worse" reading here is wrong and the incumbent is the end of this line.
+s0 is the second target: it should be diagnosed before the run, not after, because if the
+stall is an absorbing row rather than slow learning then more episodes will not touch it.
+
 ---
 
 ## E19 — Potential-based shaping on digit 6's own goal
