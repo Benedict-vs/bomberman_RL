@@ -78,6 +78,95 @@ land within noise — training length and the floor both dead knobs, meaning the
 variance and the 19-crate gap are entirely structural (features/shaping), and E19 becomes
 the only live lever on this rung.
 
+### Incident note, before the results
+
+The `train.py` changes this entry declares were never on disk: an unsaved editor buffer
+meant commit 61cafc1's message claims a diff it does not contain, training ran with
+`EXPERIMENT = "e17"` (logs live under `q_e17_{ext,eps0005,eps0}_*` names) and the old
+`CHECKPOINTS`, so **no 140 000 / 200 000 checkpoints were written and the 140 k point is
+lost**. The `ext` runs themselves are valid — 200 000 episodes confirmed in the logs, and
+the final tables are the 200 k state, which is what the 200 k evaluations below measure.
+
+The expensive half of the mistake: the first evaluation pass loaded the ten *nonexistent*
+checkpoint files, and `setup()`'s missing-file fallback silently played an **all-zero
+table** — 2.82 crates, 1.000 suicides, five byte-identical "seeds", i.e. a uniform-random
+agent measured under a real label. Caught only because the numbers were absurd.
+`callbacks.py` now raises on a missing table when not training (verified to fire); in the
+tournament the table ships beside the file, so the guard can only trigger when something
+is genuinely broken — which the submission pre-run should say loudly.
+
+### Result
+
+`crates`, five-seed mean ± std (ε arms at 100 k; `ext` at 200 k from the final tables):
+
+| arm | crates | per seed | vs 0.02 @100 k (97.31 ± 12.5) |
+|---|---|---|---|
+| `eps0005` @100 k | **100.26 ± 7.79** | 94.4 · 108.4 · 107.9 · 91.2 · 99.3 | +2.95, t = +0.44 — within noise |
+| `eps0` @100 k | 84.03 ± 4.07 | 85.4 · 79.4 · 80.2 · 88.9 · 86.2 | −13.27, t = −2.20, **all five seeds worse** |
+| `ext` @200 k | **62.85 ± 44.40** | 90.4 · **24.5** · **5.4** · 100.6 · 93.4 | −34.46, t = −1.60 |
+
+Guards: suicides ≤ 0.013, survived ≥ 0.987, `think_max_ms` ≤ 0.09 everywhere.
+
+**Training to 200 000 is actively harmful: the peak-then-decay is back at γ = 0.99.** The
+best seed of the whole configuration (s2, 112.37 at 100 k) collapsed to **5.43**, and the
+frozen seed fell further (82.21 → 24.47). E15's addendum said "at γ = 0.99 there is no
+peak to find"; there is — it merely sits past 40 000 instead of past 10 000. γ delays the
+decay, it does not remove it. What survives is exactly E16's narrower restatement: the
+variance is set by the size of the margins the argmax is decided by, and *any* knob that
+leaves those margins thin leaves the cliff in place.
+
+**Row 3007 shows the mechanism in one row.** Between 100 k and 200 k the corner-spawn row
+did not converge toward its target — it *re-rolled*: s1 flipped RIGHT → BOMB (margin
+0.012), s2 flipped DOWN → RIGHT at margin **0.000**, s4 stayed on its override. With
+per-cell α at ~10⁻³ and true action gaps flattened by γ = 0.99, the argmax in a near-tie
+row is a random walk on noise, and every extra 100 000 episodes is another draw that can
+land on a cliff. **"Train longer" is not a variance cure — it is another spin of the same
+wheel.**
+
+**The ε answer: the floor stays. Decaying to 0 is measurably wrong.** `eps0` converges its
+behaviour policy exactly as intended — KILLED_SELF in the last 10 000 training episodes is
+**0.004** against the floor's 0.64 — and is *worse* for it: 4 of its 5 tables produce
+byte-identical evaluations at 40 k and 100 k, i.e. **learning stops entirely once nothing
+explores**, and all five seeds land below their 0.02 counterparts. The 0.64 deaths per
+episode at the floor are not waste; they are the tuition that keeps rare rows alive.
+`eps0005` is statistically indistinguishable from 0.02 (and incidentally the best mean and
+tightest spread ever measured on this rung — not claimable at t = 0.44, noted for the
+record). E15's one-sided curve is now two-sided: 0.10 harmful, 0.02 ↔ 0.005 flat, 0 harmful.
+
+### Predictions, scored
+
+1. **"`ext` @200 k: 99–107" — wrong, and the refutation clause fired as written:** 62.85,
+   below 92.8. Peak-then-decay is back at γ = 0.99 and E15's "no peak to find" falls.
+2. **"s1 flips row 3007 and jumps to ≥ 95" — wrong in the third way.** I wrote two
+   branches (flips-and-recovers, stays-frozen) and the row took neither: it flipped *and*
+   fell (24.47), while the best seed's same row flipped onto a 0.000-margin override and
+   took 107 crates down with it. The churn, not the freeze, is the finding.
+3. **"Both ε arms within noise; `eps0` slightly lower with ≥ 1 seed below 80" — half
+   right.** `eps0005` within noise ✓; `eps0` −13.3 with 5/5 seeds worse is more than
+   "slightly" (t = −2.20, short of the CI rule, unanimous in sign); the seed-below-80
+   detail: 79.4 ✓. The refutation (`eps0` winning by > 10) did not fire.
+4. **"`eps0` training suicides < 0.05" — right, emphatically.** 0.004 from 0.64.
+5. **Guards — held everywhere** (worst: 0.013 / 0.987, at `ext` 200 k).
+6. **`think_max_ms` unchanged — held** (0.09).
+
+The whole-entry refutation does not fire: `ext` collapsed, but `eps0` is not within noise,
+so the floor is not a dead knob — it has a wrong side.
+
+### Verdict
+
+**The operating point stands: 100 000 episodes, ε floor 0.02 (0.005 equally admissible).**
+Both directions away from it are now measured as harmful — more training re-rolls the
+near-tie rows and lost the best seed; zero exploration stops learning outright. The
+checkpoint-and-measure discipline paid for itself a second time in one entry: shipping
+"the final table" of the 200 k runs would have shipped 62.85 where 97.31 was available.
+
+The deeper reading: every road on this rung now ends at the same wall. E17 says the
+features all carry load; E18 says neither training length nor the floor moves the mean or
+tames the churn. The disease is thin argmax margins in high-traffic rows — diagnosed in
+the E13 post-mortem, seen live in row 3007's re-rolls — and the one untried lever that
+attacks margins *directly* is potential-based shaping toward the target. **E19 is next and
+it is now the main line, not an option.**
+
 ---
 
 ## E17 — The ablation panel E10 has owed since the rung transition

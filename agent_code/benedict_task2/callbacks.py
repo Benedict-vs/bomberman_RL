@@ -340,9 +340,18 @@ def setup(self):
 
     self.policy_rng = np.random.default_rng(POLICY_SEED)
 
-    if self.train or not os.path.isfile(MODEL_FILE):
+    if self.train:
         self.logger.info("Starting from an empty Q-table")
         self.q = np.zeros((N_STATES, len(ACTIONS)))
+    elif not os.path.isfile(MODEL_FILE):
+        # E18 post-mortem: evaluating a table that does not exist must fail, not
+        # silently play the uniform-random policy of an all-zero table -- ten
+        # evaluations of a missing checkpoint measured exactly that, at 2.82
+        # crates and 1.000 suicides, identically across five "seeds". In the
+        # tournament the table ships beside this file, so this can only fire
+        # when something is genuinely broken -- and the submission pre-run
+        # should say so loudly rather than play a random agent.
+        raise FileNotFoundError(f"No Q-table at {MODEL_FILE} and not training.")
     else:
         self.logger.info("Loading Q-table from disk.")
         self.q = np.load(MODEL_FILE)
