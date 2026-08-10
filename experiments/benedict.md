@@ -21,6 +21,109 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E20 — The target distance as a feature digit
+
+- **Question:** E19's finding 3 was that Φ varies *inside* a row — visit-weighted sd **1.28
+  tiles** on the safe rows the policy actually uses — and that feeding it back as a *reward*
+  injects noise of exactly that size into the very margins it was meant to widen. But the
+  information is real and the agent cannot see it: one row saying "target is DOWN, all four
+  neighbours clear, a bomb here pays" covers states where the target is one step away and
+  states where it is six, and the value of stepping towards it is not the same in both.
+  Shaping had to cancel between actions to stay honest; a **state digit** does not. Does the
+  distance buy in the state space what it could not buy in the reward?
+
+- **The design is measured, not guessed.** 40 greedy rounds of the incumbent, read-only,
+  safe-with-target steps only (`scratchpad/benedict/` probes):
+
+  | bucket scheme | residual within-row sd | used rows |
+  |---|---|---|
+  | none (incumbent) | 1.28 tiles | 144 |
+  | `{1, 2+}` (base 3) | 1.23 | ×1.26 |
+  | `{1, 2, 3+}` (base 4) | 0.89 | ×1.67 |
+  | `{1, 2, 3, 4+}` (base 5) | 0.64 | ×2.08 |
+  | **`{1, 2, 3–4, 5+}` (base 5)** | **0.48** | **×2.09** |
+
+  The chosen split is not the obvious one: a uniform `{1,2,3,4+}` costs the same rows and
+  only reaches 0.64, because the distance is not concentrated near 1 — over those rounds it
+  spends 26.4 % of its steps at d = 1, 23.2 % at 2, 28.8 % at 3–4 and 21.6 % at 5+.
+  **The nominal table growth is not the cost that matters:** the policy touches only **262
+  of 12 800 rows (2.0 %)**, so 12 800 → 64 000 nominal is ×2.09 in rows that are actually
+  learned.
+
+- **Change:** `callbacks.py` gains digit 8, appended (not inserted) so every "digit 6" and
+  "digit 7" in the entries below still means what it says. `bfs_first_step` returns
+  `(direction, distance)` from the same traversal, so the two digits describe one objective
+  by construction and cannot drift apart. `FEATURE_SIZES` becomes
+  `(4, 4, 4, 4, 5, 5, 2, 5)`, N_STATES 64 000. No reward, no hyperparameter, no training
+  change — `BM_SHAPE` stays in `train.py` at its default 0 so E19 remains reproducible.
+
+  **Deliberately the safe branch only.** In a danger state digit 8 reads 0, because digit 5
+  already carries the scarce resource there (moves of grace left), and the escape distance
+  is bounded by it. Escape distance as its own digit is the obvious follow-up if this works;
+  bundling it here would make a null result unattributable.
+
+- **Honest caveat, measured before the run:** this will almost certainly **not** fix the
+  corner-spawn row 3007 that E18 pinned. Over 40 rounds the agent is in that row 9 times
+  (~22 % of rounds, one step each — it is a spawn row) at d = 2 in 7 of them, sd 0.47. The
+  digit splits rows whose distance *varies*; that one's does not. E19 already severed the
+  link between "row 3007 follows digit 6" and performance, so E20 is argued from aliasing in
+  general, not from that row.
+
+- **Agent:** `benedict_task2` · otherwise E16's winning cell (coin 5, crate 0.3, γ = 0.99,
+  ε floor 0.02) · entry and code are one commit.
+- **Training:** two arms × five seeds × 100 000 episodes, world seed 810731.
+
+  | arm | switch | what it isolates |
+  |---|---|---|
+  | `dist` | — | the full change: finer rows *and* the new information |
+  | `distnull` | `BM_ABLATE=target_dist` | digit 8 pinned to 0: the **same** information as the incumbent in a table of the **same** 64 000 rows — i.e. the pure sample-dilution cost, with no new information at all |
+
+  `distnull` is the control that makes a null result readable. Without it, "E20 ties the
+  baseline" cannot be split into "the distance is worthless" and "the distance is worth
+  exactly what the extra rows cost".
+- **Measurement:** 300 rounds, ε = 0, seed 20260731, at 40 000 and 100 000. Labels
+  `benedict_q_e20_{dist,distnull}_s{0..4}__ep{40000,100000}__task2`. Baseline **c5_k03
+  @100 k: 97.31 ± 12.54 crates** (@40 k: 92.80 ± 9.47). Old checkpoints are unreadable by
+  design — the shape guard in `setup()` raises rather than misindexing.
+
+### Prediction (written before the run)
+
+1. **Crates @100 k, `dist`: 100–110**, i.e. the digit earns more than it costs.
+   **Refutation:** below 92.8 → the resolution is not worth the dilution and feature
+   refinement on this map is finished.
+2. **The signature of a sample-efficiency trade, not a free win:** at 40 000 `dist` is
+   **at or below** the baseline's 92.80 (I expect 88–94), and its 40 k → 100 k gain is
+   **larger** than the baseline's +4.51. A finer map should start slower and end higher.
+   **Refutation:** `dist` gains *less* from 40 k → 100 k than the baseline → whatever moved
+   is not resolution, and prediction 1 succeeding would be luck.
+3. **`distnull` lands below `dist` and below the baseline**, in the 88–96 band: same
+   information, 5× the rows, so it pays the dilution and buys nothing.
+   **Refutation:** `distnull` ≥ `dist` → the gain in 1 came from the table size (more
+   free parameters, softer per-cell α) and *not* from the distance, which would make the
+   whole feature story wrong and is the single most important thing this control can catch.
+4. **Used rows grow ~2×, not 5×:** tables show 500–650 rows with a non-zero entry against
+   the incumbent's ~262 measured on-policy. **Refutation:** above 900 → the fragmentation
+   measurement did not transfer from the incumbent's trajectory to the trained one, and
+   the sample-efficiency reasoning behind 2 and 3 is unfounded.
+5. **Cycling does not get worse:** `loop_probe` confined rounds ≤ 5/20 on every `dist` seed
+   (incumbent 1/20 and 3/20; E19's `shape02` 17/20). **Refutation:** > 5/20 on two or more
+   seeds → the finer map creates new mirror-image degeneracies instead of breaking them.
+6. **Row 3007 does not resolve** — still 3/5 or 4/5 seeds following digit 6, as now. This is
+   a deliberately *negative* prediction; scoring it either way is informative.
+   **Refutation:** 5/5 → the corner override was distance aliasing after all and I called it
+   wrong above.
+7. **Guards:** suicides ≤ 0.02, survived ≥ 0.98, `think_max_ms` ≤ 0.30. The BFS returns a
+   depth it already computed, so think time should barely move; the table is 3.1 MB instead
+   of 614 KB, which is still nothing against the 0.5 s budget.
+
+**Refutation condition for the whole entry:** `dist` within noise of the baseline **and**
+prediction 2's gain signature absent → the distance is not information this agent can use,
+the within-row spread E19 measured is not load-bearing, and feature work on this rung is
+done. In that case the next move is not another digit but **rung 3** — `GOT_KILLED` into the
+reward table and the transfer floor against `peaceful_agent`.
+
+---
+
 ## E19 — Potential-based shaping on digit 6's own goal
 
 - **Question:** E17 showed that no feature is redundant, E18 that neither more episodes nor
