@@ -389,3 +389,60 @@ neuen `run`-Namen wählen.
 
 **Pro Konfiguration 3–5 Läufe mit verschiedenen Seeds.** Eine einzelne Lernkurve ist zu
 verrauscht, um etwas zu belegen.
+
+---
+
+# 4 · `plot_checkpoints.py` — die *andere* Lernkurve
+
+`trainlog.py` zeigt, was **während** des Trainings passiert ist: ε-greedy, gegen eine
+Tabelle, die sich unter dem Agenten noch ändert. Das beantwortet "ist es konvergiert" und
+ist laut `AGENTS.md` ausdrücklich **kein Ergebnis** — E01 hat am Trainingsende 48,2 Münzen
+gemessen und 1,45 in der Auswertung desselben Modells.
+
+Dieses Skript plottet die andere Kurve: **jeder Checkpoint mit `evaluate.py` bei ε = 0 auf
+dem festen Arenensatz gemessen**, aufgetragen über die Trainingsepisoden. Das ist dieselbe
+Messung, aus der jede berichtete Zahl in `results/eval/` stammt — und damit die Kurve, die
+in den Bericht darf.
+
+Wozu man sie braucht: sie zeigt, ob ein Lauf beim Abbruch schon konvergiert *war*. In E20
+war genau das die ganze Frage — die alte Merkmalskarte lief nach 40 000 Episoden flach
+(+4,51 über die letzten 60 000), die feinere stieg noch (+15,05), und ein Vergleich bei
+gleicher Episodenzahl vergleicht dann zwei Punkte auf unterschiedlichen Kurvenabschnitten.
+
+Voraussetzung ist die Namenskonvention, die `evaluate.py --label` schreibt:
+
+```
+<präfix>_<arm>_s<seed>__ep<episoden>__<stufe>.csv
+```
+
+```bash
+# Allgemeine Form
+uv run python tools/plot_checkpoints.py <dateien/globs ...> \
+    [--metric crates] [--reference <ref.csv>] [--out pfad.png] [--no-seeds] [--table]
+
+# Ein Arm gegen die Baseline, mit Markdown-Tabelle für das Protokoll
+uv run python tools/plot_checkpoints.py --metric crates --table \
+    'results/eval/task2_crates/benedict_q_e20_dist_s*__ep*__task2.csv' \
+    'results/eval/task2_crates/benedict_q_e16_c5_k03_s*__ep*__task2.csv'
+
+# Mit Referenzagent als waagerechter Linie
+uv run python tools/plot_checkpoints.py --metric crates \
+    --reference results/eval/baselines/ref_rule_based_agent__task2.csv \
+    'results/eval/task2_crates/benedict_q_e20_*_s*__ep*__task2.csv'
+```
+
+| Argument | Bedeutung |
+|---|---|
+| `--metric` | jede Spalte der Auswertungs-CSV; Standard `crates` |
+| `--reference` | CSV, deren Mittelwert als waagerechte Linie eingezeichnet wird; mehrfach angebbar |
+| `--no-seeds` | nur Mittelwert und Band, ohne die einzelnen Seeds |
+| `--table` | druckt die Zahlen zusätzlich als Markdown-Tabelle |
+| `--out` | Standard: `results/figures/curve_<metric>.png` |
+
+**Wie die Abbildung zu lesen ist.** Dicke Linie = Mittelwert über die Seeds, Band = ± 1
+Standardabweichung, dünne Linien = die einzelnen Seeds. Die Einzel-Seeds sind absichtlich
+sichtbar: auf diesem Projekt war die Streuung zwischen den Seeds mehrfach *das Ergebnis*
+und nicht das Rauschen (E15, E18, E20), und ein Mittelwert allein verdeckt genau das.
+
+Die Abbildungen landen in `results/figures/` und sind bewusst nicht eingecheckt — sie sind
+reine Funktionen der CSVs.
