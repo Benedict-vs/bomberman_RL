@@ -106,6 +106,15 @@ def setup_training(self):
     self.gamma = GAMMA
     self.visits = np.zeros((N_STATES, len(ACTIONS)), dtype=np.int64)
     self.last_phi = None
+    
+    # E20 post-mortem: a diagnostic that drives BombeRLeWorld with train=True
+    # while BM_MODEL_SUFFIX names a real checkpoint will overwrite it, because
+    # MODEL_FILE resolves to that path and the atexit hook below fires on any
+    # normal exit. It happened to q_table_e16_c5_k03_s2__ep100000.npy, and it
+    # was caught by an mtime rather than by anything in this file. Remember
+    # whether the table existed before this run started; save_table refuses if
+    # it did.
+    self.model_file_preexisted = os.path.isfile(MODEL_FILE)
 
     # Per-episode accumulators for the learning curve. evaluate.py measures the
     # finished agent; this is what shows whether it converged, and when.
@@ -142,7 +151,26 @@ def setup_training(self):
 
 
 def save_table(self) -> None:
+    """Write the table, unless that would clobber a checkpoint we did not create.
+
+    A training run legitimately overwrites its own file every SAVE_EVERY rounds
+    -- the guard is armed once, at setup, and disarmed by the first successful
+    write, so only the *first* write of a run can trip it. That is the write
+    that destroys somebody else's result.
+
+    Deliberately a hard failure. The alternative -- warn and continue -- is what
+    the E18 missing-table fallback did, and it produced ten evaluations of an
+    all-zero table before anyone noticed.
+    """
+
+    if self.model_file_preexisted:
+        raise FileExistsError(
+            f"{MODEL_FILE} existed before this run started. Training would "
+            "overwrite it. Set BM_MODEL_SUFFIX to a name of this run's own, or "
+            "delete the file deliberately if the overwrite is intended."
+        )
     np.save(MODEL_FILE, self.q)
+    self.model_file_preexisted = False
 
 
 def checkpoint_file(episode: int) -> str:
