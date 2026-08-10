@@ -224,6 +224,70 @@ seed that stalled. Falsifiable form: if `dist` at 200 000 behaves like E18's `ex
 s0 is the second target: it should be diagnosed before the run, not after, because if the
 stall is an absorbing row rather than slow learning then more episodes will not touch it.
 
+### s0, diagnosed (2026-08-10) — and it changes the E21 design
+
+**Not absorbing.** Its TD error over the last 10 000 episodes is 0.306 against 0.302–0.363
+for the other four, and its training-time crates hold at 47.5 → 51.6 → 48.2. It is still
+learning; what has broken is the gap between the behaviour policy and the greedy extraction.
+
+**The cycle, opened with `cycle_dump`** on the first round that collapses (world seed 810731,
+step 17 of 400): tiles (1,1) ↔ (1,2), in the spawn corner.
+
+| tile | row | target | Q | argmax |
+|---|---|---|---|---|
+| (1,1) | 15027 | `RIGHT`, bomb pays | `[-1.111, -0.042, -0.041, -1.109, -0.212, -0.127]` | `DOWN` |
+| (1,2) | 51013 | `UP` | `[0.026, -1.069, 0.024, -1.065, -0.169, 0.021]` | `UP` |
+
+At (1,1) the table picks `DOWN` (−0.041) over its own target `RIGHT` (−0.042) — **an override
+by 0.001**. At (1,2) digit 6 genuinely points `UP`, back into the corner, and the table
+follows it. So the cycle is half noise and half feature, and `cycle_dump`'s symmetry test
+says the two rows are **not** D₄ images of each other: canonicalisation would not merge them
+and would not break this.
+
+**Why the margin is a thousandth is the actual finding.** Row 15027 across the five seeds:
+
+| | s0 | s1 | s2 | s3 | s4 |
+|---|---|---|---|---|---|
+| Q(`RIGHT`) — the target | −0.042 | 1.403 | 3.266 | 2.663 | 3.093 |
+| largest \|Q\| in the row | 1.111 | 1.920 | 3.266 | 3.358 | 3.093 |
+| crates | 59.9 | 88.5 | 93.3 | 104.3 | 113.6 |
+
+s0 has learned the two `INVALID_ACTION` penalties (−1.11 on the walled directions) and
+nothing else: every legal action sits at the step cost. No crate value ever propagated back
+into the corner. And it is systemic rather than two unlucky rows:
+
+| seed | rows used | rows with \|Q\|max > 2 | thin margins | crates |
+|---|---|---|---|---|
+| s0 | 851 | **477** | 17.4 % | 59.9 |
+| s1 | 846 | **495** | 3.9 % | 88.5 |
+| s2 | 832 | 810 | 6.2 % | 93.3 |
+| s3 | 845 | 788 | 1.9 % | 104.3 |
+| s4 | 839 | 811 | 2.6 % | 113.6 |
+
+All five fragmented into ~840 rows; s0 and s1 filled only ~485 of them — about what the
+incumbent's *coarse* map fills (433–470 of 474). **They are running a 64 000-row map at the
+resolution of the 12 800-row one**, and the unfilled half is exactly where the near-ties sit.
+
+**Consequence for E21: "train longer" is the right fix for three seeds and the wrong one for
+s0.** s2/s3/s4 are in the filling regime — monotone curves, ~95 % of their rows carrying
+value — so more episodes should keep paying. s0 is not: its curve rose then fell
+(65.8 → 57.8 → 59.9), which is E18's re-rolling signature, and re-rolling a row whose six
+values lie within 0.05 of each other is a coin flip however long it runs.
+
+So E21 becomes two arms rather than one:
+
+| arm | change |
+|---|---|
+| `ext` | the same `dist` runs continued to 200 000 and 300 000 |
+| `warm` | each fine row initialised from the coarse row it was split from — `q_fine[5i + d] = q_coarse[i]` for all four buckets, taken from the incumbent's converged `c5_k03` table — then trained normally |
+
+`warm` attacks the measured deficit directly: the fine map's problem is *empty* rows, and the
+coarse map already knows what those states are worth, up to the distinction the new digit
+adds. It is coarse-to-fine value transfer, not a hack, and it costs one line at
+`setup_training`. Together the two arms separate "s0 is slow" from "s0 is stuck": if `ext`
+rescues it, it was slow; if only `warm` does, the near-ties never resolve on their own and
+initialisation — not episode count — is the lever for this map.
+
 ---
 
 ## E19 — Potential-based shaping on digit 6's own goal
@@ -832,7 +896,7 @@ map does *not yet* encode, or from the seeds that converge badly.
   | `COIN_COLLECTED` 5 | E15's winner (baseline cell) | |
   | `COIN_COLLECTED` 1 | the game's own value | |
 
-- **Agent:** `benedict_task2` · commit `<fill in>` · labels
+- **Agent:** `benedict_task2` · commit `bd52080` · labels
   `benedict_q_e16_c{1,5}_k{03,10}_s{0..4}__ep*__task2`
 - **Training:** **100 000 rounds**, world seed 810731, checkpoints 20 000 / 40 000 / 70 000 /
   100 000. Longer than every previous entry because E15's addendum showed γ = 0.99 is still
@@ -985,6 +1049,49 @@ model does not change, but it is now matched rather than ahead.
    and with the best seed already within noise of the reference the honest description of the
    remaining gap is reliability, not capability.
 
+### Correction, 2026-08-10 — the suicide mechanism above is wrong
+
+The sentence *"a dead agent stops opening crates, so the metric being rewarded harder falls —
+the guard fired and it was the explanation, not a footnote"* does not survive the arithmetic,
+and it has been repeated since. The guard did fire: suicides really do go 0.002 → 0.071, a
+35-fold increase, and that is a real regression worth reporting. It is simply **not the
+reason the crates fall**, and the check is one line — condition on the rounds the agent
+survived to step 400:
+
+| `c5` arm | overall | surviving rounds only | death rate |
+|---|---|---|---|
+| `k03` @100 k | 97.31 | 97.47 | 0.002 |
+| `k10` @100 k | 50.59 | 51.70 | 0.071 |
+| **deficit** | **46.72** | **45.77** | |
+
+**98 % of the deficit is still there in rounds where nobody died** (98.4 % at 40 000, same
+picture in the `c1` pair). Truncated episodes account for about one crate of forty-seven.
+The original reasoning confused a *guard that fired* with a *mechanism that explains*, which
+is exactly the failure mode the guards exist to avoid — and E19 repeated it a different way,
+so this is a pattern and not a one-off.
+
+What the surviving rounds actually show, same tables, same 400-step rounds:
+
+| `c5` arm @100 k | bombs | crates per bomb |
+|---|---|---|
+| `k03` | 38.30 | **2.55** |
+| `k10` | 47.41 | **1.09** |
+
+The agent with the larger crate reward bombs **more** (+24 %) and gets **less than half** out
+of each bomb. Raising `CRATE_DESTROYED` does not make it reckless about dying; it makes it
+reckless about *where*. `BOMB` becomes attractive in rows where a bomb hits little, and digit
+7 cannot object, because it is binary — "a bomb here hits at least one crate" reads the same
+whether the answer is one crate or three. So the corrected statement is:
+
+> A larger `CRATE_DESTROYED` degrades **bomb placement**, not survival. The suicide rise is a
+> real but minor side effect; the crates are lost to bombs that were not worth dropping.
+
+This also sharpens an idea E16 deprioritised as "aiming at the mean" (point 4 above, and
+E14's counted digit): **make digit 7 count the crates in blast range** (0 / 1 / 2 / 3+)
+rather than answer yes/no. The measurement above is the first direct evidence that the binary
+digit is what lets a mis-priced bomb reward do damage, which is a better argument than the one
+E14 was rejected on. Candidate for after E21.
+
 ---
 
 ## E15 — The first hyperparameter sweep: γ × ε floor, factorial
@@ -1002,8 +1109,10 @@ model does not change, but it is now matched rather than ahead.
   E14 can be retested on top of tuned hyperparameters, which is a better test of it than E14 was.
 - **Design:** γ ∈ {0.9, 0.95, 0.99} × `EPS_END` ∈ {0.02, 0.10}, five seeds per cell — **30 runs**.
   α (`1/N^0.7`), the ε decay rate and the rewards are held fixed.
-- **Agent:** `benedict_task2` · commit `<fill in>` · labels
+- **Agent:** `benedict_task2` · commit `5c644b4` · labels
   `benedict_q_e15_g{90,95,99}_e{02,10}_s{0..4}__ep*__task2`
+  (the `g099_e002` arm's 5 000 and 40 000 checkpoints were evaluated one commit earlier,
+  at `54e695b`; the agent code is identical between the two — the diff is this file.)
 - **Training:** 40 000 rounds, world seed 810731, checkpoints 5 000 / 10 000 / 20 000 / 40 000.
 - **Measurement:** 300 rounds, ε = 0, seed 20260731; evaluate the 10 000 and 20 000 checkpoints
   first and extend if a cell's optimum lands on an edge. Baseline **E13 @10 000: 83.56 ± 24.23
@@ -1178,7 +1287,7 @@ property of the feature map and the reward function, not of luck.
   crate, and do I have one) becomes `crates_in_blast` bucketed to **0 / 1 / 2 / 3+** (4 values),
   still 0 when no bomb is available. `FEATURE_SIZES` (4,4,4,4,5,5,2) → **(4,4,4,4,5,5,4)**, table
   12 800 → **25 600**. Digits 1–6, the escape branch, and the rewards are untouched.
-- **Agent:** `benedict_task2` · commit `<fill in>` · labels `benedict_q_e14_s{0..4}__ep*__task2`
+- **Agent:** `benedict_task2` · commit `e6ead20` · labels `benedict_q_e14_s{0..4}__ep*__task2`
 - **Training:** 40 000 rounds, five seeds, world seed 810731, checkpoints 5 000 / 10 000 /
   20 000 / 40 000. Kept at 40 000 rather than E13's optimum of 10 000 because the table doubles —
   see prediction 7.
@@ -1341,7 +1450,7 @@ margin was real and is now fixed, and it was **not** what was capping the crate 
   should walk up to and bomb. Coin branch unchanged, except that an unreachable coin now falls
   through to the crate branch instead of returning `NO_TARGET`. `FEATURE_SIZES`, the danger
   branch from E11, and the rewards are all untouched.
-- **Agent:** `benedict_task2` · commit `<fill in>` · labels `benedict_q_e13_s{0..4}__ep*__task2`
+- **Agent:** `benedict_task2` · commit `b157c45` · labels `benedict_q_e13_s{0..4}__ep*__task2`
 - **Training:** 40 000 rounds, five seeds, world seed 810731, checkpoints at
   **5 000 / 10 000 / 20 000 / 40 000**. Trained past E12's 20 000-round optimum on purpose — see
   prediction 5.
@@ -1566,7 +1675,7 @@ gap and the cycle all have one cause.
 - **Change:** none to the agent, the features or the rewards. `train.py` additionally writes the
   table at five checkpoints. Learning is untouched — the same updates in the same order — so this
   entry's answer transfers to E13 onward.
-- **Agent:** `benedict_task2`, the E11 configuration exactly · commit `<fill in>` · labels
+- **Agent:** `benedict_task2`, the E11 configuration exactly · commit `203fa13` · labels
   `benedict_q_e12_s{0..4}__ep{2500,5000,10000,20000,40000}__task2`
 - **Training:** one 40 000-round sweep, five seeds, world seed 810731. Checkpoints at
   **2 500 / 5 000 / 10 000 / 20 000 / 40 000** episodes.
@@ -1775,7 +1884,8 @@ distribution beside it.**
   tile no bomb reaches, found by a time-aware BFS (at depth *k* a tile may only be entered if it
   is still survivable after *k* moves). The coin and crate branches are untouched, `FEATURE_SIZES`
   is untouched, the rewards are untouched, and the table stays at 12 800 rows.
-- **Agent:** `benedict_task2` · commit `<fill in from .meta.json>` · labels
+- **Agent:** `benedict_task2` · commit `b765202` (**-dirty**: the tree carried uncommitted
+  changes when this was measured, so the hash alone does not pin the code) · labels
   `benedict_q_e11_s{0..4}__task2`
 - **Training:** 40 000 rounds, `classic`, world seed 810731, `BM_RUN_INDEX` 0–4. Identical to E10
   in every other respect, so this is a paired comparison against it.
@@ -1955,7 +2065,7 @@ Both remaining gaps are now quantified rather than guessed, and they are indepen
 - **Question:** E09 measured the floor at 0.000 and named three requirements for the rung-2
   state. Do they, together, get an agent off that floor — and if it still dies, *which* of the
   two jobs (bombing, escaping) is the one the features fail to support?
-- **Agent:** `benedict_task2` · commit `<fill in from .meta.json>` · labels
+- **Agent:** `benedict_task2` · commit `c188bb9` (**-dirty**, see E11) · labels
   `benedict_q_e10_s{0..4}__task2`
 - **Training:** 40 000 rounds, `classic`, no opponents, world seed **810731**, five runs at
   `BM_RUN_INDEX` 0–4. Per-cell α, ε decay, γ = 0.9 — all unchanged from rung 1.
@@ -2236,7 +2346,7 @@ buys the last stretch, not the first, so it goes second.)*
 - **Change:** none to the agent. `agent_code/benedict_task2/` is byte-identical to
   `tabular_q_task1/` apart from identity strings, and it loads the rung-1 table
   (49.15 ± 1.23 coins on `coin-heaven`). Only the scenario changes.
-- **Agent:** `benedict_task2` · commit `<fill in from .meta.json>` · label
+- **Agent:** `benedict_task2` · commit `7799000` (**-dirty**, see E11) · label
   `benedict_task1model__task2_floor`
 - **Training:** none. This is a pure transfer measurement at ε = 0.
 - **Measurement:** `results/eval/task2_crates/benedict_task1model__task2_floor.csv`,
@@ -2430,7 +2540,7 @@ after this one, not a feature.
   provided agents first is cheap and stops me optimising the wrong column for a week.
 - **Change:** none. Measurement of the four provided agents, each alone.
 - **Agent:** `random_agent`, `peaceful_agent`, `coin_collector_agent`, `rule_based_agent` ·
-  commit `<fill in from .meta.json>` · labels `ref_<agent>__task2`
+  commit `7799000` · labels `ref_<agent>__task2`
 - **Measurement:** `results/eval/baselines/ref_<agent>__task2.csv`, 300 rounds each,
   `classic`, `--opponents none`, seed 20260731, `--preset task2`.
 
