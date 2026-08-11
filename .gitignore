@@ -144,5 +144,12 @@ scratchpad/*/models/
 # the submitted agent folder.
 agent_code/*/q_table_*.npy
 
+# Where those per-run tables now live. The submission is a zip of
+# agent_code/<agent>/, so 700 MB of checkpoints sitting beside callbacks.py was
+# a submission accident waiting to happen -- they are out of that folder
+# entirely rather than merely ignored. Reproducible from the commit plus the
+# BM_* variables in each run's .meta.json, so they are never versioned.
+checkpoints/
+
 # macOS
 .DS_Store
