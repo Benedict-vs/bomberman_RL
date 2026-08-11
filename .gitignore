@@ -124,6 +124,8 @@ results/figures/
 results/train_local/
 results/train/task2_crates/*.csv
 results/train/task2_crates/*.meta.json
+results/train/task3_opponents/*.csv
+results/train/task3_opponents/*.meta.json
 
 final_project.pdf
 

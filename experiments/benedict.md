@@ -21,6 +21,89 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E25 — Train in an opponent field, and tell the agent that being killed is bad
+
+- **Question:** E24 established the floor and named the cause. Two of every three rung-3 deaths
+  land in an **all-zero Q row** — 67.9 % against `coin_collector` and 60.5 % against
+  `rule_based`, on base rates of 1.35 % and 3.44 % — so at the moment it dies the agent is
+  choosing uniformly at random among six tied zeros. A row that was never updated cannot be
+  repaired by a better feature; only by visiting it. That makes **training distribution**, not
+  feature engineering, the first thing to change on this rung.
+
+  Riding along is a plain inconsistency in the reward table that could not fire before, because
+  rung 2 was trained with `--opponents none`:
+
+  | event | reward | |
+  |---|---|---|
+  | `KILLED_SELF` | −5 | rung 1, load-bearing (E17) |
+  | `GOT_KILLED` | **absent, i.e. 0** | never fired without opponents |
+
+  Under that table, walking into *your* blast is free and walking into *mine* costs 5. Since
+  `killed_by` is 0.340–0.453 per round, that is not a detail.
+
+- **Change:** a new agent, `agent_code/benedict_task3/`, copied from `benedict_task2` at
+  `<commit>`. The feature map is **untouched** — same eight digits, same 64 000 rows — so the
+  shipped rung-2 table is a same-layout parent and `warm_start` transfers it row for row
+  (`factor = 1`). Two things differ from rung 2: the training line-up has opponents in it, and
+  `REWARDS` gains `e.GOT_KILLED` behind `BM_GOT_KILLED`.
+
+- **Design.** The arms separate the two, because the death penalty is worthless without the
+  field and the field may be sufficient without the penalty:
+
+  | arm | `BM_GOT_KILLED` | isolates |
+  |---|---|---|
+  | baseline | — | the shipped rung-2 table, unretrained: **E24** |
+  | `A` | 0 | training distribution alone |
+  | `B` | −5 | training distribution + a symmetric death penalty |
+
+  Five training seeds per arm, `BM_RUN_INDEX` **10–14** (never used on this project), 40 000
+  episodes, warm-started from `q_table_rung2ship` with `WARM_N = 100`. Training field is
+  **3× `coin_collector_agent`** — the ladder's hard rung-3 opponent, it bombs (and foreign
+  bombs are ~90 % of the damage), but it does not hunt, so early training is not dominated by
+  being out-played before anything is learnt. Measured cost 9.11 s per 200 episodes, so ~30 min
+  a run; ten runs fit on the ten cores at once.
+- **Measurement:** 300 rounds at ε = 0 on the **validation** seed **550731**, held out from
+  E24's dev seed, at both the 20 000 and 40 000 checkpoints, in the training field
+  (`coin_collector`) and in the transfer field (`rule_based`). Opponents are seeded per round
+  (E24), so these are reproducible; the *training* runs are not — `main.py` does not seed the
+  provided agents and nothing in `setup_training` can precede their own reseed. That is why
+  every arm gets five seeds and is compared at the arm level, never on a single run.
+
+### Prediction (written before the run)
+
+1. **Arm A alone closes most of the survival gap in the training field.** The all-zero rows get
+   visited, so the random-choice-at-death mechanism disappears whether or not deaths are priced.
+   Predict arm-mean survival ≥ 0.60 against `coin_collector`, from the 0.433 floor, and the
+   all-zero share at the fatal step to fall below 25 %. **Refutation:** survival stays within
+   0.05 of the floor → visiting the rows is not sufficient and the state cannot express the
+   situation, which promotes features (E26) over distribution.
+2. **Arm B beats arm A on survival, and the paired arm difference clears zero.** −5 for
+   `GOT_KILLED` prices the 0.34 deaths/round that currently cost nothing. Predict
+   B − A ≥ +0.05 survival with a CI excluding 0 over the five seeds. **Refutation:** the CI
+   contains 0 → the field does the work and the penalty is decoration, which is the cheaper
+   result and worth knowing.
+3. **Crates fall in both arms, and that is not a regression.** Rung 2's 116.6 came from 400
+   uncontested steps. Predict 26.9 → no more than 35 in the training field: the board is shared
+   four ways and the ceiling is ~30 per agent, which is what the three `coin_collector`
+   opponents already achieve (31.6–32.4). **Refutation:** crates rise above 40 → I have
+   mis-read the shared-board ceiling.
+4. **`suicides` does not creep up.** The guard from rung 2. Both arms ≤ 0.227, the floor's
+   value. **Refutation:** either arm above 0.30 → learning to live with opponents has cost the
+   own-bomb escape, and `KILLED_SELF` needs rebalancing against `GOT_KILLED`.
+5. **Kills stay near the floor in both arms.** Neither arm rewards a kill, and E24 showed kills
+   are a by-product of bombing crates (1.893 against `peaceful` with no aggression term).
+   Predict ≤ 0.15 in both — deliberately, so that `KILLED_OPPONENT` in E26+ has a clean
+   baseline. **Refutation:** kills > 0.25 → surviving longer alone buys aggression, and the
+   aggression term may never be needed.
+6. **Transfer to `rule_based` is positive but much smaller.** Predict survival ≥ 0.25 there
+   (floor 0.143) for the better arm — real movement, still far from the reference's 0.400.
+   **Refutation:** transfer survival ≤ 0.16 → training against a non-hunting opponent does not
+   generalise, and E26's field choice becomes the question rather than its features.
+
+- **Verdict:** _pending._
+
+---
+
 ## E24 — What the rung-2 agent does when there are opponents on the board
 
 - **Question:** the opening measurement of rung 3, and deliberately not a change. Rung 3 has

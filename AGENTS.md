@@ -179,6 +179,19 @@ not the agent's exploration RNG. **That has not been true since the exploration 
 E12 confirmed it by rerunning a 40 000-round sweep and getting round-for-round identical
 evaluation results.
 
+*Amended 2026-08-11 (E24).* **That guarantee ends as soon as opponents train alongside us.**
+`main.py` does not seed the provided agents, and each of them reseeds the global RNG from OS
+entropy in `setup` — which runs *after* ours, so nothing in `setup_training` can precede it.
+A rung-3 training run is therefore reproducible in its arenas and in our own exploration, but
+not in the opponents, and two runs of the same command give different tables. This is
+**accepted rather than fixed**: opponent variety during training is desirable for the same
+reason arena variety is, and the only hook that runs before an opponent's first action is our
+own `act()`, where seeding the global RNG would reach into other agents' behaviour — not
+something the submitted agent should ever do. Reproducibility is preserved where the numbers
+come from: `tools/evaluate.py` seeds the opponents per round (above). The practical
+consequence is that rung-3 arms must be compared **across several training seeds**, never on a
+single run.
+
 **`results/train/task2_crates/` is therefore no longer committed** (`.gitignore`, from
 2026-08-08). It had reached 282 MB: an evaluation CSV is ~35 KB, but a 100 000-episode training
 log is ~7 MB and a 20-run sweep is 140 MB, which every collaborator would clone. They are
