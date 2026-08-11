@@ -1,28 +1,33 @@
-"""Tabular Q-learning agent — task 2 (`classic`, no opponents).
+"""Tabular Q-learning agent -- task 2 (`classic`, no opponents).
 
 Forked from `agent_code/tabular_q_task1/`, the agreed rung-1 baseline, and
 rebuilt for rung 2 in E10. The rung-1 feature map transferred *nothing*: on
-`classic` it scored 0.000 and never took a single step in 300 rounds, because
-"no coin is visible" -- the normal condition on this rung, where all nine coins
-start under crates -- was a state it had only ever met at the end of a won
-round (`experiments/benedict.md` E09).
+`classic` it scored 0.000 in 300 rounds, because "no coin is visible" -- the
+normal condition here, where all nine coins start under crates -- was a state it
+had only ever met at the end of a won round (E09).
 
-Carried over from rung 1: the dense mixed-radix table, random tie-breaking
-among equal-value actions, the per-cell learning rate and the seeded RNGs.
-What E10 changes:
+The state is one mixed-radix row index over eight digits. Sizes are
+`FEATURE_SIZES` below; the synthesis of what each is worth is in
+`experiments/benedict_task2.md`, and the per-experiment evidence in
+`experiments/benedict.md`.
 
-- crates stop being collapsed into "wall". A neighbour is blocked, lethal
-  this step, covered by a live bomb, or clear.
-- the target digit falls back to the nearest crate-bombing position when no
-  coin is visible, so it carries information for the whole round instead of
-  being pinned at 0.
-- the own tile carries a grace period, counted in moves rather than in bomb
-  timer units.
-- one bit for "a bomb dropped here would open a crate, and I have one to drop".
+    1-4  each neighbour: blocked / lethal this step / in a blast / clear
+     5   moves of grace left on my own tile, 0 = safe
+     6   BFS first step to the objective -- the way *out* while in a blast
+         (E11, +24 crates), otherwise the nearest coin, else the nearest
+         crate (E13, +57: targeting a tile that *can hit* a crate was
+         satisfied on 99.7 % of free tiles, so the digit carried no gradient
+         and mirror-image rows pointed at each other)
+     7   a bomb here would open a crate, and I have one to drop
+     8   how far digit 6's target is: 1 / 2 / 3-4 / 5+ (E20)
 
-State: 4 neighbour states + grace + target direction + bomb payoff
--> 4^4 x 5 x 5 x 2 = 12 800 rows. Large but cheap to fill: a competent agent
-visits 451 of them, and 146 cover 90 % of its steps.
+4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions. Nominally large, actually sparse:
+training touches ~840 rows and the greedy policy visits ~520. That sparsity is
+why the table is dense storage and why the warm start in `train.py` matters --
+the rows exist, they just need values.
+
+Everything here runs in the tournament, so this file imports numpy and
+`settings` only, uses paths relative to `__file__`, and never touches `tools/`.
 """
 
 import os
@@ -48,12 +53,12 @@ MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path
 )
 
 # E17 ablation switch, same environment-variable pattern as BM_MODEL_SUFFIX.
-# Each arm pins one feature component to a constant, so the table keeps its
-# 12 800 rows and only the information content changes -- rows collapse, they
-# do not disappear. Unset -- every normal game, and the tournament -- the full
-# map is active. The switch must be set for training AND for evaluating an
-# ablated table: the shapes match either way, so a mismatch would not crash,
-# it would silently measure a table through features it was never trained on.
+# Each arm pins one feature component to a constant, so the table keeps its full
+# row count and only the information content changes -- rows collapse, they do
+# not disappear. Unset -- every normal game, and the tournament -- the full map
+# is active. The switch must be set for training AND for evaluating an ablated
+# table: the shapes match either way, so a mismatch would not crash, it would
+# silently measure a table through features it was never trained on.
 #
 #   escape       -- digit 6 no longer switches to the way out while in a blast
 #   crate_target -- digit 6 goes silent when no coin is visible (the E11 map)
@@ -61,9 +66,13 @@ MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path
 #                   Digit 5 = 0 also means the escape branch never fires, so
 #                   this arm removes escape AS WELL -- the components nest.
 #   bomb_digit   -- digit 7 pinned at 0
-#   target_dist  -- E20: digit 8 pinned at 0. Same information as the pre-E20
-#                   map in a table of the same 64 000 rows, so it prices the
-#                   sample dilution on its own, with no new information at all.
+#   target_dist  -- digit 8 pinned at 0. NOT an ablation in the sense the others
+#                   are: pinning the least significant digit maps row i to 5i,
+#                   a bijection onto every fifth row, so the arm reproduces the
+#                   pre-E20 agent *exactly* rather than measuring what the digit
+#                   costs (E20 finding 2 -- it was designed as a dilution control
+#                   and could never have been one). Still useful, as a bit-exact
+#                   wiring check and as "the old map under a new hyperparameter".
 ABLATE = os.environ.get("BM_ABLATE", "")
 if ABLATE not in ("", "escape", "crate_target", "danger", "bomb_digit", "target_dist"):
     raise ValueError(

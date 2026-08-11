@@ -3,22 +3,75 @@
 Loaded only with `--train`, so nothing here runs in the tournament. That is why
 `tools/` may be imported (defensively) and why the exploration RNG lives here.
 
-Settings inherited from task 1, with the evidence (`experiments/task1.md`):
+Reproducing the shipped `q_table.npy`
+-------------------------------------
+Every default below is the shipped configuration, so this one command rebuilds
+it bit for bit (the suffix only keeps it from overwriting the shipped file,
+which `save_table` refuses to do anyway)::
 
-- **alpha = 1/N(s,a)^0.7, not a constant.** Largest single effect measured on
-  rung 1: constant alpha gave 20.78 +- 6.98 coins over 5 seeds, per-cell gave
-  49.15 +- 1.23. A constant alpha satisfies neither of L26's convergence
-  conditions, so busy cells never settle -- and an unsettled cell here is not a
-  small error but an absorbing deadlock.
-- **KILLED_SELF = -5.** Removed every suicide at once, which is why BOMB can
-  stay in the action set instead of being masked out.
-- **The epsilon schedule is not justified by rung-1 numbers** (no demonstrated
-  difference over 5 seeds). Kept for task 2, where danger states are a distinct
-  region of the state space that only a surviving agent ever reaches.
+    BM_MODEL_SUFFIX=_repro uv run python main.py play --no-gui \\
+        --agents benedict_task2 --train 1 --n-rounds 20000 --seed 810731
 
-Reproducibility needs BOTH the exploration seed here and `main.py --seed`;
-either alone leaves runs incomparable. Train on a world seed that is *not* the
-evaluation seed (20260731), or the agent is measured on arenas it trained on.
+    cmp checkpoints/benedict_task2/q_table_repro.npy \\
+        agent_code/benedict_task2/q_table.npy
+
+Two things that are *not* obvious and are easy to get wrong:
+
+- **The world seed 810731 is not optional and is not the evaluation seed.**
+  Reproduction needs both it and `TRAIN_SEED + RUN_INDEX` below; either alone
+  leaves runs incomparable. Never train on 20260731 -- the agent would then be
+  measured on arenas it trained on.
+- **Training is coarse-to-fine.** `WARM_SUFFIX` starts the 64 000-row table from
+  a converged 12 800-row parent (E23). That parent belongs to the *pre-E20*
+  feature map and cannot be retrained at this commit, which is why it is the one
+  checkpoint kept under version control.
+
+Why these hyperparameters (evidence in `experiments/benedict_task2.md` §4)
+--------------------------------------------------------------------------
+=================  ==========  ====================================================
+setting            value       why
+=================  ==========  ====================================================
+alpha              1/N^0.7     Rung 1's largest single effect: constant alpha gave
+                               20.78 +- 6.98 coins, per-cell 49.15 +- 1.23. A
+                               constant alpha meets neither of L26's convergence
+                               conditions, and an unsettled cell here is not a small
+                               error but an absorbing deadlock. Exponent swept in
+                               E22: 1.0 tripled the thin-margin fraction and cost
+                               the best seed 88 crates -- the target is
+                               non-stationary, so sample-averaging is wrong.
+gamma              0.99        E15. At 0.9 the horizon is ~10 steps, shorter than
+                               the distance to most targets; 0.99 cut the crate std
+                               from 24.2 to 2.9 and removed a peak-then-decay that
+                               three earlier entries blamed on their own changes.
+eps                0.2 -> 0.02 E15/E18. A floor of 0.10 halves performance; 0.005 is
+                               indistinguishable from 0.02; 0 stops learning outright
+                               (4 of 5 tables frozen from 40 000 on). The residual
+                               0.64 deaths/episode are the tuition that keeps rare
+                               rows alive.
+COIN_COLLECTED     +5          E16, and the most surprising result on the rung: the
+                               game's own +1 costs 45 crates. The reward is not a
+                               statement about coins being valuable, it is what keeps
+                               the value function separated -- 16.7:1 against the
+                               crate reward gives the table the dynamic range that
+                               stops near-ties being settled by noise.
+CRATE_DESTROYED    +0.3        E16. 1.0 halves the crate count -- not by killing the
+                               agent (98 % of the deficit is in rounds nobody died)
+                               but by degrading placement: it bombs 24 % more often
+                               for 1.09 crates a bomb instead of 2.55.
+KILLED_SELF        -5          Rung 1. Removed every suicide at once, which is why
+                               BOMB can stay in the action set instead of being
+                               masked out. E17 confirms it is load-bearing.
+STEP_COST          -0.1        Shortest-path pressure; the round is capped at 400
+                               steps and 99 % of rounds hit that cap.
+WARM_N             100         E23. Not optional: alpha is exactly 1 on a cell's
+                               first update, so an untouched transfer is overwritten
+                               immediately. 10 000 and 100 000 are both worse -- the
+                               table then cannot differentiate the rows the new digit
+                               created.
+episodes           20 000      E23. Longer is worse on this map: 40 000 loses ~7
+                               crates, and E18 measured 200 000 turning the coarse
+                               map from 97.31 into 62.85 by re-rolling near ties.
+=================  ==========  ====================================================
 """
 
 import atexit
@@ -50,10 +103,10 @@ ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP", 0.7))     # in (0.5, 1]
 EPS_START = 0.2
 EPS_END = float(os.environ.get("BM_EPS_END", 0.02))
 
-# Rounds between model saves. The table is 614 KB, so saving every round is
-# ~25 GB of writes over a 40 000-round run and five of those run concurrently --
-# enough I/O to matter. A crash costs at most this many rounds of learning, and
-# the atexit hook in setup_training covers every normal ending.
+# Rounds between model saves. The table is 2.9 MB since E20, so saving every
+# round is ~120 GB of writes over a 40 000-round run, with up to fifteen of them
+# running at once -- enough I/O to dominate the batch. A crash costs at most this
+# many rounds, and the atexit hook in setup_training covers every normal ending.
 SAVE_EVERY = 100
 
 # Episodes at which the table is also written to its own file, so the learning
@@ -75,30 +128,32 @@ REWARDS = {
 
 # --- Experiment switches --------------------------------------------------
 # Read from the environment so a shell loop can sweep seeds and arms without
-# editing this file. Defaults are the settings task 1 ended on.
-RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 0))
-ALPHA_MODE = os.environ.get("BM_ALPHA", "visit")    # "visit" | "const"
-EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const"
+# editing this file. Every default is the shipped configuration.
 
-# E19: potential-based shaping, F = γ·Φ(s') − Φ(s), with Φ(s) = −BM_SHAPE · (BFS
-# distance to the nearest reachable coin, else the nearest crate) -- digit 6's goal
-# set, safe branch. Ng et al. 1999: a state-only potential leaves the optimal policy
-# unchanged; the γ inside F is the one the L26 board dropped, and Φ(terminal) = 0 is
-# what keeps the telescope exact in episodic play. 0 -- the default, and every
-# experiment before E19 -- skips all of it, including the BFS.
+# Seeds the exploration RNG as TRAIN_SEED + RUN_INDEX. 5 is the seed the shipped
+# table came from, selected on the held-out world seed 550731 (E23); 0-4 are the
+# sweep it was selected against.
+RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 5))
+
+ALPHA_MODE = os.environ.get("BM_ALPHA", "visit")    # "visit" | "const" (E06)
+EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const" (E05)
+
+# E19, rejected: potential-based shaping, F = gamma*Phi(s') - Phi(s) with
+# Phi = -BM_SHAPE * (BFS distance to digit 6's goal). Kept at its default of 0 --
+# which skips the whole mechanism, BFS included -- so E19 stays reproducible.
+# It fails because a row of this table is a bucket of states with different Phi,
+# so the offset does not cancel between actions the way the theorem needs.
 SHAPE = float(os.environ.get("BM_SHAPE", 0))
 
-# E21: coarse-to-fine value transfer. Names a table the way BM_MODEL_SUFFIX does;
-# empty -- the default, and every experiment before E21 -- starts from zero.
-WARM_SUFFIX = os.environ.get("BM_WARM", "")
-
-# Pseudo-visits the transferred cells are credited with. Not optional: alpha =
-# 1/N^0.7 is exactly 1 on a cell's first update, so without this the first visit
-# would overwrite the transferred value outright and the arm would be a no-op
-# with extra I/O. 100 puts the starting alpha at 0.0398.
+# E23: coarse-to-fine value transfer. Names a table the way BM_MODEL_SUFFIX does
+# and every row starts from the row it was split from. Empty starts from zero,
+# which is ~20 crates worse -- see the module docstring.
+#
+# CAREFUL when reproducing an entry older than E23: those runs had no warm start,
+# and the launch commands recorded in the ledger do not set this variable, so at
+# this commit they would silently get one. Pass BM_WARM= (empty) for E08-E22.
+WARM_SUFFIX = os.environ.get("BM_WARM", "_e16_c5_k03_s0__ep100000")
 WARM_N = int(os.environ.get("BM_WARM_N", 100))
-
-
 
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
 TRAIN_SEED = 20260731

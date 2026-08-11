@@ -90,13 +90,25 @@ E16 is variance work, and it took seven entries to convert a 15-crate spread int
 | 7 | a bomb here would open a crate **and** I have one | 2 |
 | 8 | how far the digit-6 target is: 1 / 2 / 3–4 / 5+ (0 = n/a) | 5 |
 
-**Learning.** γ = 0.99 · α = 1/N(s,a)^0.7 per cell · ε 0.2 → 0.02, decay 0.9995 ·
-rewards `COIN_COLLECTED` +5, `CRATE_DESTROYED` +0.3, `INVALID_ACTION` −1, `WAITED` −0.1,
-`KILLED_SELF` −5, step cost −0.1.
+**Every hyperparameter, and what decided it.** None of these is a default carried in unexamined;
+each row names the entry that set it. All are the defaults in `train.py`.
+
+| setting | value | decided by |
+|---|---|---|
+| α | **1/N(s,a)^0.7** | Rung 1's largest single effect — constant α gave 20.78 ± 6.98 coins, per-cell 49.15 ± 1.23. A constant α meets neither of L26's convergence conditions, and an unsettled cell here is an absorbing deadlock, not a small error. The **exponent** was swept only in E22: 1.0 tripled thin margins and cost the best seed 88 crates, because the target is non-stationary (mean \|TD\| *rises* through training) and sample-averaging is the wrong rule for it. |
+| γ | **0.99** | E15. At 0.9 the horizon is ~10 steps, shorter than the distance to most targets. Cut the crate std 24.2 → 2.9 and removed a peak-then-decay three earlier entries had blamed on their own feature changes. |
+| ε | **0.2 → 0.02**, ×0.9995 | E15/E18. A floor of 0.10 halves performance; 0.005 is indistinguishable from 0.02; **0 stops learning** — 4 of 5 tables frozen from 40 000 on. The residual 0.64 deaths/episode are the tuition that keeps rare rows alive. |
+| `COIN_COLLECTED` | **+5** | E16, the rung's most surprising result: the game's own +1 **costs 45 crates**. Not a claim that coins matter more — a 16.7:1 ratio against the crate reward is what gives the table the dynamic range that stops near-ties being settled by noise. |
+| `CRATE_DESTROYED` | **+0.3** | E16. 1.0 halves the crate count, and *not* by killing the agent (98 % of the deficit is in rounds nobody died) — it bombs 24 % more often for 1.09 crates a bomb instead of 2.55. Rewarding the metric harder degrades placement. |
+| `KILLED_SELF` | **−5** | Rung 1; removed every suicide at once, which is why `BOMB` can stay in the action set instead of being masked out. E17 confirms it is load-bearing. |
+| `INVALID_ACTION` | −1 | Rung 1. An invalid move leaves the state unchanged, which is the absorbing-row failure mode. |
+| step cost | −0.1 | Shortest-path pressure. Binding, since 99 % of rounds hit the 400-step cap. |
+| `WARM_N` | **100** | E23. Not optional — α is exactly 1 on a cell's first update, so an uncredited transfer is overwritten immediately. 10 000 and 100 000 are both worse: the table then cannot differentiate the rows the new digit created. |
+| episodes | **20 000** | E23. Longer is worse here (40 000 loses ~7 crates), and E18 measured 200 000 turning the coarse map from 97.31 into 62.85 by re-rolling near ties. |
 
 **Training recipe (E23).** Warm-start every row from the row it was split from in a converged
 12 800-row table (`np.repeat`, pseudo-count `WARM_N = 100`), then train **20 000 episodes**.
-Longer is worse.
+Longer is worse. Training from scratch on this map instead is ~20 crates worse (E20).
 
 **Shipped table** `q_table_e23_wn100_s5__ep20000`, selected on held-out seed 550731 and confirmed
 on 990731 — an arena set used to choose nothing — over **1000 rounds**:
@@ -279,28 +291,43 @@ the evaluation seed 20260731; the training world seed is 810731.
 
 ## 9 · Reproduction
 
+**The shipped table, from a clean clone.** Every default in `train.py` is the shipped
+configuration, so this is the whole recipe — the suffix exists only to avoid writing over
+`q_table.npy`, which `save_table` refuses to do anyway:
+
 ```bash
-# 1. a coarse parent (12 800-row map, pre-E20 commit) — or reuse checkpoints/
-BM_QUIET_LOGS=1 BM_ARM=c5_k03 BM_RUN_INDEX=$i BM_MODEL_SUFFIX=_e16_c5_k03_s$i \
-  uv run python main.py play --no-gui --agents benedict_task2 --train 1 \
-  --n-rounds 100000 --seed 810731
+BM_MODEL_SUFFIX=_repro uv run python main.py play --no-gui \
+    --agents benedict_task2 --train 1 --n-rounds 20000 --seed 810731
 
-# 2. warm-start the 64 000-row map from it and stop at 20 000
-BM_QUIET_LOGS=1 BM_WARM=_e16_c5_k03_s${p}__ep100000 BM_WARM_N=100 \
-  BM_ARM=wn100 BM_RUN_INDEX=$i BM_MODEL_SUFFIX=_e23_wn100_s$i \
-  uv run python main.py play --no-gui --agents benedict_task2 --train 1 \
-  --n-rounds 40000 --seed 810731
-
-# 3. select on the held-out seed, confirm on a third, then ship
-BM_MODEL_SUFFIX=_e23_wn100_s${i}__ep20000 uv run python tools/evaluate.py \
-  --agents benedict_task2 --opponents none --n-rounds 300 --seed 550731 \
-  --label benedict_q_e23_wn100_s${i}__ep20000__task2_val550731 \
-  --out-dir results/eval/task2_crates
-cp checkpoints/benedict_task2/q_table_e23_wn100_s5__ep20000.npy \
-   agent_code/benedict_task2/q_table.npy
+cmp checkpoints/benedict_task2/q_table_repro.npy agent_code/benedict_task2/q_table.npy
 ```
 
-Five training seeds in parallel; `BM_RUN_INDEX` seeds the exploration RNG
-(`TRAIN_SEED + RUN_INDEX`), so a run is bit-identical given the same commit and the same `BM_*`
-variables. `BM_MODEL_SUFFIX` resolves into `checkpoints/<agent>/`, so per-run tables can never
-land in the submitted folder.
+Verified byte-identical. The warm-start parent
+`checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy` is the **one checkpoint kept
+under version control** (614 KB): it belongs to the pre-E20 12 800-row feature map and therefore
+*cannot* be retrained at this commit, so without it in the repo the shipped model would not be
+reproducible at all. To rebuild it from scratch, check out `bd52080` (E16) and run
+`BM_ARM=c5_k03 BM_RUN_INDEX=0 BM_MODEL_SUFFIX=_e16_c5_k03_s0 … --n-rounds 100000 --seed 810731`.
+
+**The sweep the shipped seed was selected from** — five training seeds in parallel, selection on
+the held-out world seed 550731, confirmation on 990731:
+
+```bash
+for i in 5 6 7 8 9; do
+  BM_QUIET_LOGS=1 BM_ARM=wn100 BM_RUN_INDEX=$i BM_MODEL_SUFFIX=_e23_wn100_s$i \
+    uv run python main.py play --no-gui --agents benedict_task2 --train 1 \
+    --n-rounds 40000 --seed 810731 &
+done; wait
+
+for i in 5 6 7 8 9; do
+  BM_MODEL_SUFFIX=_e23_wn100_s${i}__ep20000 uv run python tools/evaluate.py \
+    --agents benedict_task2 --opponents none --n-rounds 300 --seed 550731 \
+    --label benedict_q_e23_wn100_s${i}__ep20000__task2_val550731 \
+    --out-dir results/eval/task2_crates
+done
+```
+
+`BM_RUN_INDEX` seeds the exploration RNG (`TRAIN_SEED + RUN_INDEX`), so a run is bit-identical
+given the same commit and the same `BM_*` variables — the shipped seed is **5**, and the sweep it
+was selected against is 5–9. `BM_MODEL_SUFFIX` resolves into `checkpoints/<agent>/`, so per-run
+tables can never land in the submitted folder.
