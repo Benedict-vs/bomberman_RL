@@ -1867,6 +1867,8 @@ property of the feature map and the reward function, not of luck.
    was variance reduction, which γ now provides for free; whether it buys *selectivity* is
    untested and is the question its own entry failed to answer.
 
+## E14 — Count the crates in blast range instead of asking yes/no
+
 - **Question:** the E13 post-mortem traced the 2-cycle to a margin: in the seeds that collapse,
   half of all bombing opportunities are decided by less than 0.01 between `BOMB` and walking on,
   against 0.207 in the seed that reaches reference parity. The proposed cause is aliasing — digit
