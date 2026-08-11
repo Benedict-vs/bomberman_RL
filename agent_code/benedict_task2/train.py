@@ -75,13 +75,15 @@ episodes           20 000      E23. Longer is worse on this map: 40 000 loses ~7
 """
 
 import atexit
+import json
 import os
 from typing import List
 
 import numpy as np
 
 import events as e
-from .callbacks import state_to_features, ACTIONS, MODEL_FILE, N_STATES, DELTAS
+from .callbacks import (state_to_features, ACTIONS, MODEL_FILE, N_STATES,
+                        DELTAS, FEATURE_SIZES)
 
 try:
     from tools.trainlog import TrainLogger
@@ -243,6 +245,7 @@ def save_table(self) -> None:
     # and may not exist on a fresh clone.
     os.makedirs(os.path.dirname(MODEL_FILE), exist_ok=True)
     np.save(MODEL_FILE, self.q)
+    write_layout(MODEL_FILE)
     self.model_file_preexisted = False
 
 
@@ -342,6 +345,33 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.eps = max(EPS_END, self.eps * EPS_DECAY)
 
 
+LAYOUT_EXT = ".layout.json"
+
+
+def write_layout(table_file: str) -> None:
+    """Record the feature layout beside a saved table.
+
+    A `.npy` says how many rows it has and nothing about what they mean. Two
+    different `FEATURE_SIZES` can produce the same row count, so a table alone
+    cannot tell a warm start whether it is a legitimate parent -- see the
+    append-only argument in `warm_start`. One line of JSON removes the guesswork.
+    """
+
+    with open(table_file + LAYOUT_EXT, "w") as fh:
+        json.dump({"feature_sizes": list(FEATURE_SIZES)}, fh)
+
+
+def read_layout(table_file: str) -> list | None:
+    """The layout a table was trained on, or None for tables written before this
+    existed -- including the E16 parent the shipped model starts from."""
+
+    try:
+        with open(table_file + LAYOUT_EXT) as fh:
+            return json.load(fh)["feature_sizes"]
+    except (OSError, KeyError, ValueError):
+        return None
+
+
 def warm_start(self) -> None:
     """Initialise this table from a coarser one, each row from its parent.
 
@@ -352,10 +382,17 @@ def warm_start(self) -> None:
     distinction the new digit draws, so a child starts from its parent rather
     than from zero.
 
-    The new digit is the least significant, so the children of parent i are rows
-    5i..5i+4 and `np.repeat` is exactly that map. Only cells whose parent carried
-    value get the pseudo-count: crediting the rest would start genuinely new rows
-    at a twenty-fifth of their learning rate for nothing.
+    **The new digits must be appended, never inserted.** `encode` is mixed radix,
+    so appending digits to `FEATURE_SIZES` multiplies every old index by the new
+    radices: parent row i becomes children `k*i .. k*i+k-1`, which is exactly
+    `np.repeat`. Insert a digit anywhere else and the row count is identical, the
+    divisibility check below still passes, and the mapping is silently wrong --
+    measured on 5 000 random states, an inserted digit mis-maps 39 % of them.
+    That is why the layout is written beside every table and checked here.
+
+    Only cells whose parent carried value get the pseudo-count: crediting the
+    rest would start genuinely new rows at a twenty-fifth of their learning rate
+    for nothing.
     """
 
     coarse_file = os.path.join(os.path.dirname(MODEL_FILE),
@@ -366,6 +403,19 @@ def warm_start(self) -> None:
         raise ValueError(
             f"{coarse_file} has {len(coarse)} rows, which does not divide the "
             f"current {N_STATES} -- it is not a parent of this feature map.")
+
+    parent_sizes = read_layout(coarse_file)
+    if parent_sizes is None:
+        self.logger.warning(
+            f"{coarse_file} has no {LAYOUT_EXT} sidecar, so the append-only "
+            "assumption cannot be checked -- verify it by hand before trusting "
+            "the result.")
+    elif tuple(FEATURE_SIZES[:len(parent_sizes)]) != tuple(parent_sizes):
+        raise ValueError(
+            f"{coarse_file} was trained on FEATURE_SIZES {tuple(parent_sizes)}, "
+            f"which is not a prefix of the current {tuple(FEATURE_SIZES)}. New "
+            "digits must be appended, not inserted -- otherwise np.repeat maps "
+            "parent rows onto the wrong children and nothing will complain.")
 
     self.q[:] = np.repeat(coarse, factor, axis=0)
     self.visits[np.repeat(np.abs(coarse).sum(axis=1) > 0, factor)] = WARM_N

@@ -106,9 +106,43 @@ each row names the entry that set it. All are the defaults in `train.py`.
 | `WARM_N` | **100** | E23. Not optional — α is exactly 1 on a cell's first update, so an uncredited transfer is overwritten immediately. 10 000 and 100 000 are both worse: the table then cannot differentiate the rows the new digit created. |
 | episodes | **20 000** | E23. Longer is worse here (40 000 loses ~7 crates), and E18 measured 200 000 turning the coarse map from 97.31 into 62.85 by re-rolling near ties. |
 
-**Training recipe (E23).** Warm-start every row from the row it was split from in a converged
-12 800-row table (`np.repeat`, pseudo-count `WARM_N = 100`), then train **20 000 episodes**.
-Longer is worse. Training from scratch on this map instead is ~20 crates worse (E20).
+### Coarse-to-fine — how the table is actually built, and why it is reusable
+
+The shipped table is **not trained in one run.** It is a two-stage curriculum across two feature
+maps, and this is the most transferable thing on the rung:
+
+| stage | map | episodes | produces |
+|---|---|---|---|
+| 1 | 7 digits, **12 800 rows** (commit `bd52080`, pre-E20) | 100 000 | the coarse parent |
+| 2 | 8 digits, **64 000 rows** (HEAD) | **20 000** | the shipped table |
+
+Stage 2 initialises every row from the row it was split from — `np.repeat(coarse, 5)` — and
+credits those cells with `WARM_N = 100` pseudo-visits so the first update does not erase them.
+
+**Why not one stage.** Trained from scratch, the fine map reaches **91.92** crates after 100 000
+episodes (E20). Warm-started it reaches **111.40** after 20 000 — better, and five times cheaper.
+The fine map has ~840 used rows against the coarse map's ~474, so the same data is spread twice
+as thin; the parent hands it values for those rows instead of making it rediscover them. The two
+stages do different jobs: the coarse map learns **what to do**, the fine map learns **when the
+distance changes the answer**.
+
+**The constraint that makes it work: new digits must be *appended*, never inserted.** `encode`
+is mixed radix, so appending multiplies every old index by the new radix — parent row *i*
+becomes children *k·i … k·i+k−1*, which is exactly `np.repeat`. Insert a digit anywhere else and
+the row count is unchanged, the divisibility check still passes, and **the mapping is silently
+wrong**: measured on 5 000 random states, an inserted digit mis-maps **39 %** of them, with no
+error raised. Digit 8 was appended for an unrelated reason — to keep "digit 6" meaning the same
+thing in older entries — and that accident is what makes the warm start valid.
+
+Since this is a silent-failure mode rather than a crash, `train.py` now writes a
+`.layout.json` sidecar beside every table and `warm_start` refuses a parent whose
+`FEATURE_SIZES` is not a prefix of the current one. Tables written before this exist without a
+sidecar and produce a warning instead of a refusal.
+
+**This is expected to be needed again on rungs 3 and 4.** Opponent features mean more digits,
+which means a bigger and sparser table facing the same problem, and the shipped rung-2 table is
+the natural parent for it. Append the opponent digits after digit 8 and the same machinery
+applies unchanged.
 
 **Shipped table** `q_table_e23_wn100_s5__ep20000`, selected on held-out seed 550731 and confirmed
 on 990731 — an arena set used to choose nothing — over **1000 rounds**:
@@ -273,7 +307,10 @@ the evaluation seed 20260731; the training world seed is 810731.
 ## 8 · Carried into task 3
 
 1. **`state_to_features` has no opponent information at all** — the `TODO task 3+` in
-   `callbacks.py` is untouched. That is the whole of rung 3's feature work.
+   `callbacks.py` is untouched. That is the whole of rung 3's feature work. **Append the new
+   digits after digit 8**, so the shipped rung-2 table stays a valid warm-start parent (§3);
+   inserting them would silently break the mapping and the guard in `warm_start` would be the
+   only thing standing between that and a wasted batch.
 2. **Order agreed:** `GOT_KILLED` into the reward table first, then measure the transfer floor of
    the shipped rung-2 agent against `peaceful_agent`, then add opponent digits. `peaceful_agent`
    is a genuine floor here in a way it never was on rung 2.

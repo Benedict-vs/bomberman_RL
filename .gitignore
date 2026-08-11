@@ -157,6 +157,9 @@ checkpoints/benedict_task2/*
 # retrained at HEAD -- without it in the repo, `q_table.npy` is not reproducible
 # from a clone at all. 614 KB, and it is an input to the submitted model.
 !checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy
+# ...and its layout sidecar, without which warm_start can only warn that the
+# append-only assumption is unchecked instead of enforcing it.
+!checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy.layout.json
 
 # macOS
 .DS_Store
