@@ -207,6 +207,19 @@ def evaluate(
             # The one line that makes comparisons paired.
             world.rng = np.random.default_rng(base_seed + round_index)
 
+            # ...and from task 3 on, this one. All three provided opponents call
+            # np.random.seed() with *no argument* in setup (peaceful_agent:5,
+            # coin_collector_agent:68, rule_based_agent:69), reseeding the global
+            # legacy RNG from OS entropy once per world -- so without this the
+            # arenas are paired but the opponents are not, and rerunning the same
+            # evaluation moves the numbers (E24 measured 12 vs 7 deaths against
+            # peaceful_agent on identical seeds). The framework itself draws only
+            # from `world.rng` (environment.py:335) and our agents only from
+            # seeded default_rng generators, so this reaches the opponents and
+            # nothing else: arenas are untouched and older baselines stay
+            # comparable.
+            np.random.seed(base_seed + round_index)
+
             world.new_round()
             while world.running:
                 world.do_step()

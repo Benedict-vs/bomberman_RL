@@ -198,6 +198,18 @@ reproducible as a whole. `tools/evaluate.py` instead reseeds with `base_seed + r
 seed. That is what makes `--compare` paired; `main.py --seed` alone is not sufficient for a
 measurement.
 
+**From task 3 on, the opponents are seeded too** (added 2026-08-11, `experiments/benedict.md`
+E24). All three provided agents call `np.random.seed()` **with no argument** in `setup`
+(`peaceful_agent:5`, `coin_collector_agent:68`, `rule_based_agent:69`), reseeding the global
+legacy RNG from OS entropy — so with opponents on the board an evaluation was *not* reproducible
+at a fixed seed, only its arenas were. Rerunning one diagnostic gave 12 vs 7 deaths against
+`peaceful_agent` on identical seeds. `evaluate.py` now calls
+`np.random.seed(base_seed + round_index)` beside the `world.rng` line. Nothing in the framework
+draws from that RNG (`environment.py:335` is the only generator) and our agents use seeded
+`default_rng` objects only, so this changes opponent behaviour and nothing else: arenas are
+untouched and evaluations without opponents are bit-identical to before. **Numbers recorded with
+opponents before this are single draws, not constants.**
+
 ## Task ladder (subsets of each other)
 1. `coin-heaven`, no crates/opponents → efficient navigation to revealed coins.
 2. `classic`, no opponents → use bombs to open crates, **escape own bombs**, keep navigating.
