@@ -88,6 +88,11 @@ N_STATES = int(np.prod(FEATURE_SIZES))
 
 POLICY_SEED = 20260731
 
+# How close two actions must be to count as tied in `act`. 0.0 reproduces every
+# measurement up to E22 exactly. Set as an environment switch rather than an
+# edited constant so the default in the tournament is the value in this file.
+TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
+
 
 def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
     """Tiles a bomb at (x, y) covers. Mirrors `items.py:Bomb.get_blast_coords`.
@@ -422,6 +427,12 @@ def act(self, game_state: dict) -> str:
     # near-tie into an absorbing loop -- an invalid move leaves the state
     # unchanged, so the agent repeats it forever. Cheap insurance; it is not a
     # substitute for the learning rate that stops the ties happening.
+    #
+    # TIE_TOL widens "tied" from exact float equality to a band. At 0.0 -- the
+    # default -- this is byte-for-byte the behaviour every entry up to E22 was
+    # measured with. The audit of E19-E22 measured that the insurance above
+    # never fires in practice: the rows that absorb a collapsed policy sit at
+    # margins of 1e-4 to 1e-2, never at 0.
     q_row = self.q[state]
-    best = np.flatnonzero(q_row == q_row.max())
+    best = np.flatnonzero(q_row >= q_row.max() - TIE_TOL)
     return ACTIONS[int(best[0] if best.size == 1 else self.policy_rng.choice(best))]
