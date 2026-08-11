@@ -249,7 +249,9 @@ danger features, never before.
   `agent_code/<name>/callbacks.py` may import from it.
 - `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
   Grouped per task, same names in both trees: `task1_coin_collectors/`, `task2_crates/`,
-  plus `results/eval/baselines/` for the provided agents. Underscores, never spaces — a
+  `task3_opponents/`, plus `results/eval/baselines/` for the provided agents — including a
+  provided agent measured *in an opponent field*, which is a reference and not a result
+  (`ref_<agent>__task3_<field>.csv`). Underscores, never spaces — a
   directory with a space in it silently breaks unquoted globs in analysis scripts.
   Non-default locations need `--out-dir`, e.g.
   `--out-dir results/eval/task2_crates`.

@@ -21,6 +21,84 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E24 — What the rung-2 agent does when there are opponents on the board
+
+- **Question:** the opening measurement of rung 3, and deliberately not a change. Rung 3 has
+  three holes and I cannot rank them from the armchair:
+
+  1. **No opponent information in the state.** `state_to_features` is the rung-2 map verbatim,
+     `TODO task 3+` untouched.
+  2. **Kills and deaths by others are worth 0 in the learning signal.** `REWARDS`
+     (`train.py:134`) is `{COIN_COLLECTED, CRATE_DESTROYED, INVALID_ACTION, WAITED,
+     KILLED_SELF}` — no `KILLED_OPPONENT`, no `GOT_KILLED`. The *game* pays +5 for a kill; the
+     agent is never told.
+  3. **The danger digits assume a static board.** Digit 6's exit direction is computed from
+     bombs and walls only, so an opponent standing in the escape corridor is invisible.
+
+  Which of these binds depends on whether the failure mode is *death* or *passivity*, and those
+  need opposite fixes. E09 is the precedent: the rung-1 → rung-2 transfer floor was 0.00 crates,
+  and knowing that before building anything is what set rung 2's direction. The same move costs
+  ~20 minutes here and no training at all.
+
+- **Change:** none. Frozen `q_table.npy`, ε = 0, no `BM_*` set. This measures what the rung-2
+  policy *does*, not what it could learn.
+
+- **Three facts established before the run**, because they drive the predictions:
+  - `peaceful_agent` (`agent_code/peaceful_agent/callbacks.py:8`) picks uniformly from the four
+    moves, never bombs, never waits. Against it, **every bomb on the board is mine**, so its
+    deaths are all attributable to me and `kills` measures accidental lethality with the
+    aggression term switched off.
+  - **Opponents block movement but are invisible to my pathing.** `tile_is_free`
+    (`environment.py:121`) counts other agents *and* bombs as obstacles, while `bfs_first_step`
+    searches `field` alone. A move onto an occupied tile is silently converted to a wait.
+  - Rung-2 reference for the same table (1000 rounds, seed 990731): score **8.474**, crates
+    **116.57**, bombs **45.27**, suicides **0.000**, survived **1.000**.
+
+- **Design.** Two agents in the same slot × three opponent fields, 300 rounds, seed 20260731,
+  ε = 0. The reference is `rule_based_agent` put in *my* slot against the identical field, so
+  the comparison is paired arena for arena rather than against a number from another setup.
+
+  | field | `--opponents` | what it isolates |
+  |---|---|---|
+  | 3× `peaceful_agent` | `peaceful` | pure survival + accidental kills; no foreign bombs |
+  | 3× `coin_collector_agent` | `coin_collector` | competition for crates and coins, foreign bombs |
+  | 3× `rule_based_agent` | `rule_based` | the rung-4 opponent, measured early for the gap |
+
+- **Measurement:** `--preset task3` plus `killed_by` and `bombs`. Results in
+  `results/eval/task3_opponents/` (mine) and `results/eval/baselines/` (the reference).
+
+### Prediction (written before the run)
+
+1. **Against `peaceful` the agent scores *higher* than its rung-2 8.47, from kills it never
+   learnt to want.** 45.27 bombs per round, each blast covering ~10 tiles for 2 steps, is roughly
+   900 tile-steps of lethal board against ~150 reachable free tiles over 400 steps — a random
+   walker should not survive that. Predict **kills ≥ 1.0**, survived ≥ 0.95, and score ≥ 12
+   (coins hold near 8.5 because `peaceful_agent` collects none). **Refutation:** kills < 0.5, or
+   survived < 0.90.
+2. **`invalid` rises in every field, and orders with how much the opponents are in the way.**
+   Blocked steps are the direct, measurable consequence of pathing over `field` alone. Predict
+   `invalid` above the rung-2 level in all three fields. **Refutation:** `invalid` unchanged
+   against `peaceful` — then the blocking is rare enough to ignore and hole 3 is cheap.
+3. **`crates` collapses against the two bombing fields, not against `peaceful`.** 122 crates
+   shared four ways plus rounds that end early. Predict < 60 against `coin_collector` and
+   `rule_based`, and ≥ 100 against `peaceful`. **Refutation:** ≥ 80 in a bombing field.
+4. **The dominant death mode is `killed_by_opponent`, and `suicides` stays put.** The escape
+   logic is priced by `KILLED_SELF` and measured at 0.000, and nothing about opponents changes
+   my own bomb's blast. Predict suicides < 0.02 everywhere, `killed_by_opponent` ≈ 0 against
+   `peaceful` and ≥ 0.3 against the bombing fields. **Refutation:** suicides ≥ 0.05 in any field
+   — which would mean opponents break my escapes by standing in them, and would promote hole 3
+   above hole 2.
+5. **The gap to `rule_based_agent` is on `kills`, not on survival.** Predict the reference takes
+   ≥ 2× my kills in the `peaceful` field, while my survival is within 0.05 of its. **Refutation:**
+   the reference out-survives me by more than 0.1 — then the gap is defensive, not offensive.
+
+**This is the prediction that picks E25.** Killed-by dominant → opponent features first.
+Survives-but-never-kills → the reward table first.
+
+- **Verdict:** _pending._
+
+---
+
 ## E23 — `WARM_N` and the tie-break tolerance, on five training seeds never used before
 
 - **Question:** the closing experiment for rung 2. Two loose ends, one batch, because they need
