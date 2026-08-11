@@ -22,9 +22,20 @@ Two things that are *not* obvious and are easy to get wrong:
   leaves runs incomparable. Never train on 20260731 -- the agent would then be
   measured on arenas it trained on.
 - **Training is coarse-to-fine.** `WARM_SUFFIX` starts the 64 000-row table from
-  a converged 12 800-row parent (E23). That parent belongs to the *pre-E20*
-  feature map and cannot be retrained at this commit, which is why it is the one
-  checkpoint kept under version control.
+  a converged 12 800-row parent (E23). That parent is kept under version control
+  because it is an input to the shipped model, but it is *not* a dependency on
+  an old commit -- it can be rebuilt here, because pinning the trailing digit is
+  a bijective relabeling of the coarse map (E20 finding 2)::
+
+      BM_ABLATE=target_dist BM_SAVE_PARENT=1 BM_WARM= BM_RUN_INDEX=0 \\
+          BM_MODEL_SUFFIX=_parent uv run python main.py play --no-gui \\
+          --agents benedict_task2 --train 1 --n-rounds 100000 --seed 810731
+
+  leaves `q_table_parent__coarse.npy` (12 800 rows, with the parent's layout in
+  its sidecar), which `BM_WARM=_parent__coarse` then accepts. Verified at 20 000
+  episodes against the committed parent checkpoint: identical.
+  **`BM_WARM=` must be empty here**, or the parent rebuild is itself warm-started
+  from the parent it is meant to replace.
 
 Why these hyperparameters (evidence in `experiments/benedict_task2.md` §4)
 --------------------------------------------------------------------------
@@ -83,7 +94,7 @@ import numpy as np
 
 import events as e
 from .callbacks import (state_to_features, ACTIONS, MODEL_FILE, N_STATES,
-                        DELTAS, FEATURE_SIZES)
+                        DELTAS, FEATURE_SIZES, ABLATE)
 
 try:
     from tools.trainlog import TrainLogger
@@ -156,6 +167,11 @@ SHAPE = float(os.environ.get("BM_SHAPE", 0))
 # this commit they would silently get one. Pass BM_WARM= (empty) for E08-E22.
 WARM_SUFFIX = os.environ.get("BM_WARM", "_e16_c5_k03_s0__ep100000")
 WARM_N = int(os.environ.get("BM_WARM_N", 100))
+
+# Set with BM_ABLATE=target_dist to also write the coarse parent this run is
+# really producing -- see `write_parent`. Off by default; it is only meaningful
+# for that one ablation arm and costs an extra file per save otherwise.
+SAVE_PARENT = os.environ.get("BM_SAVE_PARENT", "") not in ("", "0")
 
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
 TRAIN_SEED = 20260731
@@ -246,6 +262,8 @@ def save_table(self) -> None:
     os.makedirs(os.path.dirname(MODEL_FILE), exist_ok=True)
     np.save(MODEL_FILE, self.q)
     write_layout(MODEL_FILE)
+    if SAVE_PARENT:
+        write_parent(self)
     self.model_file_preexisted = False
 
 
@@ -370,6 +388,40 @@ def read_layout(table_file: str) -> list | None:
             return json.load(fh)["feature_sizes"]
     except (OSError, KeyError, ValueError):
         return None
+
+
+def write_parent(self) -> None:
+    """Also write the *coarse* table an ablated run is really producing.
+
+    `BM_ABLATE=target_dist` pins the trailing digit to 0, and because that digit
+    is least significant, pinning it is a bijective relabeling: the coarse row i
+    lands at row k*i and the other k-1 rows of each group are never touched
+    (E20 finding 2, verified here -- they hold exactly 0.0). So `q[::k]` *is* the
+    table the pre-E20 feature map would have produced.
+
+    Writing it out removes the last reason to check out an old commit: the
+    warm-start parent can be rebuilt at HEAD. Confirmed by training 20 000
+    episodes this way and comparing against the committed
+    `q_table_e16_c5_k03_s0__ep20000.npy` -- identical.
+
+    The sidecar records the *parent's* layout, not this run's, which is what
+    lets `warm_start` accept the result as a legitimate ancestor.
+    """
+
+    if ABLATE != "target_dist":
+        raise ValueError(
+            "BM_SAVE_PARENT only makes sense with BM_ABLATE=target_dist. "
+            f"With BM_ABLATE={ABLATE!r} the trailing digit is live, so the "
+            "stride-k rows are not a coarse table -- they are every fifth row "
+            "of a finer one, which is not the same thing and would warm-start "
+            "into nonsense.")
+
+    stride = FEATURE_SIZES[-1]
+    base, ext = os.path.splitext(MODEL_FILE)
+    out = f"{base}__coarse{ext}"
+    np.save(out, self.q[::stride])
+    with open(out + LAYOUT_EXT, "w") as fh:
+        json.dump({"feature_sizes": list(FEATURE_SIZES[:-1])}, fh)
 
 
 def warm_start(self) -> None:

@@ -113,8 +113,16 @@ maps, and this is the most transferable thing on the rung:
 
 | stage | map | episodes | produces |
 |---|---|---|---|
-| 1 | 7 digits, **12 800 rows** (commit `bd52080`, pre-E20) | 100 000 | the coarse parent |
-| 2 | 8 digits, **64 000 rows** (HEAD) | **20 000** | the shipped table |
+| 1 | 7 digits, **12 800 rows** (`BM_ABLATE=target_dist`) | 100 000 | the coarse parent |
+| 2 | 8 digits, **64 000 rows** | **20 000** | the shipped table |
+
+**Both stages run at HEAD.** Stage 1 does not need the pre-E20 commit: pinning the trailing
+digit is a bijective relabeling, so an ablated run is the coarse agent embedded at stride 5 and
+`BM_SAVE_PARENT=1` writes out `q[::5]` with the parent's layout in its sidecar. Verified by
+training 20 000 episodes that way at HEAD and comparing against the committed
+`q_table_e16_c5_k03_s0__ep20000.npy` — **identical**, with the untouched rows holding exactly
+0.0. That check doubles as independent evidence that E21/E22/E23's defaults really are inert on
+the training path.
 
 Stage 2 initialises every row from the row it was split from — `np.repeat(coarse, 5)` — and
 credits those cells with `WARM_N = 100` pseudo-visits so the first update does not erase them.
@@ -341,10 +349,23 @@ cmp checkpoints/benedict_task2/q_table_repro.npy agent_code/benedict_task2/q_tab
 
 Verified byte-identical. The warm-start parent
 `checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy` is the **one checkpoint kept
-under version control** (614 KB): it belongs to the pre-E20 12 800-row feature map and therefore
-*cannot* be retrained at this commit, so without it in the repo the shipped model would not be
-reproducible at all. To rebuild it from scratch, check out `bd52080` (E16) and run
-`BM_ARM=c5_k03 BM_RUN_INDEX=0 BM_MODEL_SUFFIX=_e16_c5_k03_s0 … --n-rounds 100000 --seed 810731`.
+under version control** (614 KB) — an input to the shipped model, so that a clone can retrain it
+immediately rather than after a 25-minute prerequisite run.
+
+It is a convenience, not a dependency: **stage 1 rebuilds at HEAD**, no old commit required.
+
+```bash
+BM_ABLATE=target_dist BM_SAVE_PARENT=1 BM_WARM= BM_RUN_INDEX=0 \
+  BM_MODEL_SUFFIX=_parent uv run python main.py play --no-gui \
+  --agents benedict_task2 --train 1 --n-rounds 100000 --seed 810731
+# -> q_table_parent__coarse.npy (12 800 rows) + its .layout.json;
+#    then BM_WARM=_parent__coarse for stage 2.
+```
+
+`BM_WARM=` must be empty in that command, or the parent rebuild is itself warm-started from the
+parent it is meant to replace. `BM_SAVE_PARENT` refuses to run without the ablation, since
+without it the stride-5 rows are every fifth row of a *finer* table, which is not a coarse table
+and would warm-start into nonsense.
 
 **The sweep the shipped seed was selected from** — five training seeds in parallel, selection on
 the held-out world seed 550731, confirmation on 990731:
