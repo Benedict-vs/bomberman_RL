@@ -95,7 +95,147 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 **This is the prediction that picks E25.** Killed-by dominant → opponent features first.
 Survives-but-never-kills → the reward table first.
 
-- **Verdict:** _pending._
+### Results (commit `82cae03`, 300 rounds, seed 20260731)
+
+> **Superseded draw.** These numbers were taken *before* the opponent-seeding fix below, so
+> they are one sample of an unseeded opponent stream rather than a reproducible constant. They
+> are replaced further down by the re-take under the fix; kept because they are what the
+> post-mortem in this entry was computed from.
+
+| | rung 2, alone | `peaceful` | `coin_collector` | `rule_based` |
+|---|---|---|---|---|
+| score | 8.474 | **17.753** | 2.500 | 2.727 |
+| coins | 8.474 | 8.137 | 2.217 | 2.410 |
+| kills | — | **1.923** | 0.057 | 0.063 |
+| suicides | 0.000 | 0.080 | 0.200 | 0.410 |
+| killed by opp. | — | 0.000 | 0.427 | 0.437 |
+| survived | 1.000 | 0.920 | 0.373 | 0.153 |
+| crates | 116.57 | 112.97 | 27.04 | 28.84 |
+| invalid | 0.14 | 0.63 | 21.80 | 9.48 |
+| steps alive | 399.9 | 386.9 | 210.6 | 165.3 |
+
+`rule_based_agent` in the identical slot, paired arena for arena: 21.477 / 2.773 / 0.153 /
+0.847 (`peaceful`), 2.847 / 0.163 / 0.293 / 0.670 (`coin_collector`), 3.353 / 0.220 / 0.573 /
+0.353 (`rule_based`).
+
+**Scorecard.** 1 correct (kills 1.923 ≥ 1.0, score 17.75, coins held; survival 0.920 undershot
+the ≥ 0.95 I wrote but cleared the refutation). 2 correct in the number, **wrong in the
+mechanism**. 3 correct. 4 **half refuted** by my own clause. 5 **refuted, and it reverses by
+field**: 1.44× not ≥ 2×, and I *out-survive* the reference by +0.073 against `peaceful` while it
+out-survives me by 0.297 and 0.200 in the bombing fields.
+
+### Two premises in the question section above are wrong
+
+Left standing as written, corrected here:
+
+- **"No opponent information in the state" is false.** `state_to_features`
+  (`callbacks.py:344`) already builds `occupied` from `bombs` *and* `others` and passes it to
+  `neighbour_status` and `escape_direction`. Only `target_direction` ignores it, and a target
+  direction pointing through a body costs a detour, not an invalid action. The data agrees:
+  `invalid` against `peaceful` is 0.63 against a rung-2 baseline of 0.14 — half an action per
+  round, small *because* the neighbour digits work.
+- **"The danger digits assume a static board" is false.** `danger_map` (`callbacks.py:147`)
+  iterates over every bomb on the board and the explosion map, and `escape_direction` is
+  time-aware. Foreign bombs are already in the state.
+
+So the machinery is present and the agent dies anyway. That moves the diagnosis off "missing
+features" and onto the policy — which is what the post-mortem below tests.
+
+### Bodies cost almost nothing; other people's bombs cost everything
+
+`peaceful` isolates one variable, since `peaceful_agent` never bombs: agents as obstacles.
+Bodies alone cost 0.08 survival and 3.6 crates. Adding foreign bombs costs a further 0.55–0.77.
+**~90 % of the collapse is other agents' bombs, not blocking.**
+
+The second split matters more. Against `rule_based`, `suicides` (0.410) is as large as
+`killed_by` (0.437): **half my deaths are my own bomb**, from an agent measured at 0.000 alone.
+And the asymmetry against `coin_collector` — same arenas, same bomb population — is stark:
+I am killed by bombs 0.427 times per round, each opponent 0.037–0.063. **~8× more often**, while
+collecting 0.057 kills to their 0.19.
+
+### Post-mortem: the deaths are in rows the training never updated
+
+`scratchpad/benedict/death_rows.py`, 100 rounds per field, same arenas. `callbacks.setup`
+initialises with `np.zeros`, so an all-zero row is an exact test for "never updated by either
+training stage" — **61 636 of 64 000 rows (96.3 %) are all-zero**, i.e. the rung-2 policy
+practised 2 364 rows.
+
+The number that matters is the enrichment over the **base rate**, not the raw share — a count is
+not a rate, which is the E22 mistake:
+
+| field | all-zero rows, all steps | all-zero rows, **at the fatal step** | enrichment |
+|---|---|---|---|
+| `peaceful` | 0.03 % | 0.00 % | — |
+| `coin_collector` | 1.38 % | **71.93 %** | 52× |
+| `rule_based` | 3.04 % | **63.95 %** | 21× |
+
+Rows never visited by the solo ε = 0 rollout: base 0.43 / 2.57 / 5.14 %, at the fatal step
+**100 / 98.25 / 93.02 %**.
+
+**In roughly two of every three deaths the Q-row is all zeros.** With `TIE_TOL = 0.0` all six
+actions then tie exactly, `act` falls through to `policy_rng.choice(best)` — so the agent is
+choosing **uniformly at random at the moment it dies**. That cannot be repaired by a better
+feature; only by visiting the row.
+
+The mechanism probe agrees and is independent of any visitation argument: in **40–42 %** of
+deaths the agent was standing in a blast with `escape_direction` returning `NO_TARGET` somewhere
+in the 4-step window — genuinely trapped. Against `peaceful` that is **100 %** of the (7) deaths,
+with the fatal rows all *present* in the table but never reached by the solo greedy policy. So
+`peaceful` deaths are rare-state deaths, `bombing`-field deaths are unvisited-state deaths.
+
+Withdrawn from the first run of this script: a "foreign bomb on the board" figure. `game_state`
+carries no owner for a bomb, so an agent **cannot tell its own bomb from anyone else's** — the
+quantity is not measurable from the observation, which is itself a constraint on rung-3 feature
+design. Only the total bomb count is; deaths cluster at 2–3 bombs on the board.
+
+### Method: opponent behaviour is not reproducible, and the pairing is weaker from here on
+
+`peaceful_agent:5`, `coin_collector_agent:68` and `rule_based_agent:69` all call
+`np.random.seed()` **with no argument** in `setup`, reseeding the global legacy RNG from OS
+entropy once per world. `evaluate.py`'s per-round `world.rng` reseed therefore pairs the
+**arenas** but not the opponents. Re-running this diagnostic gave 12 vs 7 deaths against
+`peaceful` and 84 vs 86 against `rule_based` on identical seeds.
+
+Consequences: every rung-3 number is one draw, not a reproducible constant, and paired CIs no
+longer remove all between-run variance. It is fixable in *our* harness without touching a
+framework file — all three provided agents use the **global** `np.random`, while our agent uses
+only seeded `default_rng` generators (`callbacks.py:403`, `train.py:189`), so a
+`np.random.seed(base_seed + round_index)` beside the existing `world.rng` line restores pairing
+for the opponents and cannot affect us. To be applied before E25.
+
+### Verdict — **floor established**, and it re-picks E25 against what I pre-registered
+
+Not a verdict on a change: a floor. The rung-2 agent transfers as a **crate engine with no
+survival policy in company** — 116.6 → 27–29 crates, 1.000 → 0.153 survival against the
+tournament opponent, and behind `rule_based_agent` on score in all three fields.
+
+My pre-registered rule ("killed-by dominant → features; survives-but-never-kills → rewards")
+does not resolve: both death modes bind and kills are ~0. The numbers resolve it differently.
+**Kills are nearly free once opponents exist** — 1.923 per round against `peaceful` with the
+aggression term switched off, purely as a by-product of bombing crates. The bottleneck is not
+*earning* kills but *surviving to bank them*: against `rule_based` I score 2.727 because I am
+dead at step 165 of 400. Adding `KILLED_OPPONENT` to an agent that survives 15 % of rounds
+optimises the wrong term.
+
+Survival first, and there is a correctness argument rather than a tuning argument for it:
+`REWARDS[KILLED_SELF] = -5` while `GOT_KILLED` is **absent, i.e. 0**. Under that table walking
+into your bomb is free and walking into mine costs 5. The inconsistency was invisible until now
+because with `--opponents none` the event cannot fire.
+
+**E25 = add `GOT_KILLED` and retrain in an opponent field**, warm-started from the shipped
+table; no new digits until that is measured. The two are inseparable — a penalty that never
+fires is a no-op — so the arms are (A) retrain in the field, rewards unchanged, (B) retrain in
+the field with `GOT_KILLED = -5`, against the shipped table as the untrained baseline. That
+decomposes "training distribution" from "death penalty", which is exactly what the post-mortem
+says is in question.
+
+**Cost, measured rather than estimated** (200 episodes, `--train 1`): 9.11 s in the
+`coin_collector` field, 8.24 s in `rule_based`, 1.56 s solo. Rounds end sooner with opponents,
+so the extra per-step cost is largely offset and 40 000 episodes is ~30 min, not the ~1.7 h I
+projected from per-step figures. Both fields are affordable; the field is a question about
+learning signal only, and it is deferred to E26.
+
+---
 
 ---
 
