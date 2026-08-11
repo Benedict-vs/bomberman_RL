@@ -21,6 +21,84 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E23 — `WARM_N` and the tie-break tolerance, on five training seeds never used before
+
+- **Question:** the closing experiment for rung 2. Two loose ends, one batch, because they need
+  the same thing — training runs that were not used to choose anything.
+  1. **`WARM_N`.** The audit named the cause of `warm`'s instability: `WARM_N = 100` puts
+     α = 0.0398 on transferred cells where the parent had settled to α ≈ 2.15e-4, so the warm
+     start **raises the learning rate on converged values by 185×** and un-converges what it
+     transfers. It was a number I picked to make the transfer survive its first update, never
+     swept. The trade-off is visible in the arithmetic: at 100 000 pseudo-visits α = 3.16e-4,
+     within 1.5× of the parent, so the values are preserved — but then the new digit can barely
+     be learnt and the arm should collapse onto its parent's 97.31.
+  2. **The tie-break.** `act` breaks ties on exact float equality, and the audit measured that
+     this insurance never fires: the rows that absorb a collapsed policy sit at margins of
+     1e-4 to 1e-2, never at 0. `BM_TIE_TOL = 0.01` was measured on the existing tables to lift
+     the worst seed 63.97 → 76.20 and cut between-seed sd 16.77 → 11.99. But **`TOL` was chosen
+     across those same five training seeds**, and the audit's own rule — a holdout must hold out
+     the factor that was selected over — makes that a development number, not a result.
+
+- **Change:** none to the learning rule. `BM_TIE_TOL` already exists (default 0.0, verified
+  byte-identical: re-evaluating `warm_s2@100k` with the switch present reproduces the committed
+  CSV in 300/300 rounds). This entry only *chooses* its value and tests it where it was not
+  chosen.
+- **Design.** Training seeds **`BM_RUN_INDEX` 5–9**, which have never been run on this project.
+  Three arms × five seeds × 40 000 episodes (`warm` peaks at 40 000; 100 000 is spent past it):
+
+  | arm | `BM_WARM_N` | α on transferred cells | vs the parent's 2.15e-4 |
+  |---|---|---|---|
+  | `wn100` | 100 (the E21 value) | 0.0398 | 185× |
+  | `wn10k` | 10 000 | 1.58e-3 | 7× |
+  | `wn100k` | 100 000 | 3.16e-4 | 1.5× |
+
+  Every table is then evaluated **twice**, at `TIE_TOL` 0.0 and 0.01 — a paired within-table
+  comparison, so the tie-break is tested on runs that played no part in choosing it.
+  Coarse parents `e16_c5_k03_s{0..4}` are reused, run index *i* taking parent *i* − 5, so each
+  parent appears once per arm. The parents are shared with E21; what is held out is the
+  **training run**, which is the factor both questions were selected over.
+- **Measurement:** 300 rounds, ε = 0, seed 20260731, at 20 000 and 40 000. Reference for the
+  same configuration on the *old* seeds: `warm`@40 k **106.67 ± 9.70** dev, and the parent
+  `c5_k03`@100 k **97.31 ± 12.54**.
+
+### Prediction (written before the run)
+
+1. **`WARM_N` is non-monotone, with 10 000 best.** `wn100k` lands within 5 crates of the parent's
+   97.31 (values preserved, new digit unlearnable); `wn100` reproduces E21 at 100–110 with the
+   large spread that made it unshippable; **`wn10k` ≥ 108 with sd < 9**. **Refutation:** all
+   three arms within 5 crates of each other → `WARM_N` is not the lever, `warm`'s instability has
+   another cause, and the 185× arithmetic explains nothing.
+2. **`wn100k` collapses onto its parent in a checkable way, not just in the mean:** its 20 000 and
+   40 000 checkpoints differ by less than 3 crates, because it is barely moving.
+   **Refutation:** it moves more than `wn100` does over the same interval.
+3. **The guard breach tracks `WARM_N`.** Arm-mean suicides: `wn100` ≈ 0.02 (E21's arm mean was
+   0.019, not the 0.043–0.053 the entry quoted from one seed), `wn10k` and `wn100k` below 0.01.
+   **Refutation:** `wn100k` ≥ `wn100` → the breach is not the transfer learning-rate.
+4. **The tie-break replicates out of sample, on variance and not on the mean.** Over the 30
+   (arm, seed, checkpoint) tables: worst-seed-per-cell improves by ≥ 5 crates, between-seed sd
+   falls, and **the paired mean effect stays inside its CI** — I am explicitly *not* predicting a
+   mean improvement. **Refutation:** worst seed improves by less than 2 crates, or sd does not
+   fall → the dev-set result was selection over five seeds and the tie-break is dropped.
+5. **The tie-break costs nothing where nothing is broken:** on tables already above 100 crates
+   the paired difference is within ±2. **Refutation:** a healthy table loses more than 5 → 0.01
+   is too wide and the value must be re-chosen.
+6. **Guards:** `think_max_ms` ≤ 0.30 at `TOL = 0.01` (measured 0.12–0.19 on three tables, against
+   a 500 ms budget); suicides ≤ 0.02 and survived ≥ 0.98 as **arm means**, reported per seed.
+
+**Refutation condition for the whole entry:** `WARM_N` flat across the three arms **and** the
+tie-break failing to replicate → rung 2 has no remaining tractable lever, the best table on the
+board stays what it already is, and the honest close is to ship it and go to rung 3.
+
+**Decision this entry is meant to settle.** The best table ever measured here is still
+`e13_s2@10k` — **117.14 on 550731, 116.64 dev, 115.70 on 990731**, at or just above
+`rule_based_agent`'s 116.43 — and it belongs to the **pre-E20 12 800-row map**. Nothing built on
+the 64 000-row map has beaten it (best: `warm_s1@40k`, 113.46 held-out). If this entry does not
+put the fine map clearly ahead, the correct close for rung 2 is to **revert the feature map to
+its pre-E20 form and ship `e13_s2@10k`**, and to record E20/E21/E22 as three well-measured
+negative results rather than carrying a map that costs crates.
+
+---
+
 ## E22 — The α exponent, the one constant never swept
 
 - **Question:** E21 finding 3 said the table never settles because the residual update and the
