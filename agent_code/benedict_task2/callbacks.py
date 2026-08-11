@@ -33,10 +33,18 @@ import settings as s    # BOMB_POWER / BOMB_TIMER
 
 # Training-only escape hatch: parallel training runs would otherwise all write
 # the same file. Unset -- every normal game, and the tournament -- this is
-# exactly "q_table.npy". Relative to this file, never absolute.
-MODEL_FILE = os.path.join(
-    os.path.dirname(__file__),
-    f"q_table{os.environ.get('BM_MODEL_SUFFIX', '')}.npy",
+# exactly "q_table.npy" beside this file. Relative to this file, never absolute.
+#
+# When it IS set, the table lives in checkpoints/<agent>/ instead of here. The
+# submission is a zip of this folder, and 700 MB of per-run tables sitting next
+# to callbacks.py is a submission accident waiting to happen -- keeping them out
+# by construction beats remembering to delete them. The tournament never sets
+# the variable, so the branch below is not even taken there.
+_SUFFIX = os.environ.get("BM_MODEL_SUFFIX", "")
+_AGENT_DIR = os.path.dirname(__file__)
+MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path.join(
+    _AGENT_DIR, os.pardir, os.pardir, "checkpoints",
+    os.path.basename(_AGENT_DIR), f"q_table{_SUFFIX}.npy",
 )
 
 # E17 ablation switch, same environment-variable pattern as BM_MODEL_SUFFIX.

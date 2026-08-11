@@ -184,6 +184,9 @@ def save_table(self) -> None:
             "overwrite it. Set BM_MODEL_SUFFIX to a name of this run's own, or "
             "delete the file deliberately if the overwrite is intended."
         )
+    # checkpoints/<agent>/ is where BM_MODEL_SUFFIX now points; it is gitignored
+    # and may not exist on a fresh clone.
+    os.makedirs(os.path.dirname(MODEL_FILE), exist_ok=True)
     np.save(MODEL_FILE, self.q)
     self.model_file_preexisted = False
 
