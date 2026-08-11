@@ -89,7 +89,91 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 tie-break failing to replicate → rung 2 has no remaining tractable lever, the best table on the
 board stays what it already is, and the honest close is to ship it and go to rung 3.
 
-**Decision this entry is meant to settle.** The best table ever measured here is still
+### Result (measured 2026-08-11) — rung 2 closes at reference parity
+
+| arm | @20 000 | @40 000 |
+|---|---|---|
+| `wn100` (the E21 value) | **111.40 ± 4.84** | 104.03 ± 13.42 |
+| `wn10k` | 55.22 ± 48.33 | 105.71 ± 6.66 |
+| `wn100k` | 37.72 ± 25.10 | 44.50 ± 44.81 |
+| incumbent `c5_k03` @100 k | — | 97.31 ± 12.54 |
+
+**Prediction 1 is wrong, and backwards.** I predicted 10 000 best and 100 000 ≈ the parent.
+Measured: **`WARM_N = 100` is the best of the three and raising it is harmful**, catastrophically
+so at 100 000 (44.50, two seeds below 20). The mechanism reasoning was right at the table level
+and wrong about its consequence — mean |Q − parent| after 40 000 episodes runs 0.0093 / 0.0017 /
+0.0006 across the three arms, exactly the monotone ordering the α arithmetic predicts, so a high
+pseudo-count really does preserve the parent. It just does not *help*: at initialisation the
+children of a parent row are identical, so the greedy policy **is** the parent's, and a table
+that can barely move cannot differentiate the five children the new digit created. It ends up
+neither the parent nor a working fine-map agent. Prediction 2 fails with it (`wn100k` moves
++6.78 from 20 k → 40 k, `wn100` −7.37 — no smaller). Prediction 3 is unscored: training-time
+`KILLED_SELF` is 0.62–0.65 in all three arms, which is the ε-greedy behaviour policy, not the
+evaluated one; eval suicides are 0.007–0.016 everywhere, inside the guard.
+
+**The tie-break replicates out of sample, and it is insurance rather than an improvement.**
+Paired within each table, over the 30 tables of this batch:
+
+| unit | effect | 95 % CI |
+|---|---|---|
+| per training run (n = 5) | **+13.84** | **[+7.17, +20.50]** |
+| per arm × seed (n = 15) | +13.84 | [+1.10, +26.58] |
+| worst seed per cell | 51.82 → 69.54 | [+2.86, +32.56] |
+| between-seed sd | 23.86 → 18.88 | [−10.32, +0.37] |
+
+It clears the bar on the mean *and* the worst seed at the run level — but the entire effect is
+rescue: individual collapses go 5.57 → 60.65, 3.81 → 42.92, 11.82 → 65.71, while **on the
+healthy `wn100` arm it is −1.06, CI [−3.05, +0.94]** — free where nothing is broken. Prediction
+4 said there would be no mean effect; there is one, because a third of these tables were
+collapsed. Prediction 5's refutation fires on its single-table criterion (`wn100_s7`@40 k loses
+8.82) even though the arm-level effect is null. `think_max_ms` 0.12–0.22 against a 500 ms budget.
+
+**The improvement over the incumbent is real but still not demonstrated, and I nearly reported a
+selected cell as if it were.** Paired against the parent each run was warm-started from:
+
+| cell | Δ vs parent | 95 % CI | t |
+|---|---|---|---|
+| seeds 5–9 @20 k (dev) | **+14.10** | [+4.46, +23.73] | **+2.87** |
+| seeds 5–9 @20 k (held 550731) | **+16.32** | [+5.17, +27.48] | **+2.87** |
+| seeds 5–9 @40 k | +6.73 | [−11.08, +24.53] | +0.74 |
+| seeds 0–4 @20 k (E21) | +5.94 | [−14.06, +25.94] | +0.58 |
+| seeds 0–4 @40 k (E21) | +9.36 | [−5.99, +24.70] | +1.20 |
+| **both replicate runs averaged per parent, checkpoint-agnostic** | **+9.03** | **[−6.00, +24.06]** | **+1.18** |
+
+The two significant rows are **one of four** seed-set × checkpoint cells. Averaging the two
+independent replicate runs per parent — the correct pooling, since there are five independent
+parents and ten children — gives **+9.03, not demonstrated**. Writing "DEMONSTRATED" off the
+first cell I looked at would have been the same selection error the audit found in `warm`@40 k,
+committed one entry later. **Recorded verdict: nicht gezeigt at n = 5, with a point estimate of
++9 crates.**
+
+**What *is* settled is the ship table.** Selection on held-out 550731 among current-map tables
+put `wn100_s5`@20 k first (116.92; dev 116.35). Confirmed on **990731, never used to select
+anything, 1 000 rounds**:
+
+> **116.57 crates · score 8.47 · suicides 0.000 · survived 1.000 · think_max 0.22 ms**
+
+against `rule_based_agent`'s 116.43 and `coin_collector_agent`'s 116.26 on the same task, and
+against the old map's `e13_s2`@10 k at **115.70** on that same arena set. Identical to two
+decimals with `TIE_TOL` 0 and 0.01, which is the healthy-table result again.
+
+**Verdict: BESSER for the ship table, nicht gezeigt for the configuration.** The fine map is no
+longer behind the map it replaced — it is ahead of it on the one comparison that is properly
+held out, and the shipped agent is at parity with the strongest reference on rung 2. The
+proposed revert to the pre-E20 feature map is therefore **withdrawn**: E20's distance digit,
+combined with the warm start at `WARM_N = 100` and an early stop, produces the best table this
+project has measured. E20/E21/E22 remain three negative results on the way there, and the entry
+below stands as written.
+
+**Rung 2 is closed.** The remaining spread between training runs (± 4.8 at the best checkpoint,
+worst seed 105.2) is small enough that seed selection on held-out data is a reasonable ship
+procedure, and 116.6 is within noise of what two different rule-based references achieve — that
+is the board running out of crates, not a policy ceiling worth another batch. Next work is
+**rung 3**: `state_to_features` still has no opponent information at all.
+
+---
+
+**Decision this entry was meant to settle.** The best table ever measured here is still
 `e13_s2@10k` — **117.14 on 550731, 116.64 dev, 115.70 on 990731**, at or just above
 `rule_based_agent`'s 116.43 — and it belongs to the **pre-E20 12 800-row map**. Nothing built on
 the 64 000-row map has beaten it (best: `warm_s1@40k`, 113.46 held-out). If this entry does not
