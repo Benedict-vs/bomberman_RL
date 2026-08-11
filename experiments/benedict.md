@@ -107,6 +107,123 @@ E21 already produced empirically: take `warm` at 40 000, whose 106.39 on the hel
 is the best validated number on this rung, accept that the checkpoint is a hyperparameter chosen
 on held-out data, and move to rung 3.
 
+### Result (2026-08-11) — refuted before the batch ran, by an independent audit
+
+The 15-job batch was **never run**. An independent adversarial audit of E19–E22 (a separate
+session, given the raw data and told to form its own numbers before reading these entries;
+`scratchpad/AUDIT_E19_E22.md`) ran E22's own `a10` arm as a two-seed pilot instead — the real
+`train.py`, `BM_ALPHA_EXP=1.0`, 100 000 episodes, world seed 810731, with its instrument
+validated by reproducing `q_table_e20_dist_s0__ep20000.npy` byte for byte at 0.7.
+
+| | crates dev | held 550731 | **thin %** | median \|Q\| |
+|---|---|---|---|---|
+| `dist` s0 @100 k (0.7) | 59.90 | 63.69 | 17.4 | 3.95 |
+| **`a10` s0 @100 k (1.0)** | **9.29** | **11.35** | **41.5** | 4.12 |
+| `dist` s4 @100 k (0.7) | 113.60 | 112.48 | 2.6 | 3.73 |
+| **`a10` s4 @100 k (1.0)** | **25.65** | **25.05** | **39.9** | 4.47 |
+
+**Prediction 1's refutation clause fires by 4× and 15×.** It asked for ≤ 5 % thin margins and
+set refutation above 10 %; the measurement is 41.5 % and 39.9 %. Thin margins go **up**, and not
+by scale compression — the median |Q| is unchanged or larger. The best 0.7 seed loses 88 crates.
+Predictions 2, 4, 5 and 7 fall with it. **Verdict: SCHLECHTER, decisively, at a cost of one hour
+instead of four and three quarters.**
+
+**And the premise was wrong by four orders of magnitude.** The N ≈ 5 000 in E21 finding 3 and in
+this entry's crossover table is 24.5 M updates ÷ (840 rows × 6) — *uniform visitation*. Measured
+over 383 359 updates on a frozen table, the real distribution is skewed ~700×: unweighted median
+N = 256, **visit-weighted median N = 173 454**. So the residual per-visit update has median
+**3.1e-5**, and the visit-weighted margin of the greedy choice has median **0.24–0.48**. The
+ratio is **12 000×, not 1×**. The entry's own crossover table never supported its conclusion
+either: at 0.7 the crossover is N = 3 623 and both stated budgets (8 790 coarse, 4 960 fine) are
+above it.
+
+**This is the same error as E20's row 3007, one level up, and it is now a pattern:** reasoning
+about a per-cell average when the quantity is distributed over a heavily skewed visitation. It is
+written in my own notes as "static counts are not visitation" and I have now made it three times
+in four entries. The rule that follows: **any claim about "a typical cell" must be visit-weighted
+and measured, never divided out of a total.**
+
+**Why 1/N is not "the other end of the same admissible interval".** Σα = ∞ and Σα² < ∞ guarantee
+convergence for a *stationary* target. This target is measurably non-stationary — mean |TD| per
+episode *rises* through training (`dist` s0: 0.226 @20 k → 0.315 @100 k). α = 1/N makes Q the
+arithmetic mean of every target ever seen at that cell, weighting episode 1 as heavily as episode
+100 000, which under a moving target drags every action in a row toward the same early-policy
+mean. That is why margins got *thinner*. If α is ever swept again the interesting direction is
+**0.55–0.6**, not 1.0.
+
+---
+
+## Corrections to E19 and E21, from the same audit (2026-08-11)
+
+These change scored verdicts, so they go in the record rather than in a quiet edit.
+
+**1. "Both arms decay" (E21) is wrong, and the fault is mine.** `CHECKPOINTS` wrote five
+`ext`@300 000 tables and the evaluation loop I ran stopped at 200 000. Evaluated now:
+
+| `ext` | 100 k | 150 k | 200 k | **300 k** |
+|---|---|---|---|---|
+| dev 20260731 | 91.92 | 90.61 | 83.57 | **97.59 ± 12.57** |
+| held 550731 | — | — | — | **97.45 ± 12.05** |
+
+The arm does not decay; it dips and recovers to its best checkpoint. **E21 prediction 2 was
+scored "FAILED, refutation fired" on a number that was not the arm's endpoint** — at 300 000 the
+s2/s3/s4 mean is 104.7 against the 103.7 they started from, so they did not fall. The score is
+withdrawn: **not demonstrated either way**. Training to 300 000 and evaluating to 200 000 was a
+choice, not a constraint, and the tables were on disk when the entry was written.
+
+**2. Neither decay was established in the first place.** Paired at the run level (n = 5):
+`warm` 40 k → 100 k **−24.13, CI [−73.1, +24.8]**; `ext` 100 k → 200 k **−8.35, CI [−19.9,
++3.2]**. 75 % of the `warm` decay is seed 2 alone; leave-one-out gives −7.6. E21's headline was
+one seed and one unread checkpoint.
+
+**3. E21 prediction 3 was unfalsifiable.** `np.repeat(coarse, 5)` puts **2 165–2 350** rows above
+the ≥ 780 threshold *at initialisation*, 2.8–3.0× the line, before a single episode; training
+moves the count by 5–41. Scoring it "CONFIRMED, emphatically" was scoring an identity. The
+correct verdict is **not a prediction**. Finding 1 ("filling was never the deficit") still holds
+— but on the flat-across-checkpoints evidence, not on this.
+
+**4. E21's guard violation is one seed reported as the arm.** "suicides 0.043–0.053, survival
+0.947–0.957" is seed 3 across checkpoints. Per seed at 40 000: 0.000 / 0.030 / 0.007 / **0.043** /
+0.013. **Arm means 0.019 and 0.981 — inside both guards.** And it is not unexplained: `WARM_N=100`
+sets α = 0.0398 on transferred cells where the parent was updating them at ≈ 2.15e-4, so the warm
+start *raises* the learning rate on converged values by **185×**. It un-converges what it
+transfers. E22's arm 2 would have confounded this, since 1.0 also changes that first-update α.
+
+**5. `val550731` does not validate `warm`@40 k's checkpoint choice.** Selection shrinkage dev →
+held-out is +0.28. A new *arena* seed costs nothing, because the checkpoint was selected on a
+300-arena mean and arena noise is already averaged out; the factor selected over, and the dominant
+variance component, is the **training seed**, which is identical in both sets. At the run level
+the advantage over its own parent is +9.36 dev / +10.78 on 550731 / +10.68 on 990731, **CI
+[−12.4, +31.1] / [−14.8, +36.4] / [−9.4, +30.8]** — not demonstrated on any of the three. E21's
+finding 4 heading ("it survives a held-out arena set") overstates what that measurement can do.
+**Also: `warm`@40 k has consumed 140 000 episodes, not 40 000** — its parent's 100 000 plus its
+own 40 000 — and E21's table puts it in a "40 k" column beside genuine 40 k runs.
+
+**6. E19 finding 2's magnitude is a partial sum of a telescoping series.** "−12.8 per round on
+being in a blast … 2.5 deaths' worth of discouragement per round" sums F over the blast bucket
+only. The three buckets cover all 400 steps and sum to **+1.94 per round**, which is what Ng et
+al. predicts for γ < 1. The −12.8 on blast steps is offset by +24.8 on plain steps. **The
+mechanism survives and is stated correctly as finding 3** — shaping does not telescope back into
+the same aliased *rows*, so the row that chose `BOMB` is systematically debited — but "2.5 deaths
+per round" is not a cost the agent ever pays, and that sentence should not be quoted in the report.
+
+**7. Method changes adopted from the audit.**
+- Report **run-level CIs at n = 5** alongside per-round paired ones, and say which question each
+  answers: two *fixed tables* → paired over arenas; two *configurations* → paired over training
+  runs. The pooled per-round bootstrap gives `warm`@40 k [+7.4, +11.4] by treating 5 runs as
+  1 500 replicates; that is the wrong unit for a configuration claim.
+- A **held-out set must hold out the factor that was selected over**. For a checkpoint or a
+  hyperparameter chosen across seeds, that means held-out **training seeds** (`BM_RUN_INDEX` 5–9),
+  not held-out arenas.
+- **Write refutation clauses a plausible outcome can trigger.** Two here could not fire. Before
+  committing an entry: ask what the arm produces at initialisation, and whether the opposite
+  outcome is physically available.
+- **Record `main.py --seed`** in the `TrainLogger` hyperparameters — the world seed currently
+  survives only in the prose of these entries.
+
+**What the audit found no fault with:** 80 of 80 official evaluations reproduced exactly under an
+independent driver, as did both byte-identity controls (E19's no-op switch, E21's prediction 7).
+
 ---
 
 ## E21 — Is s0 slow or stuck? Longer training against a warm start
