@@ -171,6 +171,44 @@ procedure, and 116.6 is within noise of what two different rule-based references
 is the board running out of crates, not a policy ceiling worth another batch. Next work is
 **rung 3**: `state_to_features` still has no opponent information at all.
 
+### Measurement note (2026-08-11) — bomb placement quality, and why rung 2 is saturated
+
+Prompted by watching the shipped agent play. Read-only probe over 40 rounds, every bomb it drops
+(`scratchpad/benedict/` style probe, `blast_coords` at the moment of the drop):
+
+| | crates |
+|---|---|
+| hit by the bomb actually dropped | **2.60** |
+| best available from a tile 1 step away | 3.32 (**+0.72**) |
+| best available within 2 steps | 3.66 (+1.07) |
+| bombs already at the local optimum | 69 % (1 step) · 54 % (2 steps) |
+
+The distribution is bimodal in the way it looks on screen: 429 of 1 799 bombs hit exactly one
+crate, 219 hit four or more. **So 31 % of bombs are placed worse than a spot one step away** —
+digit 7 is binary and cannot tell "hits 1" from "hits 4", which is the same gap the E16
+correction above identifies as the reason a mis-priced crate reward degrades placement.
+
+**But rung 2 cannot pay for fixing it.** The board holds **122.2 crates** and the agent destroys
+**116.2 — 95.1 %**; coins 8.47 of 9. The entire remaining prize is **~6 crates**. What makes the
+gap interesting is elsewhere: **99 % of rounds (993/1000) hit the 400-step limit**, so the agent
+is stopped by the clock, not by capability. Bomb quality is therefore a *throughput* variable —
+45 bombs at 2.60 clear what 37 would clear at 3.32, and each bomb costs ~4–5 steps of approach
+and escape. The marginal rate is favourable but thin: the agent converts ~0.65 crates per step
+today, and walking one extra step for +0.72 crates is barely above that.
+
+**Decision: not tested on rung 2, folded into rung-3 feature work.** Three reasons. (1) The
+prize is 5 % and we are already at `rule_based` parity. (2) E14 tested the counted digit (0/1/2/3+)
+and it is a warning, not a green light — crates/bomb 2.43 → 2.69 (+10 %, against 2.9–3.4
+predicted), mean unmoved, and the **ceiling fell** from 116.64 to 106.63. (3) The same efficiency
+buys much more with opponents on the board, where the clock is tighter and coins come out of
+crates. When it is tested, the pre-registered failure mode is E14's: **crates/bomb rises while
+the best table falls below 116.6 → the same result twice, and the digit is dead.**
+
+A second variant — retargeting digit 6 from "nearest crate" to "densest cluster" — is the
+stronger lever but drifts closer to encoding the answer than the task rules are comfortable
+with. The counted digit has no such problem: it describes the state and leaves the policy to be
+learnt.
+
 ---
 
 **Decision this entry was meant to settle.** The best table ever measured here is still
