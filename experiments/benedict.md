@@ -95,28 +95,43 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 **This is the prediction that picks E25.** Killed-by dominant → opponent features first.
 Survives-but-never-kills → the reward table first.
 
-### Results (commit `82cae03`, 300 rounds, seed 20260731)
-
-> **Superseded draw.** These numbers were taken *before* the opponent-seeding fix below, so
-> they are one sample of an unseeded opponent stream rather than a reproducible constant. They
-> are replaced further down by the re-take under the fix; kept because they are what the
-> post-mortem in this entry was computed from.
+### Results (commit `0a54eb9`, 300 rounds, seed 20260731, opponents seeded)
 
 | | rung 2, alone | `peaceful` | `coin_collector` | `rule_based` |
 |---|---|---|---|---|
-| score | 8.474 | **17.753** | 2.500 | 2.727 |
-| coins | 8.474 | 8.137 | 2.217 | 2.410 |
-| kills | — | **1.923** | 0.057 | 0.063 |
-| suicides | 0.000 | 0.080 | 0.200 | 0.410 |
-| killed by opp. | — | 0.000 | 0.427 | 0.437 |
-| survived | 1.000 | 0.920 | 0.373 | 0.153 |
-| crates | 116.57 | 112.97 | 27.04 | 28.84 |
-| invalid | 0.14 | 0.63 | 21.80 | 9.48 |
-| steps alive | 399.9 | 386.9 | 210.6 | 165.3 |
+| score | 8.474 | **17.680** | 2.460 | 2.947 |
+| coins | 8.474 | 8.213 | 2.143 | 2.530 |
+| kills | — | **1.893** | 0.063 | 0.083 |
+| suicides | 0.000 | 0.073 | 0.227 | 0.403 |
+| killed by opp. | — | 0.000 | 0.340 | 0.453 |
+| survived | 1.000 | 0.927 | 0.433 | 0.143 |
+| crates | 116.57 | 113.76 | 26.88 | 28.65 |
+| invalid | 0.14 | 0.61 | 25.27 | 8.64 |
+| steps alive | 399.9 | 389.9 | 225.7 | 163.1 |
 
-`rule_based_agent` in the identical slot, paired arena for arena: 21.477 / 2.773 / 0.153 /
-0.847 (`peaceful`), 2.847 / 0.163 / 0.293 / 0.670 (`coin_collector`), 3.353 / 0.220 / 0.573 /
-0.353 (`rule_based`).
+`rule_based_agent` in the identical slot (score / kills / suicides / survived), paired arena for
+arena: 21.517 / 2.767 / 0.140 / 0.860 (`peaceful`), 2.753 / 0.150 / 0.270 / 0.693
+(`coin_collector`), 3.290 / 0.200 / 0.507 / 0.400 (`rule_based`).
+
+**The paired comparison against that reference splits cleanly, and not the way the means read.**
+
+| | `peaceful` | `coin_collector` | `rule_based` |
+|---|---|---|---|
+| score | −3.837 [−4.520, −3.150] | −0.293 [−0.623, **+0.030**] | −0.343 [−0.693, **+0.010**] |
+| kills | −0.873 [−0.983, −0.767] | −0.087 [−0.140, −0.037] | −0.117 [−0.173, −0.060] |
+| suicides | −0.067 (better) | −0.043 [−0.113, +0.027] | −0.103 (better) |
+| survived | **+0.067** [+0.020, +0.113] | **−0.260** [−0.333, −0.187] | **−0.257** [−0.320, −0.193] |
+
+In both bombing fields the score difference to `rule_based_agent` **includes zero** — I am not
+demonstrably behind it on the primary metric — while survival is decisively worse by ~0.26 and
+kills by ~0.1. Score parity is bought by being the better crate-and-coin collector for as long
+as I stay alive, which is 163 steps against the tournament opponent's 224–240. That is a
+different problem from "loses on score", and a more tractable one.
+
+*(A first, pre-fix draw of this measurement — before the opponent-seeding correction below — gave
+17.753 / 2.500 / 2.727 on score and 0.920 / 0.373 / 0.153 on survival. Every conclusion here is
+unchanged; the two score comparisons were `WORSE` there and `no effect shown` here, which is the
+noise the fix removes.)*
 
 **Scorecard.** 1 correct (kills 1.923 ≥ 1.0, score 17.75, coins held; survival 0.920 undershot
 the ≥ 0.95 I wrote but cleared the refutation). 2 correct in the number, **wrong in the
@@ -144,14 +159,14 @@ features" and onto the policy — which is what the post-mortem below tests.
 ### Bodies cost almost nothing; other people's bombs cost everything
 
 `peaceful` isolates one variable, since `peaceful_agent` never bombs: agents as obstacles.
-Bodies alone cost 0.08 survival and 3.6 crates. Adding foreign bombs costs a further 0.55–0.77.
+Bodies alone cost 0.073 survival and 2.8 crates. Adding foreign bombs costs a further 0.49–0.78.
 **~90 % of the collapse is other agents' bombs, not blocking.**
 
-The second split matters more. Against `rule_based`, `suicides` (0.410) is as large as
-`killed_by` (0.437): **half my deaths are my own bomb**, from an agent measured at 0.000 alone.
+The second split matters more. Against `rule_based`, `suicides` (0.403) is as large as
+`killed_by` (0.453): **half my deaths are my own bomb**, from an agent measured at 0.000 alone.
 And the asymmetry against `coin_collector` — same arenas, same bomb population — is stark:
-I am killed by bombs 0.427 times per round, each opponent 0.037–0.063. **~8× more often**, while
-collecting 0.057 kills to their 0.19.
+I am killed by bombs 0.340 times per round, each opponent 0.030–0.067. **~7× more often**, while
+collecting 0.063 kills to their 0.153–0.167.
 
 ### Post-mortem: the deaths are in rows the training never updated
 
@@ -165,23 +180,29 @@ not a rate, which is the E22 mistake:
 
 | field | all-zero rows, all steps | all-zero rows, **at the fatal step** | enrichment |
 |---|---|---|---|
-| `peaceful` | 0.03 % | 0.00 % | — |
-| `coin_collector` | 1.38 % | **71.93 %** | 52× |
-| `rule_based` | 3.04 % | **63.95 %** | 21× |
+| `peaceful` | 0.10 % | 0.00 % | — |
+| `coin_collector` | 1.35 % | **67.86 %** | 50× |
+| `rule_based` | 3.44 % | **60.49 %** | 18× |
 
-Rows never visited by the solo ε = 0 rollout: base 0.43 / 2.57 / 5.14 %, at the fatal step
-**100 / 98.25 / 93.02 %**.
+Rows never visited by the solo ε = 0 rollout: base 0.58 / 2.45 / 5.71 %, at the fatal step
+**83.3 / 92.9 / 96.3 %**.
+
+The effect is far larger than the run-to-run noise: three draws of this script (two before the
+opponent-seeding fix, one after) put the fatal-step figure at 71.9 / 65.5 / 67.9 % against
+`coin_collector` and 64.0 / 71.4 / 60.5 % against `rule_based`, on base rates never above 3.5 %.
 
 **In roughly two of every three deaths the Q-row is all zeros.** With `TIE_TOL = 0.0` all six
 actions then tie exactly, `act` falls through to `policy_rng.choice(best)` — so the agent is
 choosing **uniformly at random at the moment it dies**. That cannot be repaired by a better
 feature; only by visiting the row.
 
-The mechanism probe agrees and is independent of any visitation argument: in **40–42 %** of
-deaths the agent was standing in a blast with `escape_direction` returning `NO_TARGET` somewhere
-in the 4-step window — genuinely trapped. Against `peaceful` that is **100 %** of the (7) deaths,
-with the fatal rows all *present* in the table but never reached by the solo greedy policy. So
-`peaceful` deaths are rare-state deaths, `bombing`-field deaths are unvisited-state deaths.
+The mechanism probe agrees and is independent of any visitation argument: in **27–42 %** of
+deaths (noisy across draws) the agent was standing in a blast with `escape_direction` returning
+`NO_TARGET` somewhere in the 4-step window — genuinely trapped. Against `peaceful` that is
+**83–100 %** of the 6–12 deaths, with the fatal rows all *present* in the table but never
+reached by the solo greedy policy (0.00 % all-zero at the fatal step, in every draw). So
+`peaceful` deaths are rare-state deaths and bombing-field deaths are unvisited-state deaths —
+two different failures that happen to share a metric.
 
 Withdrawn from the first run of this script: a "foreign bomb on the board" figure. `game_state`
 carries no owner for a bomb, so an agent **cannot tell its own bomb from anyone else's** — the
@@ -206,15 +227,17 @@ for the opponents and cannot affect us. To be applied before E25.
 ### Verdict — **floor established**, and it re-picks E25 against what I pre-registered
 
 Not a verdict on a change: a floor. The rung-2 agent transfers as a **crate engine with no
-survival policy in company** — 116.6 → 27–29 crates, 1.000 → 0.153 survival against the
-tournament opponent, and behind `rule_based_agent` on score in all three fields.
+survival policy in company** — 116.6 → 27–29 crates and 1.000 → 0.143 survival against the
+tournament opponent. It is clearly behind `rule_based_agent` against `peaceful` (−3.84 score),
+but in both bombing fields the score gap **is not demonstrated** (CIs include 0) while the
+survival gap is (−0.26 in both). The deficit is time alive, not scoring rate.
 
 My pre-registered rule ("killed-by dominant → features; survives-but-never-kills → rewards")
 does not resolve: both death modes bind and kills are ~0. The numbers resolve it differently.
-**Kills are nearly free once opponents exist** — 1.923 per round against `peaceful` with the
+**Kills are nearly free once opponents exist** — 1.893 per round against `peaceful` with the
 aggression term switched off, purely as a by-product of bombing crates. The bottleneck is not
-*earning* kills but *surviving to bank them*: against `rule_based` I score 2.727 because I am
-dead at step 165 of 400. Adding `KILLED_OPPONENT` to an agent that survives 15 % of rounds
+*earning* kills but *surviving to bank them*: against `rule_based` I score 2.947 because I am
+dead at step 163 of 400. Adding `KILLED_OPPONENT` to an agent that survives 14 % of rounds
 optimises the wrong term.
 
 Survival first, and there is a correctness argument rather than a tuning argument for it:

@@ -75,6 +75,7 @@ def rollout(cb, line_up: list[str], n_rounds: int, base_seed: int, log_dir: Path
 
     for round_index in range(n_rounds):
         world.rng = np.random.default_rng(base_seed + round_index)   # same arenas as evaluate.py
+        np.random.seed(base_seed + round_index)                      # ...and the same opponents
         world.new_round()
         # Only `do_step` sets this, and we call `get_state_for_agent` before the
         # first one. The agent never reads it.
