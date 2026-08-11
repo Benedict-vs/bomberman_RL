@@ -9,7 +9,9 @@ import numpy as np
 import torch
 
 from agent_code.ben_coin_collector_dqn import train
-from agent_code.ben_coin_collector_dqn.model import CoinCollectorDQN
+from agent_code.ben_coin_collector_dqn.model import (
+    CoinCollectorDQN,
+)
 
 
 class TrainingCallbacksTest(unittest.TestCase):
@@ -21,9 +23,17 @@ class TrainingCallbacksTest(unittest.TestCase):
         return {
             "round": round_number,
             "step": step,
-            "field": np.zeros((17, 17), dtype=np.int8),
+            "field": np.zeros(
+                (17, 17),
+                dtype=np.int8,
+            ),
             "coins": [(5, 5)],
-            "self": ("dqn-agent", 0, False, (1, 1)),
+            "self": (
+                "dqn-agent",
+                0,
+                False,
+                (1, 1),
+            ),
         }
 
     @staticmethod
@@ -49,7 +59,10 @@ class TrainingCallbacksTest(unittest.TestCase):
             waited_reward,
             train.STEP_REWARD,
         )
-        self.assertEqual(movement_reward, waited_reward)
+        self.assertEqual(
+            movement_reward,
+            waited_reward,
+        )
 
     def test_coin_and_invalid_action_rewards(self):
         coin_reward = train.reward_from_events(
@@ -59,8 +72,105 @@ class TrainingCallbacksTest(unittest.TestCase):
             [e.INVALID_ACTION]
         )
 
-        self.assertAlmostEqual(coin_reward, 4.95)
-        self.assertAlmostEqual(invalid_reward, -1.05)
+        self.assertAlmostEqual(
+            coin_reward,
+            0.95,
+        )
+        self.assertAlmostEqual(
+            invalid_reward,
+            -1.05,
+        )
+
+    def test_coin_potential_uses_shortest_walkable_distance(
+        self,
+    ):
+        game_state = self.make_game_state()
+        game_state["coins"] = [(3, 1)]
+        game_state["self"] = (
+            "dqn-agent",
+            0,
+            False,
+            (1, 1),
+        )
+
+        # Block the direct route. The shortest legal path now has
+        # four steps: up, right, right, down.
+        game_state["field"][2, 1] = -1
+
+        potential = train._coin_potential(
+            game_state
+        )
+
+        self.assertAlmostEqual(
+            potential,
+            -4.0 / 32.0,
+        )
+
+    def test_potential_shaping_prefers_moving_closer(
+        self,
+    ):
+        old_state = self.make_game_state()
+        old_state["coins"] = [(4, 1)]
+        old_state["self"] = (
+            "dqn-agent",
+            0,
+            False,
+            (2, 1),
+        )
+
+        closer_state = self.make_game_state()
+        closer_state["coins"] = [(4, 1)]
+        closer_state["self"] = (
+            "dqn-agent",
+            0,
+            False,
+            (3, 1),
+        )
+
+        farther_state = self.make_game_state()
+        farther_state["coins"] = [(4, 1)]
+        farther_state["self"] = (
+            "dqn-agent",
+            0,
+            False,
+            (1, 1),
+        )
+
+        closer_reward = train.potential_shaping_reward(
+            old_state,
+            closer_state,
+        )
+        farther_reward = train.potential_shaping_reward(
+            old_state,
+            farther_state,
+        )
+
+        self.assertGreater(
+            closer_reward,
+            0.0,
+        )
+        self.assertLess(
+            farther_reward,
+            0.0,
+        )
+
+    def test_wait_remains_costly_with_potential_shaping(
+        self,
+    ):
+        game_state = self.make_game_state()
+
+        total_reward = (
+            train.reward_from_events([e.WAITED])
+            + train.potential_shaping_reward(
+                game_state,
+                game_state,
+            )
+        )
+
+        self.assertLess(
+            total_reward,
+            0.0,
+        )
 
     def test_epsilon_schedule(self):
         self.assertAlmostEqual(
@@ -106,15 +216,34 @@ class TrainingCallbacksTest(unittest.TestCase):
 
         train.setup_training(agent)
 
-        self.assertEqual(agent.device, torch.device("cpu"))
-        self.assertEqual(agent.epsilon, train.EPSILON_START)
-        self.assertEqual(len(agent.replay_buffer), 0)
-        self.assertEqual(agent.environment_steps, 0)
-        self.assertEqual(agent.optimization_steps, 0)
+        self.assertEqual(
+            agent.device,
+            torch.device("cpu"),
+        )
+        self.assertEqual(
+            agent.epsilon,
+            train.EPSILON_START,
+        )
+        self.assertEqual(
+            len(agent.replay_buffer),
+            0,
+        )
+        self.assertEqual(
+            agent.environment_steps,
+            0,
+        )
+        self.assertEqual(
+            agent.optimization_steps,
+            0,
+        )
         self.assertIsNone(agent.trainlog)
 
-        online_parameters = agent.online_network.state_dict()
-        target_parameters = agent.target_network.state_dict()
+        online_parameters = (
+            agent.online_network.state_dict()
+        )
+        target_parameters = (
+            agent.target_network.state_dict()
+        )
 
         for name in online_parameters:
             self.assertTrue(
@@ -125,7 +254,9 @@ class TrainingCallbacksTest(unittest.TestCase):
             )
 
         for parameter in agent.target_network.parameters():
-            self.assertFalse(parameter.requires_grad)
+            self.assertFalse(
+                parameter.requires_grad
+            )
 
     @patch(
         "agent_code.ben_coin_collector_dqn.train."
@@ -160,8 +291,14 @@ class TrainingCallbacksTest(unittest.TestCase):
             events=[e.WAITED],
         )
 
-        self.assertEqual(len(agent.replay_buffer), 1)
-        self.assertEqual(agent.environment_steps, 1)
+        self.assertEqual(
+            len(agent.replay_buffer),
+            1,
+        )
+        self.assertEqual(
+            agent.environment_steps,
+            1,
+        )
 
         previous_directory = os.getcwd()
 
@@ -173,35 +310,70 @@ class TrainingCallbacksTest(unittest.TestCase):
                     agent,
                     last_game_state=old_game_state,
                     last_action="WAIT",
-                    events=[e.WAITED, e.SURVIVED_ROUND],
+                    events=[
+                        e.WAITED,
+                        e.SURVIVED_ROUND,
+                    ],
                 )
 
                 self.assertTrue(
-                    os.path.isfile(train.MODEL_FILE)
+                    os.path.isfile(
+                        train.MODEL_FILE
+                    )
                 )
         finally:
             os.chdir(previous_directory)
 
         # end_of_round must modify the existing transition,
         # not append a duplicate.
-        self.assertEqual(len(agent.replay_buffer), 1)
-        self.assertEqual(agent.environment_steps, 1)
+        self.assertEqual(
+            len(agent.replay_buffer),
+            1,
+        )
+        self.assertEqual(
+            agent.environment_steps,
+            1,
+        )
 
         transition = agent.replay_buffer.sample(1)[0]
 
-        self.assertEqual(transition.action, 4)
-        self.assertAlmostEqual(
-            transition.reward,
-            train.STEP_REWARD,
-        )
-        self.assertTrue(transition.done)
-        self.assertTrue(
-            np.all(transition.next_state == 0.0)
+        expected_reward = (
+            train.STEP_REWARD
+            + train.potential_shaping_reward(
+                old_game_state,
+                new_game_state,
+            )
         )
 
-        self.assertEqual(agent.episode_reward, 0.0)
-        self.assertEqual(agent.episode_events, [])
-        self.assertEqual(agent.episode_losses, [])
+        self.assertEqual(
+            transition.action,
+            4,
+        )
+        self.assertAlmostEqual(
+            transition.reward,
+            expected_reward,
+        )
+        self.assertTrue(
+            transition.done
+        )
+        self.assertTrue(
+            np.all(
+                transition.next_state == 0.0
+            )
+        )
+
+        self.assertEqual(
+            agent.episode_reward,
+            0.0,
+        )
+        self.assertEqual(
+            agent.episode_events,
+            [],
+        )
+        self.assertEqual(
+            agent.episode_losses,
+            [],
+        )
 
 
 if __name__ == "__main__":

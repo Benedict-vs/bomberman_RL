@@ -6,6 +6,7 @@ from torch import nn
 
 from agent_code.ben_coin_collector_dqn.dqn import (
     optimize_dqn,
+    soft_update_target_network,
     update_target_network,
 )
 from agent_code.ben_coin_collector_dqn.replay_buffer import Transition
@@ -24,7 +25,10 @@ class TinyQNetwork(nn.Module):
             )
         )
 
-    def forward(self, states: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        states: torch.Tensor,
+    ) -> torch.Tensor:
         return self.q_values.unsqueeze(0).expand(
             states.shape[0],
             -1,
@@ -68,12 +72,17 @@ class DQNUpdateTest(unittest.TestCase):
             online_network=online_network,
             target_network=target_network,
             optimizer=optimizer,
-            transitions=[self.make_transition()],
+            transitions=[
+                self.make_transition()
+            ],
             gamma=0.9,
             device=torch.device("cpu"),
         )
 
-        self.assertGreater(loss, 0.0)
+        self.assertGreater(
+            loss,
+            0.0,
+        )
 
         self.assertFalse(
             torch.equal(
@@ -117,60 +126,9 @@ class DQNUpdateTest(unittest.TestCase):
             device=torch.device("cpu"),
         )
 
-        # Huber loss between prediction 0 and terminal target 1.
         self.assertAlmostEqual(
             loss,
             0.5,
-            places=6,
-        )
-
-    def test_bellman_target_ignores_illegal_action(self):
-        online_network = TinyQNetwork([0.0] * 5)
-
-        # UP has the largest Q-value, but will be blocked.
-        target_network = TinyQNetwork(
-            [100.0, 2.0, 3.0, 4.0, 1.0]
-        )
-
-        optimizer = torch.optim.SGD(
-            online_network.parameters(),
-            lr=0.0,
-        )
-
-        state = np.zeros(
-            (3, 17, 17),
-            dtype=np.float32,
-        )
-        next_state = state.copy()
-
-        # Agent at (x=5, y=5).
-        next_state[2, 5, 5] = 1.0
-
-        # Wall above the agent blocks UP.
-        next_state[0, 4, 5] = 1.0
-
-        transition = Transition(
-            state=state,
-            action=0,
-            reward=0.0,
-            next_state=next_state,
-            done=False,
-        )
-
-        loss = optimize_dqn(
-            online_network=online_network,
-            target_network=target_network,
-            optimizer=optimizer,
-            transitions=[transition],
-            gamma=1.0,
-            device=torch.device("cpu"),
-        )
-
-        # LEFT is the best legal action with Q=4.
-        # Huber loss between prediction 0 and target 4 is 3.5.
-        self.assertAlmostEqual(
-            loss,
-            3.5,
             places=6,
         )
 
@@ -192,6 +150,62 @@ class DQNUpdateTest(unittest.TestCase):
             )
         )
 
+    def test_soft_target_update_blends_parameters(self):
+        online_network = TinyQNetwork(
+            [1.0, 2.0, 3.0, 4.0, 5.0]
+        )
+        target_network = TinyQNetwork(
+            [0.0, 0.0, 0.0, 0.0, 0.0]
+        )
+
+        online_before = (
+            online_network.q_values.detach().clone()
+        )
+
+        soft_update_target_network(
+            online_network=online_network,
+            target_network=target_network,
+            tau=0.1,
+        )
+
+        expected_target = torch.tensor(
+            [0.1, 0.2, 0.3, 0.4, 0.5],
+            dtype=torch.float32,
+        )
+
+        self.assertTrue(
+            torch.allclose(
+                target_network.q_values.detach(),
+                expected_target,
+            )
+        )
+
+        self.assertTrue(
+            torch.equal(
+                online_network.q_values.detach(),
+                online_before,
+            )
+        )
+
+    def test_soft_target_update_rejects_invalid_tau(self):
+        online_network = TinyQNetwork([1.0] * 5)
+        target_network = TinyQNetwork([0.0] * 5)
+
+        for invalid_tau in (
+            0.0,
+            -0.1,
+            1.1,
+        ):
+            with self.subTest(
+                tau=invalid_tau
+            ):
+                with self.assertRaises(ValueError):
+                    soft_update_target_network(
+                        online_network=online_network,
+                        target_network=target_network,
+                        tau=invalid_tau,
+                    )
+
     def test_empty_batch_is_rejected(self):
         online_network = TinyQNetwork([0.0] * 5)
         target_network = TinyQNetwork([0.0] * 5)
@@ -210,6 +224,43 @@ class DQNUpdateTest(unittest.TestCase):
                 gamma=0.9,
                 device=torch.device("cpu"),
             )
+
+    def test_standard_dqn_uses_largest_target_value(self):
+        online_network = TinyQNetwork(
+            [0.0, 5.0, 0.0, 0.0, 0.0]
+        )
+        target_network = TinyQNetwork(
+            [100.0, 2.0, 0.0, 0.0, 0.0]
+        )
+
+        optimizer = torch.optim.SGD(
+            online_network.parameters(),
+            lr=0.0,
+        )
+
+        loss = optimize_dqn(
+            online_network=online_network,
+            target_network=target_network,
+            optimizer=optimizer,
+            transitions=[
+                self.make_transition(
+                    action=0,
+                    reward=1.0,
+                    done=False,
+                )
+            ],
+            gamma=0.5,
+            device=torch.device("cpu"),
+        )
+
+        # Standard DQN uses the largest target-network value.
+        # Bellman target: 1 + 0.5 * 100 = 51.
+        # Huber loss between prediction 0 and target 51 = 50.5.
+        self.assertAlmostEqual(
+            loss,
+            50.5,
+            places=6,
+        )
 
 
 if __name__ == "__main__":

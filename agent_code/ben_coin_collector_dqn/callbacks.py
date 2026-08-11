@@ -8,12 +8,12 @@ import random
 import numpy as np
 import torch
 
-from .action_mask import legal_action_mask
 from .features import state_to_features
 from .model import ACTIONS, CoinCollectorDQN
 
 
 MODEL_FILE = "my-saved-model.pt"
+
 
 TRAINING_SEED = 20260805
 START_FROM_SAVED_MODEL = False
@@ -67,7 +67,18 @@ def setup(self) -> None:
 
 
 def act(self, game_state: dict) -> str:
-    """Choose a legal action with epsilon-greedy exploration."""
+    """Choose an action using epsilon-greedy exploration."""
+    if self.train and random.random() < self.epsilon:
+        action = random.choice(ACTIONS)
+
+        self.logger.debug(
+            "Exploration selected action %s at epsilon %.4f.",
+            action,
+            self.epsilon,
+        )
+
+        return action
+
     features = state_to_features(game_state)
 
     state_tensor = torch.from_numpy(features).unsqueeze(0)
@@ -76,46 +87,18 @@ def act(self, game_state: dict) -> str:
         dtype=torch.float32,
     )
 
-    action_mask = legal_action_mask(state_tensor)
-    legal_indices = (
-        action_mask[0]
-        .nonzero(as_tuple=False)
-        .flatten()
-        .cpu()
-        .tolist()
-    )
-
-    if self.train and random.random() < self.epsilon:
-        action_index = random.choice(legal_indices)
-        action = ACTIONS[action_index]
-
-        self.logger.debug(
-            "Exploration selected legal action %s "
-            "at epsilon %.4f.",
-            action,
-            self.epsilon,
-        )
-
-        return action
-
     with torch.inference_mode():
         q_values = self.online_network(state_tensor)
 
-        masked_q_values = q_values.masked_fill(
-            ~action_mask,
-            float("-inf"),
-        )
-
         action_index = int(
-            masked_q_values.argmax(dim=1).item()
+            q_values.argmax(dim=1).item()
         )
 
     action = ACTIONS[action_index]
 
     self.logger.debug(
-        "Q-values %s, legal mask %s, selected action %s.",
+        "Q-values %s, selected action %s.",
         q_values.squeeze(0).cpu().tolist(),
-        action_mask.squeeze(0).cpu().tolist(),
         action,
     )
 

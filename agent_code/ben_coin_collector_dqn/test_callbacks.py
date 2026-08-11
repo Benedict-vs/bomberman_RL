@@ -43,23 +43,31 @@ class CallbacksTest(unittest.TestCase):
     def test_setup_uses_cpu(self):
         agent = self.setup_agent(train=False)
 
-        self.assertEqual(agent.device, torch.device("cpu"))
+        self.assertEqual(
+            agent.device,
+            torch.device("cpu"),
+        )
 
         parameter_device = next(
             agent.online_network.parameters()
         ).device
 
-        self.assertEqual(parameter_device.type, "cpu")
-        self.assertFalse(agent.online_network.training)
+        self.assertEqual(
+            parameter_device.type,
+            "cpu",
+        )
+        self.assertFalse(
+            agent.online_network.training
+        )
 
-    def test_greedy_action_uses_largest_legal_q_value(self):
+    def test_greedy_action_uses_largest_q_value(self):
         agent = self.setup_agent(train=False)
 
         with torch.no_grad():
             for parameter in agent.online_network.parameters():
                 parameter.zero_()
 
-            # LEFT, action index 3, is legal and has the largest Q-value.
+            # LEFT, action index 3, has the largest Q-value.
             agent.online_network.q_head[-1].bias[3] = 2.0
 
         action = callbacks.act(
@@ -84,53 +92,10 @@ class CallbacksTest(unittest.TestCase):
         self.assertTrue(
             selected_actions.issubset(set(ACTIONS))
         )
-        self.assertNotIn("BOMB", selected_actions)
-
-    def test_exploration_ignores_wall_action(self):
-        agent = self.setup_agent(train=True)
-        agent.epsilon = 1.0
-
-        game_state = self.make_game_state()
-        self_x, self_y = game_state["self"][3]
-
-        # Block LEFT.
-        game_state["field"][self_x - 1, self_y] = -1
-
-        selected_actions = {
-            callbacks.act(
-                agent,
-                game_state=game_state,
-            )
-            for _ in range(200)
-        }
-
-        self.assertNotIn("LEFT", selected_actions)
-
-    def test_greedy_action_ignores_wall_action(self):
-        agent = self.setup_agent(train=False)
-
-        with torch.no_grad():
-            for parameter in agent.online_network.parameters():
-                parameter.zero_()
-
-            # LEFT has the largest raw Q-value.
-            agent.online_network.q_head[-1].bias[3] = 2.0
-
-            # RIGHT is the best legal alternative.
-            agent.online_network.q_head[-1].bias[1] = 1.0
-
-        game_state = self.make_game_state()
-        self_x, self_y = game_state["self"][3]
-
-        # Block LEFT.
-        game_state["field"][self_x - 1, self_y] = -1
-
-        action = callbacks.act(
-            agent,
-            game_state,
+        self.assertNotIn(
+            "BOMB",
+            selected_actions,
         )
-
-        self.assertEqual(action, "RIGHT")
 
 
 if __name__ == "__main__":

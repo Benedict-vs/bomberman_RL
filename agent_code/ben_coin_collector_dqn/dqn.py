@@ -8,7 +8,6 @@ import numpy as np
 import torch
 from torch import nn
 
-from .action_mask import legal_action_mask
 from .replay_buffer import Transition
 
 
@@ -28,7 +27,10 @@ def optimize_dqn(
 
     states = torch.from_numpy(
         np.stack(
-            [transition.state for transition in transitions]
+            [
+                transition.state
+                for transition in transitions
+            ]
         )
     ).to(
         device=device,
@@ -36,20 +38,29 @@ def optimize_dqn(
     )
 
     actions = torch.tensor(
-        [transition.action for transition in transitions],
+        [
+            transition.action
+            for transition in transitions
+        ],
         dtype=torch.long,
         device=device,
     )
 
     rewards = torch.tensor(
-        [transition.reward for transition in transitions],
+        [
+            transition.reward
+            for transition in transitions
+        ],
         dtype=torch.float32,
         device=device,
     )
 
     next_states = torch.from_numpy(
         np.stack(
-            [transition.next_state for transition in transitions]
+            [
+                transition.next_state
+                for transition in transitions
+            ]
         )
     ).to(
         device=device,
@@ -57,12 +68,17 @@ def optimize_dqn(
     )
 
     dones = torch.tensor(
-        [transition.done for transition in transitions],
+        [
+            transition.done
+            for transition in transitions
+        ],
         dtype=torch.float32,
         device=device,
     )
 
-    predicted_q_values = online_network(states)
+    predicted_q_values = online_network(
+        states
+    )
 
     selected_q_values = predicted_q_values.gather(
         dim=1,
@@ -70,21 +86,15 @@ def optimize_dqn(
     ).squeeze(1)
 
     with torch.no_grad():
-        all_next_q_values = target_network(next_states)
-        next_action_masks = legal_action_mask(next_states)
-
-        masked_next_q_values = all_next_q_values.masked_fill(
-            ~next_action_masks,
-            float("-inf"),
-        )
-
-        next_q_values = masked_next_q_values.max(
-            dim=1
-        ).values
+        next_q_values = target_network(
+            next_states
+        ).max(dim=1).values
 
         target_q_values = (
             rewards
-            + gamma * (1.0 - dones) * next_q_values
+            + gamma
+            * (1.0 - dones)
+            * next_q_values
         )
 
     loss = nn.functional.smooth_l1_loss(
@@ -113,3 +123,32 @@ def update_target_network(
     target_network.load_state_dict(
         online_network.state_dict()
     )
+
+
+def soft_update_target_network(
+    online_network: nn.Module,
+    target_network: nn.Module,
+    tau: float,
+) -> None:
+    """Move target parameters a fraction tau toward online parameters."""
+    if not 0.0 < tau <= 1.0:
+        raise ValueError(
+            "Soft-update tau must satisfy 0 < tau <= 1."
+        )
+
+    with torch.no_grad():
+        parameter_pairs = zip(
+            online_network.parameters(),
+            target_network.parameters(),
+            strict=True,
+        )
+
+        for online_parameter, target_parameter in parameter_pairs:
+            target_parameter.mul_(
+                1.0 - tau
+            )
+
+            target_parameter.add_(
+                online_parameter,
+                alpha=tau,
+            )
