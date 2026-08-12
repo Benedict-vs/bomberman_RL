@@ -73,12 +73,25 @@ CRATE_DESTROYED    +0.3        E16. 1.0 halves the crate count -- not by killing
                                agent (98 % of the deficit is in rounds nobody died)
                                but by degrading placement: it bombs 24 % more often
                                for 1.09 crates a bomb instead of 2.55.
-KILLED_SELF        -5          Rung 1. Removed every suicide at once, which is why
-                               BOMB can stay in the action set instead of being
-                               masked out. E17 confirms it is load-bearing.
-GOT_KILLED         -5          E25. The rung-2 table priced only KILLED_SELF, so
-                               dying to an opponent was free. Symmetric with
-                               KILLED_SELF by construction, not tuned.
+KILLED_SELF         0          E26. Was -5 through rungs 1-2, where it removed every
+                               suicide at once. Now 0 because GOT_KILLED already
+                               fires on a suicide (environment.py:251 adds
+                               KILLED_SELF *on top* of :264's GOT_KILLED), so
+                               carrying both double-priced it. E25 shipped -5/-5
+                               believing it symmetric and actually paid -10 for a
+                               suicide, which voided its arm contrast.
+GOT_KILLED         -5          E26. Prices death exactly once, whatever killed the
+                               agent. Provably identical to the rung-2 table on a
+                               board with no opponents, since a suicide fires both
+                               events there too -- so this is a correctness fix,
+                               not a retuning.
+KILLED_OPPONENT     0          E26 arm H sets 25, preserving the game's own 5:1
+                               kill:coin ratio at this table's scale (E16 put the
+                               agent's coin at 5). Coins are saturated on rung 3 --
+                               9 shared four ways is a ~2.25 fair share and the
+                               rung-2 table already banks 2.18 -- and
+                               score = coins + 5*kills, so every further point has
+                               to come from kills.
 STEP_COST          -0.1        Shortest-path pressure; the round is capped at 400
                                steps and 99 % of rounds hit that cap.
 WARM_N             100         E23. Not optional: alpha is exactly 1 on a cell's
@@ -143,13 +156,25 @@ REWARDS = {
     e.CRATE_DESTROYED: float(os.environ.get("BM_CRATE", 0.3)),
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
-    e.KILLED_SELF: -5,
-    # E25. Absent through all of rung 2 because it cannot fire without opponents,
-    # which left the table saying that walking into someone else's blast is free
-    # while walking into your own costs 5 -- at 0.34-0.45 killed_by per round that
-    # is not a detail. Symmetric by default: dying is dying. BM_GOT_KILLED=0 is
-    # arm A, the control that retrains in the field without pricing the death.
+    # E26 correctness fix. `environment.py:264` adds GOT_KILLED to *every* agent
+    # killed by a blast and `:251` adds KILLED_SELF **on top** when the bomb was
+    # its own -- so a table carrying both prices a suicide at their sum. E25
+    # intended -5/-5 and actually paid -10 for a suicide and -5 for an opponent's
+    # kill, which voided its arm contrast. Putting the whole penalty on
+    # GOT_KILLED prices death exactly once, and is *identical* to the rung-2
+    # table on a board with no opponents, where a suicide fires both events too.
+    e.KILLED_SELF: float(os.environ.get("BM_KILLED_SELF", 0)),
     e.GOT_KILLED: float(os.environ.get("BM_GOT_KILLED", -5)),
+    # E26 arm H. Zero by default, which is what rung 2 and E25 both used.
+    # 25 rather than 5: the game pays 5:1 kill:coin, and E16 put the agent's coin
+    # at 5, so 25 preserves the game's own ratio at this table's scale. It is a
+    # rescaling of a real game event, not an invented one -- the reward table
+    # stays a map of events the tournament also generates.
+    #
+    # Why it matters on this rung: the 9 coins are shared four ways, a ~2.25 fair
+    # share, and the rung-2 table already banks 2.18 of it. score = coins + 5*kills,
+    # so every further point of score has to come from kills.
+    e.KILLED_OPPONENT: float(os.environ.get("BM_KILL", 0)),
 }
 
 # --- Experiment switches --------------------------------------------------
@@ -159,7 +184,7 @@ REWARDS = {
 # Seeds the exploration RNG as TRAIN_SEED + RUN_INDEX. 5 is the seed the shipped
 # table came from, selected on the held-out world seed 550731 (E23); 0-4 are the
 # sweep it was selected against.
-RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 10))
+RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 20))
 
 ALPHA_MODE = os.environ.get("BM_ALPHA", "visit")    # "visit" | "const" (E06)
 EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const" (E05)
@@ -189,7 +214,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e25"
+EXPERIMENT = "e26"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 

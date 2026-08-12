@@ -21,6 +21,131 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E26 — Give the agent an objective for the half of the round the board is empty
+
+- **Question:** E25's audit (`scratchpad/audit/`) moved the diagnosis off both of my hypotheses.
+  What actually drains the rung-3 reward stream is **`INVALID_ACTION` at −24.25 per round** —
+  more than coins and crates earn together, and sitting unpriced in E24's own results table.
+  96.3 % of it is `BOMB` pressed with no bomb available, 95.6 % of those in rows that *have*
+  value (median margin 0.116, so learned rather than tie-breaking), and **99 % in exactly two
+  rows, both with digit 6 = `NO_TARGET`**. `NO_TARGET` is common because four agents strip all
+  122 crates by ~step 140: for the last two thirds of the round the state carries **no objective
+  at all** (26.3 % of safe steps in the `coin_collector` field, against 0.43 % solo).
+
+  The second fact is arithmetic. The 9 coins are shared four ways — a ~2.25 fair share, and the
+  rung-2 table already banks 2.18. Since `score = coins + 5·kills`, **on rung 3 every further
+  point of score has to come from kills**, and `KILLED_OPPONENT` is currently worth 0.
+
+- **Change:** two, both behind switches that default to the pre-E26 behaviour.
+  1. **`BM_HUNT`** (`callbacks.py`): digit 6 falls through to the nearest **opponent** when no
+     coin and no crate is reachable, and digit 7 counts an opponent in blast range as a reason
+     to bomb. **`FEATURE_SIZES` is unchanged** at `(4,4,4,4,5,5,2,5)` — no digit added, inserted
+     or re-based — so `q_table_rung2ship` stays a valid parent at `factor = 1` and the parent's
+     "walk that way" values are already the right prior for the repurposed rows.
+  2. **Reward semantics** (`train.py`): `KILLED_SELF = 0`, `GOT_KILLED = −5`, so death is priced
+     once. Provably identical to rung 2 on an empty board. `BM_KILL` adds `KILLED_OPPONENT`,
+     **25** in arm H — the game's own 5:1 kill:coin ratio at this table's scale (E16 put the
+     agent's coin at 5). A rescaling of a real game event, not an invented one.
+
+- **No custom events, deliberately.** `MOVED_TOWARD_OPPONENT`, `BOMB_NEAR_OPPONENT`,
+  `ESCAPED_BLAST` and friends were considered and rejected: all are action-dependent, all reward
+  the attempt rather than the outcome, and all inject within-row noise of the same size as the
+  margins they would widen (E19 measured sd 0.91). A hunting signal belongs in the **state**,
+  where it is a fact about the board, not in the reward, where it is a bribe.
+
+### Disclosure: I measured the untrained HUNT table before writing these predictions
+
+Verifying that the switch was inert when off, I ran 100 rounds of both settings on the **frozen
+rung-2 table, no retraining at all**, seed 550731, `coin_collector` field:
+
+| | HUNT off | HUNT on |
+|---|---|---|
+| score | 2.610 | **4.340** |
+| kills | 0.090 | **0.480** |
+| invalid | 26.89 | **1.25** |
+| crates | 28.06 | 26.40 |
+| survived | 0.470 | 0.460 |
+| think_max_ms | 0.285 | 0.318 |
+
+**The feature change alone, with zero training, nearly doubles score and beats
+`rule_based_agent`'s 2.753 in the same slot.** `invalid` falls 95 %, which is the mechanism the
+audit predicted, at the magnitude it predicted. These predictions are therefore written *knowing
+this*, which is disclosed rather than hidden — the trained arms are still unmeasured, and this
+number is 100 rounds on one seed.
+
+It also changes the design: **the untrained HUNT table becomes an arm of its own**, because E25's
+lesson is that training in this field can make things worse, and a change that works without
+training must be tested against training rather than assumed to benefit from it.
+
+- **Design.** Primary metric **`score`**, 3× `coin_collector_agent`, 300 rounds at ε = 0, seed
+  550731, n = 5 training runs (`BM_RUN_INDEX` 20–24, never used). Primary checkpoint **20 000**,
+  pre-registered — both E25 arms halved on score between 20 k and 40 k, as did rung 2.
+
+  | arm | training | `BM_HUNT` | `BM_KILL` |
+  |---|---|---|---|
+  | **F** | **none** — frozen `q_table_rung2ship` | 1 | — |
+  | **S** | 40 000 in the cc field | 0 | 0 |
+  | **H** | 40 000 in the cc field | 1 | 25 |
+
+  Arm S is "E25 arm B done correctly" and is required, because E25's contrast was void.
+  Everything else — ε 0.2→0.02, γ 0.99, α 1/N^0.7, `WARM_N` 100 — is **unchanged**, because the
+  audit refuted the premise that any of them is the problem.
+
+### Prediction (written before the trained runs, after the arm-F observation above)
+
+1. **P1, primary and decisive.** Arm H at 20 000 beats the floor's 2.517 on `score`, paired CI
+   over seeds excluding 0. **Refutation:** CI includes 0 → the hunt bundle does not pay once
+   trained, and arm F ships instead. *If P1 fails the entry is FAILED regardless of P2–P6.*
+2. **P2, the one I expect to lose.** Arm H beats **arm F** (4.340 on 100 rounds). Training in
+   the field should add on top of the feature. **Refutation:** H ≤ F → training in company is
+   actively harmful even with the objective fixed, the rung-3 agent is a *frozen rung-2 table
+   with a rung-3 feature map*, and no further training happens on this rung.
+3. **P3, mechanism.** `invalid` in both HUNT arms below **5.0**/round, from 25.3. Already 1.25
+   untrained. **Refutation:** ≥ 15 → the `NO_TARGET` diagnosis is wrong and the aliasing needs
+   an appended digit 9 = `bomb_possible` (radix 2, `np.repeat(parent, 2)`), which is E27.
+4. **P4.** `kills` ≥ 0.30/round in arm H (floor 0.063, reference 0.150, arm F 0.480 untrained).
+   **Refutation:** < 0.10 → pricing kills at 25 and pointing at opponents does not produce them,
+   and rung 3's ceiling really is the coin fair share.
+5. **P5, guard.** Arm S alone does **not** recover the floor: score < 1.5. The −10/−5 error was
+   not what broke E25. **Refutation:** S ≥ 2.5 → the semantics error was the whole story and the
+   feature change must be ablated before anything ships.
+6. **P6, guard.** `suicides` ≤ 0.30 **and** `survived` ≥ 0.40 in arm H, and `crates` ≥ 15.
+   **Refutation:** any breaks → aggression has cost the escape policy or overwritten crate
+   behaviour, i.e. E25's collapse with a new cause.
+
+`think_max_ms` must be re-measured **serially**; the batch figure is void at 5-way parallelism.
+
+### Considered and rejected, with the reason (so the report has the negative decisions too)
+
+- **Tuning ε_start or `WARM_N`** — E25's two named levers. Struck: ε = 0.2 kills the shipped
+  table in 44 steps *with no opponents*, and crates/step *rises* to 0.25 through episode 1 000.
+  There is no first-1 000-episode erasure to protect against.
+- **Potential-based shaping** — E19 rejected it structurally, not for want of tuning: within-row
+  sd(Φ) = 0.91 against action margins of the same size. An opponent-distance potential varies
+  *more* within a row than crate distance does, so it is strictly worse than the version already
+  refuted.
+- **Appending digit 9 = `bomb_possible`** — would fix the invalid-`BOMB` aliasing directly, but
+  doubles the table to 128 000 rows against a map that practises 2 364 of 64 000. The digit-6
+  change removes the same invalid actions for free (measured: 26.89 → 1.25 untrained). Held as
+  **E27, conditional on P3 failing** — which is what P3 is for.
+- **Opponent-position digits** (relative bearing, "opponent adjacent", opponent count) — same
+  sparsity argument; E20/E21 measured what a single extra digit costs before a warm start exists
+  to fill it.
+- **Training against `rule_based_agent`** — it is the rung-4 *measurement* target; training on it
+  overfits one deterministic policy, and the floor survives only 0.143 there, a worse learning
+  signal than the cc field.
+- **Training longer** — 40 000 halves score against 20 000 in **both** E25 arms; E18 measured the
+  same on rung 2.
+- **Fixing the double terminal update in this entry** — real and worth fixing, but it changes the
+  learning rule and would confound the feature arm. Its own entry, under a byte-identity control,
+  or in every arm at once so it cancels.
+- **Custom events** — see above; the reward table stays a map of events the tournament also
+  generates, at the game's own ratios.
+
+- **Verdict:** _pending._
+
+---
+
 ## E25 — Train in an opponent field, and tell the agent that being killed is bad
 
 - **Question:** E24 established the floor and named the cause. Two of every three rung-3 deaths
@@ -295,6 +420,33 @@ discounted under **its own reward table** against **−0.589** for the table it 
 found a policy worse than its own initialisation, and worse than standing still (−9.82). That
 is an optimisation failure, not a reward-design one, and no retuning of rewards explains it.
 
+**The counterfactual that justifies E26.** Repricing the floor policy's *recorded* event stream
+under alternative reward tables (discounted, γ = 0.99, `scratchpad/audit/a3_economics.py`):
+
+| reward table | floor policy, cc field |
+|---|---|
+| rung-2 table as shipped | **+0.545** |
+| …with the invalid-action bleed removed | **+2.439** |
+| …and `KILLED_OPPONENT = +25` on top | **+3.08** (cc), **+15.14** (peaceful) |
+| arm B's learned policy, under arm B's own table | −11.19 |
+| "walk into a blast at step ~3" | ≈ −0.30 |
+
+Two things follow. **The margin between competent play and immediate death is only ~0.6–1.0
+discounted units** — the same order as the within-row aliasing noise E19 measured at sd 0.91,
+which is why the policy is so easily talked out of playing. And **removing the invalid-action
+bleed is worth 4× that entire margin**, from a single change that costs no new state. That is
+the largest lever on the board and it is a *feature*, not a reward.
+
+**Method note — this entry was audited by an independent session.** After E25 failed I handed a
+fresh agent the repo, the raw CSVs and the trained tables, and asked it to recompute the
+headline numbers *before* reading my conclusions and to be adversarial. It confirmed the
+semantics error, the evaluation arithmetic and the flattened value function; it **refuted** my
+central mechanism and my crate→coin premise, **overclaimed** two more, and found the invalid-action
+drain, the board-empties-by-step-140 fact and the double terminal update. I then re-verified its
+two load-bearing refutations myself (the ε table and the crates/step table above) before
+rewriting this entry. Same pattern as the E19–E22 audit recorded in `benedict_task2.md` §6, and
+it changed more verdicts than that one did.
+
 **Latent defect found by the audit, not the cause of anything here but in the shipped training
 code.** `end_of_round` is called with the same `last_game_state`, `last_action` and an
 *uncleared* event list as the final `game_events_occurred`, so on a round that reaches
@@ -514,6 +666,33 @@ only seeded `default_rng` generators (`callbacks.py:403`, `train.py:189`), so a
 for the opponents and cannot affect us. To be applied before E25.
 
 ### Verdict — **floor established**, and it re-picks E25 against what I pre-registered
+
+> **Correction added 2026-08-12, from the independent audit of E24/E25 (`scratchpad/audit/`).**
+> Two things in this entry are wrong and are left standing above with the correction here.
+>
+> 1. **"116.6 → 27 crates" is not a transfer failure.** The board holds 122.2 crates and four
+>    agents strip it by roughly **step 140**; 27 *is* approximately the fair share, and the three
+>    `coin_collector` opponents take 31–32 each. Reading it as capability loss framed the whole
+>    rung as a survival problem.
+> 2. **The real transfer failure was in this entry's own results table and I missed it.**
+>    `invalid = 25.27`, one row below `crates`. It is worth **−25.27 reward per round** — more
+>    than coins and crates earn together — and 99 % of it lives in two rows with digit 6 =
+>    `NO_TARGET`. The agent has **no objective at all** for the last two thirds of the round:
+>
+>    | field | digit 6 = `NO_TARGET`, share of safe steps |
+>    |---|---|
+>    | solo | 0.43 % |
+>    | 3× `peaceful_agent` | 0.46 % |
+>    | 3× `rule_based_agent` | 10.91 % |
+>    | 3× `coin_collector_agent` | **26.28 %** |
+>
+>    That is an **objective** problem, not a survival one, and it is what E26 acts on.
+> 3. **The all-zero-row inference was pushed one step too far.** The statistic is real and
+>    reproduces at 66 % (audit, independent instrument). But "*that cannot be repaired by a
+>    better feature; only by visiting the row*" was tested by E25 and **failed** — all-zero rows
+>    went to 0.00 % and the agent got 20× worse. A 50× enrichment *at the moment of death* is
+>    also partly a consequence of dying in unusual states rather than a cause of it; no
+>    intervention test separated the two, and the entry treats it as causal.
 
 Not a verdict on a change: a floor. The rung-2 agent transfers as a **crate engine with no
 survival policy in company** — 116.6 → 27–29 crates and 1.000 → 0.143 survival against the

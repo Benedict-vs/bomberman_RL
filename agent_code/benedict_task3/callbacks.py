@@ -111,6 +111,23 @@ POLICY_SEED = 20260731
 # edited constant so the default in the tournament is the value in this file.
 TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
 
+# E26. Off by default, so every measurement up to E25 reproduces bit for bit and
+# the shipped rung-2 behaviour is what a bare checkout plays.
+#
+# It changes the *meaning* of two digits without changing FEATURE_SIZES:
+#   digit 6  falls through to the nearest opponent when no coin and no crate is
+#            reachable. E25's audit measured digit 6 = NO_TARGET on 26.3 % of
+#            safe steps in a `coin_collector` field (0.43 % solo) because four
+#            agents strip all 122 crates by ~step 140 -- after which the agent
+#            has no objective at all for two thirds of the round, and the rung-2
+#            table's answer in that row is an invalid BOMB at -1 a time.
+#   digit 7  counts an opponent in blast range as a reason to bomb, not just a
+#            crate.
+# No digit is added, inserted or re-based, so `q_table_rung2ship` stays a valid
+# warm-start parent at factor 1 and the parent's "walk that way" values are
+# already the right prior for the new rows.
+HUNT = os.environ.get("BM_HUNT", "") not in ("", "0")
+
 
 def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
     """Tiles a bomb at (x, y) covers. Mirrors `items.py:Bomb.get_blast_coords`.
@@ -172,8 +189,21 @@ def neighbour_status(x: int, y: int, field: np.ndarray, danger: np.ndarray,
     return tuple(status)
 
 
-def bomb_hits_crate(x: int, y: int, field: np.ndarray) -> bool:
-    return any(field[cx, cy] == 1 for cx, cy in blast_coords(x, y, field))
+def bomb_hits_crate(x: int, y: int, field: np.ndarray,
+                    others: list | None = None) -> bool:
+    """Would a bomb dropped here destroy something worth destroying?
+
+    With HUNT on, an opponent standing in the blast counts as well as a crate.
+    `others` defaults to None so every pre-E26 caller keeps the crate-only
+    meaning; the digit itself is still one bit.
+    """
+
+    blast = blast_coords(x, y, field)
+    if any(field[cx, cy] == 1 for cx, cy in blast):
+        return True
+    if HUNT and others:
+        return any(pos in blast for pos in others)
+    return False
 
 
 def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> tuple[int, int]:
@@ -217,7 +247,8 @@ def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> tuple[int, int
     return NO_TARGET, 0
 
 
-def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> tuple[int, int]:
+def target_direction(x: int, y: int, field: np.ndarray, coins: list,
+                     others: list | None = None) -> tuple[int, int]:
     """First step of a shortest path to whatever the agent is currently after.
 
     Coins while one is reachable, otherwise the nearest crate. The crate is the
@@ -252,7 +283,16 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list) -> tuple[in
     if ABLATE == "crate_target":
         return NO_TARGET, 0    # E17: the E11 behaviour -- no target without a coin
 
-    return bfs_first_step(x, y, field, is_crate)
+    step, dist = bfs_first_step(x, y, field, is_crate)
+    if step != NO_TARGET or not (HUNT and others):
+        return step, dist
+
+    # E26: the board is out of crates, so the objective becomes the nearest
+    # opponent. Same rule as the crate branch -- the goal tile is tested but
+    # never expanded, so an occupied tile is a legal destination even though the
+    # agent cannot stand on it.
+    other_set = set(others)
+    return bfs_first_step(x, y, field, lambda pos: pos in other_set)
 
 
 def escape_direction(x: int, y: int, field: np.ndarray, danger: np.ndarray,
@@ -352,7 +392,8 @@ def state_to_features(game_state: dict) -> int:
     # in a "crate in range" row with no bomb left, picks BOMB, gets
     # INVALID_ACTION -- and an invalid action leaves the state unchanged, which
     # is the absorbing-row failure of E09 in a new place.
-    bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field))
+    others = [o[3] for o in game_state['others']]
+    bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field, others))
     if ABLATE == "bomb_digit":
         bomb_useful = 0
 
@@ -365,7 +406,7 @@ def state_to_features(game_state: dict) -> int:
         # Digit 5 already carries the scarce resource while escaping.
         target_dist = DIST_NONE
     else:
-        target, distance = target_direction(x, y, field, game_state['coins'])
+        target, distance = target_direction(x, y, field, game_state['coins'], others)
         target_dist = distance_bucket(distance)
 
     if ABLATE == "target_dist":
