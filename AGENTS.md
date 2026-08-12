@@ -1,8 +1,10 @@
 # Bomberman RL — Final Project (MLE, Uni Heidelberg, SS 2026)
 
 Train an RL agent to play a 4-player Bomberman variant. Tournament + report.
-Source of truth: `final_project.pdf`.
-Approach, reasoning and milestones: `KONZEPT.md` (this file is the terse spec).
+Source of truth: `final_project.pdf`. Approach and milestones: `KONZEPT.md`.
+This file is the terse spec — only what an agent cannot read out of the codebase.
+Companion docs, read on demand rather than every session:
+`MEASUREMENT.md` (why the measurement rules are what they are), `FRAMEWORK_README.md`.
 
 ## Working agreement (for any AI agent on this repo)
 - **Never run `git commit`, `git push`, `git add`, or otherwise stage/commit changes.** The user
@@ -30,40 +32,23 @@ Approach, reasoning and milestones: `KONZEPT.md` (this file is the terse spec).
 - Report (PDF, ~4000 words *per team member*, sections marked with their main author) + public
   repo URL: **28.09.2026, 21:00**. Do **not** upload the report to the repo.
 
-## Game rules (from `settings.py`)
-- Board 17×17, `MAX_STEPS = 400`, up to 4 agents starting in corners.
-- `BOMB_TIMER = 4` steps; explosion reaches `BOMB_POWER = 3` tiles in 4 directions, blocked by
-  stone walls, does **not** turn corners; lingers `EXPLOSION_TIMER = 2`.
+## Game rules
+Constants are in `settings.py`; these are the ones that shape feature design and are not
+obvious from reading it:
+- Explosions reach `BOMB_POWER = 3` tiles in 4 directions, are blocked by stone walls and do
+  **not** turn corners; they linger `EXPLOSION_TIMER = 2` after `BOMB_TIMER = 4`.
+- `field` uses **image coords (x,y)**, so it prints transposed vs. the GUI.
 - Rewards: coin `+1`, kill `+5`. Killing opponents decides the score.
-- Agent step time limit: `TIMEOUT = 0.5 s` (no limit while training). Exceeding it → `WAIT`, and
-  the overrun is subtracted from the next step's budget.
-- Tournament scenario: `classic` (`CRATE_DENSITY = 0.75`, `COIN_COUNT = 9`).
-  Dev scenarios: `empty`, `coin-heaven`, `loot-crate`.
-- Reference hardware: one thread of an AMD Ryzen 5 2600, ≤8 GB RAM.
+- `TIMEOUT = 0.5 s` per step (no limit while training). Exceeding it → `WAIT`, and the overrun is
+  subtracted from the next step's budget. Reference hardware: one thread of an AMD Ryzen 5 2600,
+  ≤8 GB RAM — so budget against a machine far slower than ours.
+- Tournament scenario: `classic`. Dev scenarios: `empty`, `coin-heaven`, `loot-crate`.
 
 ## Agent interface — `agent_code/<name>/`
-`callbacks.py` (always loaded):
-```python
-def setup(self): ...              # once, before first round; self persists across callbacks
-def act(self, game_state: dict) -> str  # 'UP','DOWN','LEFT','RIGHT','BOMB','WAIT'
-```
-`self.logger` (logging.Logger) and `self.train` (bool) are preset.
-
-`train.py` (loaded only with `--train N`):
-```python
-def setup_training(self): ...
-def game_events_occurred(self, old_game_state, self_action, new_game_state, events): ...
-def end_of_round(self, last_game_state, last_action, events): ...
-```
-
-`game_state` keys: `round`, `step`, `field` (`np.array(w,h)`: 1 crate, −1 wall, 0 free,
-**image coords (x,y)** → printed transposed vs. GUI), `bombs` `[((x,y), t)]` (t==0 → about to
-explode), `explosion_map` (steps of explosion remaining per tile), `coins` `[(x,y)]`,
-`self` `(name, score, bomb_possible, (x,y))`, `others` `[same]`, `user_input`.
-
-Events (`import events as e`): MOVED_{LEFT,RIGHT,UP,DOWN}, WAITED, INVALID_ACTION, BOMB_DROPPED,
-BOMB_EXPLODED, CRATE_DESTROYED, COIN_FOUND, COIN_COLLECTED, KILLED_OPPONENT, KILLED_SELF,
-GOT_KILLED, OPPONENT_ELIMINATED, SURVIVED_ROUND.
+Signatures and `game_state` keys: read `agent_code/tpl_agent/`; event names: `events.py`.
+`callbacks.py` is always loaded (`setup`, `act`); `train.py` only with `--train N`
+(`setup_training`, `game_events_occurred`, `end_of_round`). `self.logger` and `self.train` are
+preset. `act()` must return one of `'UP','DOWN','LEFT','RIGHT','BOMB','WAIT'` within 0.5 s.
 
 **`GOT_KILLED` means "died", not "killed by an opponent".** `environment.py:264` adds it to
 *every* agent removed by an explosion, and `environment.py:251` adds `KILLED_SELF` **in
@@ -75,163 +60,30 @@ and leave `KILLED_SELF` at 0; that is *identical* to the rung-2 table on a board
 opponents, since a suicide fires both events there too. Split them only when own-bomb and
 enemy-bomb deaths are deliberately priced differently, and write down which is which.
 
-## Commands
-```bash
-python main.py play                                     # watch rule_based_agent
-python main.py play --my-agent my_agent                 # vs 3 rule_based_agents
-python main.py play --agents my_agent random_agent rule_based_agent --train 1
-python main.py play --no-gui --agents my_agent --train 1 --scenario coin-heaven
-python main.py replay <stored-replay>                   # needs --save-replay when playing
-python main.py play --help
-```
-Useful flags: `--no-gui` (fast training), `--skip-frames`, `--seed` (fixes crates/coins, not agent
-RNG), `--turn-based` (with `user_agent`), `--continue-without-training`.
-Logs land in `agent_code/<name>/logs/<name>.log`; levels in `settings.py`.
-**`BM_QUIET_LOGS=1` drops all three log levels to WARNING** — use it for training sweeps. The
-engine logs per step, so a 40 000-round `classic` run is ~10 M INFO lines; measured saving 25 %
-of wall clock, and `logs/game.log` goes from GB-scale to empty. It is an environment switch, not
-an edited constant, so unset (every normal game, every evaluation, the tournament) `settings.py`
-holds exactly the upstream values and there is nothing to restore before submitting.
-Note that `agents.py:226-228` hardcodes the agent log path in mode `"w"`, so parallel runs of the
-same agent overwrite each other's — during a sweep the training CSV is the only usable record.
-While sweeping, also check how often `train.py` calls `np.save`: once per round on a 614 KB table
-is ~25 GB of writes per run, and five concurrent runs make that the dominant I/O.
+## Running the game
+`python main.py play --help` for the full CLI. Useful flags: `--no-gui` (fast training),
+`--skip-frames`, `--seed`, `--turn-based` (with `user_agent`), `--continue-without-training`,
+`--save-replay` (needed before `main.py replay <file>`).
+Prefer `uv run python main.py …` so the project venv is used.
+
+Three things that bite during long training sweeps (numbers in `MEASUREMENT.md`):
+- **`BM_QUIET_LOGS=1`** drops all three log levels to WARNING — always set it for a sweep.
+  It is an environment switch, not an edited constant, so there is nothing to restore before
+  submitting.
+- `agents.py:226-228` hardcodes the agent log path in mode `"w"`, so **parallel runs of the same
+  agent overwrite each other's log** — during a sweep the training CSV is the only usable record.
+- Check how often `train.py` calls `np.save`; once per round on a large table makes disk I/O the
+  bottleneck of a multi-run sweep.
 
 ## Models we are building
 - **Model A — tabular Q-learning on hand-built features.** Lecture technique, fast to converge,
   interpretable. The baseline everything is measured against and the tournament fallback.
-- **Model B — DQN on the raw board** (7 channels × 17×17, small CNN). We have GPU access for
-  training; inference in the tournament is CPU-only. Historically the risky option — clear
-  go/no-go: if it does not beat `rule_based_agent` in time, Model A is submitted.
-  Model B still goes into the report either way; a documented failure is a valid result.
+- **Model B — DQN on the raw board** (7 channels × 17×17, small CNN). GPU for training, CPU-only
+  inference in the tournament. Clear go/no-go: if it does not beat `rule_based_agent` in time,
+  Model A is submitted. Model B goes into the report either way — a documented failure is a
+  valid result.
 - Feature extraction, reward scheme, evaluation and training logs are **shared** between both.
   Splitting the team per model is explicitly forbidden by the task description.
-
-## Measurement (`tools/`) — read before running experiments
-Details and rationale in `KONZEPT.md` §6. The short version:
-
-- **`tools/evaluate.py`** — per-round, per-agent statistics as CSV + `.meta.json`
-  (git commit, seed, and a snapshot of the *rules* in `settings.py` — board size, bomb, timeout,
-  rewards, scenario config; **not** the whole file). Drives `BombeRLeWorld` directly and
-  touches no framework file, so it survives the tournament reset.
-  `main.py --save-stats` is *not* enough: it only writes lifetime totals per agent and
-  per-round totals summed over all agents, so no per-agent confidence interval is possible.
-- **`tools/analyze.py`** — means with 95 % bootstrap CI; `--compare A B` does a **paired**
-  comparison; `--ablation BASE V1 V2 …` compares many variants against one baseline on a
-  single metric; `--markdown` emits report-ready tables; `--plot` writes figures to
-  `results/figures/` (bar chart with CIs for a summary, forest plot for comparison and
-  ablation). Plotting needs matplotlib: `uv add matplotlib` (analysis only — keep it out of
-  the submitted `requirements.txt`).
-- **`tools/trainlog.py`** — one row per episode for learning curves; import defensively in
-  `train.py` (`try: from tools.trainlog import TrainLogger / except ImportError: ...`),
-  since `tools/` is not part of the submission.
-
-Conventions we all follow, otherwise the numbers are not comparable:
-- **Never change `--seed`.** Default `20260731`. The harness reseeds the world RNG per round
-  (`base_seed + round_index`), which makes every run use *identical* arenas — that is what
-  makes comparisons paired and the CIs tight. `main.py --seed` alone does **not** achieve this:
-  the world draws from the same RNG every step, so arenas drift apart from round 2 onwards.
-- **300 rounds** for any number that gets reported, 100 for a quick check, 1000 for the final
-  measurement. Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
-- **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
-  "not demonstrated". Negative results stay in the report.
-- **A training curve is not a result.** Nothing is claimed until it has been measured with
-  `tools/evaluate.py` at ε = 0. While training, ε-exploration and the still-changing table keep
-  breaking the policy out of cycles, so a broken agent can look healthy in the log. Measured
-  2026-08-05: 48.2 coins/episode at the end of training, **1.45** in the evaluation of the same
-  model (`experiments/maxi.md` E01).
-- **`steps` only measures path length in rounds that were completed.** The round ends the moment
-  the last coin is collected, so 400 means "never finished", not "slow", and a mean over both
-  kinds of round is meaningless. Always report the **completion rate** next to it, or restrict
-  `steps` to completed rounds (`tools/plot_task1_versions.py` does the latter). This is what
-  distinguishes "navigates badly" from "navigates fine but gets stuck".
-  **From task 2 on, read the completion rate together with `survived`.** A dead agent also
-  ends the round, so completion stops meaning "finished the job": measured on `classic`,
-  `random_agent` "completes" 100 % of rounds at 19.0 steps because it kills itself, while
-  `rule_based_agent` completes 8 % at 399.1 (`experiments/benedict.md` E08). Taken alone,
-  completion rate ranks the worst agent in the field first.
-- **`analyze.py` assumes higher is better**, so it prints `WORSE` for a *falling* `steps`.
-  On task 1 (and anywhere else efficiency is the goal) read that row inverted.
-- Primary metric `score`. Per-task metric sets via `analyze.py --preset task1…task4`:
-  task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
-  task 3 `score`/`kills`/**`suicides`**/`survived` ·
-  task 4 `score`/**`won`**/`kills`/`suicides`/`killed_by`/`think_ms`.
-- `suicides` changes role from task 3 on: progress signal on task 2 (must fall), regression
-  guard afterwards (must not creep back up — learning aggression is exactly when an agent
-  forgets to run from its own bomb).
-- On task 4 split the deaths: `suicides` (own bomb → escape logic broken) vs `killed_by`
-  (opponent's bomb → positioning/danger awareness). Different bugs, different fixes.
-- `won`/`rank` = standing within the round. On task 4 this matters more than mean score —
-  the tournament is decided against the other agents.
-- Always watch `think_max_ms` (0.5 s tournament limit).
-
-```bash
-uv run python tools/evaluate.py --agents <ours> --opponents rule_based --n-rounds 300 --label <name>
-uv run python tools/analyze.py results/eval/<name>.csv
-uv run python tools/analyze.py --compare results/eval/<old>.csv results/eval/<new>.csv --markdown
-uv run python tools/analyze.py --ablation results/eval/<base>.csv results/eval/<v1>.csv \
-    results/eval/<v2>.csv --metric score --plot
-uv run python tools/trainlog.py results/train/*.csv --metric score
-```
-
-Opponent presets for `--opponents`: `none`, `random`, `peaceful`, `coin_collector`, `mixed`,
-`rule_based` (mapped to the task ladder below).
-
-**Measurements are versioned** (settled 2026-08-04, was the open item in `KONZEPT.md` §6.7).
-`.gitignore` now excludes only `results/figures/`; `results/eval/` and `results/train/` are
-committed — they are the evidence for the report's most important chapter. Figures stay ignored:
-they are pure functions of the CSVs.
-
-*Amended 2026-08-07, revised 2026-08-08.* This section used to say a lost training log
-"cannot be reproduced, only replaced by a different one", because `--seed` fixes the arenas but
-not the agent's exploration RNG. **That has not been true since the exploration RNG was seeded in
-`setup_training`** (`np.random.default_rng(TRAIN_SEED + RUN_INDEX)`); `experiments/benedict.md`
-E12 confirmed it by rerunning a 40 000-round sweep and getting round-for-round identical
-evaluation results.
-
-*Amended 2026-08-11 (E24).* **That guarantee ends as soon as opponents train alongside us.**
-`main.py` does not seed the provided agents, and each of them reseeds the global RNG from OS
-entropy in `setup` — which runs *after* ours, so nothing in `setup_training` can precede it.
-A rung-3 training run is therefore reproducible in its arenas and in our own exploration, but
-not in the opponents, and two runs of the same command give different tables. This is
-**accepted rather than fixed**: opponent variety during training is desirable for the same
-reason arena variety is, and the only hook that runs before an opponent's first action is our
-own `act()`, where seeding the global RNG would reach into other agents' behaviour — not
-something the submitted agent should ever do. Reproducibility is preserved where the numbers
-come from: `tools/evaluate.py` seeds the opponents per round (above). The practical
-consequence is that rung-3 arms must be compared **across several training seeds**, never on a
-single run.
-
-**`results/train/task2_crates/` is therefore no longer committed** (`.gitignore`, from
-2026-08-08). It had reached 282 MB: an evaluation CSV is ~35 KB, but a 100 000-episode training
-log is ~7 MB and a 20-run sweep is 140 MB, which every collaborator would clone. They are
-reproducible from the commit plus the `BM_*` arm variables recorded in each run's `.meta.json`.
-Logs written before the change stay in the history — removing them from the index stops the
-growth, it does not shrink an existing clone.
-
-`results/train/task1_coin_collectors/` is untouched: it is Maxi's and Ben's and it is 21 MB.
-**`results/eval/` stays committed in full** — it is small and it is what every number in the
-report is computed from.
-
-**Seeding differs between training and measurement, on purpose.** `BombeRLeWorld.__init__`
-(`environment.py:335`) seeds the world RNG **once** and `build_arena` keeps drawing from it, so
-`main.py --seed S` gives a deterministic *sequence* of distinct arenas — variety for training,
-reproducible as a whole. `tools/evaluate.py` instead reseeds with `base_seed + round_index`
-**before every round**, so round *i* is the same arena for every agent ever measured at that
-seed. That is what makes `--compare` paired; `main.py --seed` alone is not sufficient for a
-measurement.
-
-**From task 3 on, the opponents are seeded too** (added 2026-08-11, `experiments/benedict.md`
-E24). All three provided agents call `np.random.seed()` **with no argument** in `setup`
-(`peaceful_agent:5`, `coin_collector_agent:68`, `rule_based_agent:69`), reseeding the global
-legacy RNG from OS entropy — so with opponents on the board an evaluation was *not* reproducible
-at a fixed seed, only its arenas were. Rerunning one diagnostic gave 12 vs 7 deaths against
-`peaceful_agent` on identical seeds. `evaluate.py` now calls
-`np.random.seed(base_seed + round_index)` beside the `world.rng` line. Nothing in the framework
-draws from that RNG (`environment.py:335` is the only generator) and our agents use seeded
-`default_rng` objects only, so this changes opponent behaviour and nothing else: arenas are
-untouched and evaluations without opponents are bit-identical to before. **Numbers recorded with
-opponents before this are single draws, not constants.**
 
 ## Task ladder (subsets of each other)
 1. `coin-heaven`, no crates/opponents → efficient navigation to revealed coins.
@@ -246,57 +98,97 @@ over 1000 episodes**, gone the moment `BOMB` was masked out (`experiments/maxi.m
 `BOMB`/`WAIT` are useless anyway (no crates); they come back on task 2 **together with** the
 danger features, never before.
 
+## Measurement (`tools/`) — read before running experiments
+`evaluate.py` writes per-round, per-agent CSV + `.meta.json` (git commit, seed, snapshot of the
+*rules* in `settings.py`). `analyze.py` gives means with 95 % bootstrap CI, `--compare A B`
+(paired), `--ablation BASE V1 V2 …`, `--markdown`, `--plot`. `trainlog.py` writes one row per
+episode; import it defensively in `train.py`
+(`try: from tools.trainlog import TrainLogger / except ImportError: …`), since `tools/` is not
+submitted. Plotting needs matplotlib (`uv add matplotlib`) — keep it out of `requirements.txt`.
+
+```bash
+uv run python tools/evaluate.py --agents <ours> --opponents rule_based --n-rounds 300 --label <name>
+uv run python tools/analyze.py results/eval/<name>.csv
+uv run python tools/analyze.py --compare results/eval/<old>.csv results/eval/<new>.csv --markdown
+uv run python tools/analyze.py --ablation results/eval/<base>.csv results/eval/<v1>.csv \
+    results/eval/<v2>.csv --metric score --plot
+uv run python tools/trainlog.py results/train/*.csv --metric score
+```
+`--opponents` presets: `none`, `random`, `peaceful`, `coin_collector`, `mixed`, `rule_based`
+(mapped to the task ladder). Non-default output needs `--out-dir`, e.g. `results/eval/task2_crates`.
+
+Conventions we all follow, otherwise the numbers are not comparable:
+- **Never change `--seed`.** Default `20260731`. `evaluate.py` reseeds per round
+  (`base_seed + round_index`) so every agent ever measured sees identical arenas — that is what
+  makes `--compare` paired. `main.py --seed` alone does **not** achieve this.
+- **300 rounds** for any reported number, 100 for a quick check, 1000 for the final measurement.
+  Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
+- **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
+  "not demonstrated". Negative results stay in the report.
+- **A training curve is not a result.** Nothing is claimed until measured at ε = 0 with
+  `evaluate.py` — a broken policy looks healthy in the training log.
+- **`steps` is only meaningful over completed rounds**, and from task 2 on completion rate is
+  only meaningful next to `survived` — a dead agent also ends the round, so taken alone
+  completion rate ranks the worst agent in the field first.
+- **`analyze.py` assumes higher is better**, so it prints `WORSE` for a *falling* `steps`.
+  Read that row inverted wherever efficiency is the goal.
+- **Rung-3+ arms must be compared across several training seeds, never on a single run** —
+  `main.py` does not seed the provided opponents, so two runs of the same command give
+  different tables. Evaluations *are* reproducible: `evaluate.py` seeds the opponents per round.
+- Primary metric `score`. Per-task sets via `analyze.py --preset task1…task4`:
+  task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
+  task 3 `score`/`kills`/**`suicides`**/`survived` ·
+  task 4 `score`/**`won`**/`kills`/`suicides`/`killed_by`/`think_ms`.
+- `suicides` changes role from task 3 on: progress signal on task 2 (must fall), regression guard
+  afterwards (learning aggression is exactly when an agent forgets to run from its own bomb).
+  On task 4 split the deaths: `suicides` (own bomb → escape logic) vs `killed_by` (opponent's
+  bomb → positioning). Different bugs, different fixes.
+- `won`/`rank` = standing within the round; on task 4 that matters more than mean score.
+- Always watch `think_max_ms` (0.5 s tournament limit).
+
 ## Hints that matter for the grade
 - The **scientific method is the main grading criterion**: subgoals, controlled experiments,
-  defined performance metrics, each change justified by the previous round of testing.
-  "Experiments and Results" is the most important report section.
-- Feature engineering beats model complexity: situational awareness (walls adjacent), pathfinding
-  (direction to nearest coin), life-saving (in blast radius / can I escape).
+  defined metrics, each change justified by the previous round of testing. "Experiments and
+  Results" is the most important report section.
+- Feature engineering beats model complexity: situational awareness, pathfinding to the nearest
+  coin, life-saving features (in blast radius / can I escape).
 - Reward shaping: dense, balanced (penalize the opposite of every rewarded action), many custom
   events are fine. Potential-based shaping (Ng et al. 1999) depends on *states*, not actions.
   Auxiliary rewards do **not** exist in official games — don't overfit to them.
-- Exploit the board's rotational/mirror symmetries for data augmentation or state canonicalization.
+- Exploit the board's rotational/mirror symmetries for augmentation or state canonicalization.
 - Hyperparameter optimization is explicitly graded — budget time for it.
-- Deep learning is allowed but has historically failed to converge before the deadline; simple,
-  well-tuned models have won.
-- Test the submission in the provided `Dockerfile` (`docker build .`), and list extra libraries in
+- Deep learning is allowed but has historically failed to converge before the deadline.
+- Test the submission in the provided `Dockerfile` (`docker build .`); list extra libraries in
   `requirements.txt` + README + report.
 
 ## Repo conventions
 - Python 3.12, `uv` (`pyproject.toml`, `uv.lock`); add deps with `uv add`.
-- Our agents live in `agent_code/` alongside the provided ones (`tpl_agent` is the template;
-  `rule_based_agent` is the strong reference opponent and a good source of training data —
-  but our submitted agent must be *learned*, not rule-based).
+- Our agents live in `agent_code/` alongside the provided ones. `tpl_agent` is the template;
+  `rule_based_agent` is the strong reference opponent and good training data — but our submitted
+  agent must be *learned*, not rule-based.
+- Naming: per-person development folders are `<person>_task<task>` (`benedict_task2`); the
+  agreed, merged baseline for a task is `<method>_task<task>` (`tabular_q_task1`, later
+  `dqn_task2`) and is **frozen** once agreed. Each task gets its own folder so two tasks can be
+  compared without checking out an old commit.
 - **`agent_code/tabular_q_task1/` is the agreed task-1 baseline** and the starting point for
-  everything after it. It merges the two independently developed coin collectors on the
-  evidence of both ledgers (BFS coin direction and random tie-breaking from Maxi's; per-cell
-  learning rate `1/N(s,a)^0.7`, the full six-action set, the mixed-radix table and the seeded
-  measurement harness from Benedict's). 50.00 coins in every round at 123.7 steps — **faster
-  than `coin_collector_agent`'s 125.3**, which is the metric that discriminates on this task.
-  Rationale, findings and reproduction: `experiments/task1.md`.
-  Each task gets its own folder so two tasks can be measured against each other without
-  checking out an old commit. Per-person development folders are `<person>_task<task>`
-  (`benedict_task2`); the agreed, merged baseline for a task is `<method>_task<task>`
-  (`tabular_q_task1`, later `dqn_task2`) and is frozen once it is agreed.
+  everything after it — 50.00 coins in every round at 123.7 steps, faster than
+  `coin_collector_agent`'s 125.3. What it merges and why: `experiments/task1.md`.
   `benedict_coin_collector` and `maxi_coin_collector` stay as frozen evidence for their
   ledgers — do not develop in them.
 - `tools/` holds our measurement chain; it is **not** submitted, so nothing in
   `agent_code/<name>/callbacks.py` may import from it.
-- `results/eval/` evaluation CSVs, `results/train/` training logs. Both written by `tools/`.
-  Grouped per task, same names in both trees: `task1_coin_collectors/`, `task2_crates/`,
-  `task3_opponents/`, plus `results/eval/baselines/` for the provided agents — including a
-  provided agent measured *in an opponent field*, which is a reference and not a result
-  (`ref_<agent>__task3_<field>.csv`). Underscores, never spaces — a
-  directory with a space in it silently breaks unquoted globs in analysis scripts.
-  Non-default locations need `--out-dir`, e.g.
-  `--out-dir results/eval/task2_crates`.
+- `results/eval/` CSVs and `results/train/` logs are grouped per task with the same names in both
+  trees (`task1_coin_collectors/`, `task2_crates/`, `task3_opponents/`), plus
+  `results/eval/baselines/` for the provided agents — a provided agent measured *in an opponent
+  field* is a reference, not a result (`ref_<agent>__task3_<field>.csv`). Underscores, never
+  spaces: a directory with a space silently breaks unquoted globs in analysis scripts.
+  What is committed and what is gitignored: `MEASUREMENT.md`.
 - `experiments/<person>.md` is the hand-written results ledger: one entry per experiment with
-  question, change, **prediction written before the run**, commit hash, numbers and verdict.
-  The CSVs are raw data; this is the narrative the report's Experiments chapter is built from,
-  and nothing in `tools/` can reconstruct it after the fact. Same ownership rule as the
-  logbooks — only append to your own.
+  question, change, **prediction written before the run**, commit hash, numbers and verdict. The
+  CSVs are raw data; this is the narrative the report's Experiments chapter is built from, and
+  nothing in `tools/` can reconstruct it after the fact. Same ownership rule as the logbooks —
+  only append to your own.
 - Restore original `settings.py` values before submitting if changed for training. Better still,
   make a training-only change an *environment switch* whose default is the upstream value
-  (`BM_QUIET_LOGS`), so there is nothing to remember. `evaluate.py`'s `.meta.json` catches an
-  edited **rule** (board, bomb, timeout, reward, scenario) but not anything else in the file —
-  log levels, for instance, are not snapshotted, so an edit there is invisible in the metadata.
+  (`BM_QUIET_LOGS`), so there is nothing to remember — `.meta.json` snapshots the rules, not the
+  whole file, so an edited log level is invisible in the metadata.

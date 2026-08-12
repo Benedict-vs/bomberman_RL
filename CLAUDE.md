@@ -3,9 +3,9 @@
 ## Claude Code specifics
 
 - `AGENTS.md` above is the shared, tool-agnostic project spec — edit that file, not this one,
-  for anything a collaborator's agent should also know.
-- Before touching `agent_code/<name>/callbacks.py` or `train.py`, check the framework contract in
-  `AGENTS.md` — `act()` has a 0.5 s budget and must return one of the six action strings.
+  for anything a collaborator's agent should also know. Keep it under ~200 lines: it is loaded
+  in full every session, and a long file dilutes the rules in it. Detail and rationale belong in
+  `MEASUREMENT.md`, `KONZEPT.md` or the ledgers, which are read on demand.
 - Don't "helpfully" refactor the provided framework files (`environment.py`, `agents.py`,
   `items.py`, `settings.py`, `main.py`). They are reset to upstream for the tournament; changes
   there are training-only scaffolding and must be called out explicitly.
