@@ -69,6 +69,18 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
   provided agents and nothing in `setup_training` can precede their own reseed. That is why
   every arm gets five seeds and is compared at the arm level, never on a single run.
 
+  **Pre-registered before any table existed**, because E23 nearly reported a selected cell:
+  - **The primary checkpoint is 40 000.** The mechanism under test is filling rows that were
+    never visited, and that needs episodes. Rung 2's finding that 20 000 beats 40 000 was made
+    on a saturated board with no opponents and does not transfer. The 20 000 point is reported
+    as a curve, **not** selected over.
+  - **The unit of analysis is the run, n = 5 per arm**, not the round. Arms A and B share
+    `BM_RUN_INDEX` seed for seed, so B − A is a *paired* difference over five pairs.
+  - The transfer field (`rule_based`) is a **secondary** measurement. Nothing is chosen on it;
+    it only says whether the effect generalises off the training opponent.
+  - `think_ms` from this batch is **void** — the evaluations run five at a time, which inflates
+    per-step timing. The 0.5 s check must be re-run serially before anything ships.
+
 ### Prediction (written before the run)
 
 1. **Arm A alone closes most of the survival gap in the training field.** The all-zero rows get
@@ -100,7 +112,201 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
    **Refutation:** transfer survival ≤ 0.16 → training against a non-hunting opponent does not
    generalise, and E26's field choice becomes the question rather than its features.
 
-- **Verdict:** _pending._
+### Results (commit `0a54eb9` + the E25 agent, 300 rounds, ε = 0, seed 550731, n = 5 runs/arm)
+
+The floor is the shipped rung-2 table **re-measured on 550731**, because E24's numbers are on
+the dev seed and differencing across world seeds would have confounded everything. It lands
+within 0.06 of E24 on every metric, which is a useful check that the floor is a property of the
+agent and not of the seed.
+
+**Training field (`coin_collector`), primary checkpoint 40 000:**
+
+| | floor (rung 2) | arm A (`GOT_KILLED`=0) | arm B (=−5) |
+|---|---|---|---|
+| **score** | **2.517** | **0.081** [0.043, 0.118] | **0.118** [0.079, 0.157] |
+| coins | 2.183 | 0.057 | 0.105 |
+| crates | 27.34 | **0.119** | **0.138** |
+| bombs | 27.98 | 7.54 | 24.47 |
+| survived | 0.437 | 0.309 | **0.940** [0.917, 0.963] |
+| killed by opp. | 0.343 | 0.677 | 0.039 |
+| suicides | 0.220 | 0.014 | 0.021 |
+| steps alive | 229.0 | 193.1 | 384.0 |
+
+Transfer field (`rule_based`), arm B: survived **0.650**, score 0.273, crates 0.377.
+
+**The 20 000 checkpoint, which this entry pre-registered as a curve and then failed to report
+until the audit caught it:**
+
+| | A@20k | A@40k | B@20k | B@40k |
+|---|---|---|---|---|
+| score | 0.159 | 0.081 | **0.220** | 0.118 |
+| survived | **0.853** | 0.309 | 0.922 | 0.940 |
+
+Both arms **halve on score between 20 k and 40 k**, and arm A@20k's survival of 0.853 satisfies
+prediction 1's ≥ 0.60 at the checkpoint I left out. It does not change the verdict — 0.220 is
+still 11× below the floor — but omitting a pre-registered quantity that flatters nothing is
+still a selective report, and it is the third time in this ledger (E21's unevaluated 300 k
+tables, E23's four-cell pooling) that a missing cell made a conclusion tidier.
+
+### Verdict — **FAILED**, and for two independent reasons, one of them mine
+
+**The agent learned to survive by refusing to play.** Arm B survives 94 % of rounds — better
+than `rule_based_agent`'s 0.693 — while scoring **0.118 against the floor's 2.517**. It opens
+**0.14 crates**. Rung 2's whole capability is gone.
+
+**1. The reward semantics were wrong, and the error is mine.** `environment.py:264` adds
+`GOT_KILLED` to *every* agent killed by a blast, and `:251` adds `KILLED_SELF` **on top** when
+the bomb was its own. So arm B does not price death symmetrically at −5/−5 as the design says —
+it prices a **suicide at −10** and an opponent's kill at −5. The correction is now in
+`AGENTS.md`: put the whole penalty on `GOT_KILLED` and leave `KILLED_SELF` at 0, which is
+*identical* to the rung-2 table on an empty board (a suicide fires both events there too) and
+correct in company. **Arm B's numbers do not measure what this entry says they measure.**
+
+**2. But the reward error is not what broke it.** Arm A carries the **untouched rung-2 reward
+table** and collapses just as completely: 27.34 → 0.119 crates. The destroyer is *training in
+the field*, not the death penalty.
+
+> **Correction, from the independent audit of this entry (`scratchpad/audit/`).** I first wrote
+> here that "the warm-started table meets rung 2's ε = 0.2 in a field that kills it in 40 steps,
+> every single round", and that ~1 000 episodes of that erased the transfer. **Both halves are
+> wrong, and I verified the refutation myself before committing this.**
+>
+> **(a) It is ε, not the field.** Rolling the *frozen* shipped table at fixed ε, no learning,
+> 40 rounds (`scratchpad/audit/a4_eps.py`):
+>
+> | ε | field | steps/ep | suicides | survived | crates |
+> |---|---|---|---|---|---|
+> | 0.0 | solo | 400.0 | 0.000 | 1.000 | 116.72 |
+> | 0.05 | solo | 120.3 | 0.975 | 0.025 | 38.85 |
+> | **0.2** | **solo** | **44.2** | **1.000** | **0.000** | 14.57 |
+> | 0.0 | 3× coin_collector | 214.0 | 0.400 | 0.375 | 27.05 |
+> | 0.2 | 3× coin_collector | 32.0 | 0.975 | 0.000 | 10.88 |
+>
+> ε = 0.2 destroys the table **on an empty board**. The opponents are worth ~12 of the 44 steps.
+> And ε 0.2 → 0.02 is *rung 2's own schedule*, which produced this table.
+>
+> **(b) The crate machinery is intact early and decays late.** Crates per **step** (the absolute
+> count falls only because episodes are shorter):
+>
+> | episodes | ε | steps | crates | **crates/step** |
+> |---|---|---|---|---|
+> | 0–50 | 0.198 | 40.5 | 11.14 | **0.275** |
+> | 500–1 000 | 0.138 | 50.8 | 12.64 | **0.249** |
+> | 2 000–5 000 | 0.038 | 186.9 | 10.32 | 0.055 |
+> | 10 000–20 000 | 0.020 | 287.2 | 2.92 | 0.010 |
+> | 30 000–40 000 | 0.020 | 290.1 | 1.43 | **0.005** |
+>
+> At episode 1 000 it opens crates at **0.25/step, twice the floor's greedy 0.119**. The collapse
+> runs from ~2 000 to 40 000, *after* ε has reached its floor, and is monotone. It is **slow
+> forgetting under a bad gradient, not fast erasure by exploration** — and I read a falling
+> absolute count as decay when the rate was rising. The table that contains the counter-evidence
+> is the one I quoted.
+
+**What actually drains the value.** Decomposing the floor policy's realised reward per round in
+the `coin_collector` field:
+
+| term | per round |
+|---|---|
+| `COIN_COLLECTED` +5 × 2.23 | +11.15 |
+| `CRATE_DESTROYED` +0.3 × 27.67 | +8.30 |
+| **`INVALID_ACTION` −1 × 24.25** | **−24.25** |
+| `STEP_COST` −0.1 × 225.7 | −22.57 |
+| `KILLED_SELF` −5 × 0.24 | −1.20 |
+
+**`INVALID_ACTION` costs more than everything the agent earns**, and it sat in E24's own results
+table one row below `crates` without being priced. **96.3 % of it is `BOMB` pressed with no bomb
+available**, 95.6 % of those in rows that *have* value (median margin 0.1156 — learned, not
+tie-breaking), and **99 % in exactly two rows, both with digit 6 = `NO_TARGET`**.
+
+And `NO_TARGET` is common because **the board runs out**: four agents strip all 122 crates by
+~step 140, after which the rung-2 state has **no objective at all** — 26.3 % of safe steps in
+the `coin_collector` field against 0.43 % solo. The rung-2 table's answer in that row is "press
+BOMB", at −1 a time, for the last two thirds of the round.
+
+**The value function flattened.** `scratchpad/benedict/policy_probe.py`, 30 rounds, same field:
+
+| | rung-2 table | arm B @40 k |
+|---|---|---|
+| Q(chosen), median | **+4.822** | **−1.177** |
+| Q(BOMB) − Q(2nd), median, when BOMB wins | **0.1156** | **0.0003** |
+| …of those, below 0.01 | 0.0 % | **99.8 %** |
+| all-zero rows, share of steps | 1.54 % | **0.00 %** |
+| BOMB chosen with a crate in range | 24.7 % | **0.5 %** |
+
+*(An earlier version of this table carried "next to a crate (digit 7 = 1): 9.45 % vs 34.39 %"
+and a sentence built on it. **Withdrawn** — digit 7 is `have_bomb AND bomb_hits_crate`, so it
+measures bomb *possession*, not position: the floor holds a bomb on 26.6 % of steps because it
+spends them, arm B almost always. Normalised by possession, both are ~31–34 % and the contrast
+disappears.)*
+
+So: **E24's diagnosis was right and the fix worked.** All-zero rows at the fatal step were the
+problem; training in the field drove them from 1.54 % of steps to 0.00 %, and rows with value
+went 2 364 → 4 931. It simply did not help, because the states are now *populated with
+worthless values*: every decision is made on a margin of 3 × 10⁻⁴, 385× smaller than rung 2's
+0.116. The agent stands next to a crate on a third of all steps and almost never bombs it, then
+drops 24 bombs a round into empty space — not from ties (0.01 % of steps) but as the confident
+argmax of a flat, negative value function. With no reward flowing, every action really is worth
+the same, and there is no gradient back to competence. A self-reinforcing local optimum.
+
+### Predictions — four of six "correct" while the agent got 20× worse
+
+| # | claim | outcome |
+|---|---|---|
+| 1 | arm A closes the survival gap; all-zero < 25 % | **split**: all-zero → 0.00 % (right, decisively); arm A survival 0.437 → 0.309 (wrong) |
+| 2 | B − A survival ≥ +0.05, CI excludes 0 | **numerically right** (+0.631 [+0.587, +0.676]) but **void** — confounded by the −10/−5 error |
+| 3 | crates fall, no more than 35 | **refuted catastrophically** — 0.12, not 27 |
+| 4 | suicides ≤ 0.227 | "correct" (0.014–0.021) and **meaningless**: it does not bomb, so it cannot suicide |
+| 5 | kills ≤ 0.15 | "correct" (0.003) and meaningless for the same reason |
+| 6 | transfer survival ≥ 0.25 | **correct** — arm B 0.650 on `rule_based` |
+
+**The methodological lesson is the one worth carrying.** Four of six predictions came out
+"correct" on an agent that is **twenty times worse on the primary metric**. Every one of those
+four was a *guard* metric — suicides, kills, survival, coverage — and guards only bound the
+failure modes you already imagined. Predictions 4 and 5 were satisfied by the agent abandoning
+the behaviour they were meant to protect. A pre-registered metric set has to state which number
+decides, and E25's did not: it named `score` as primary in the ladder and then spent five of six
+predictions elsewhere.
+
+### What E26 has to address
+
+1. **Fix the reward semantics** — `GOT_KILLED = −5`, `KILLED_SELF = 0`. Not an arm; a
+   correctness fix, and provably identical to rung 2 on an empty board.
+2. **Give the agent an objective for the second half of the round.** Digit 6 is `NO_TARGET` on
+   26 % of safe steps because the crates are gone by step ~140, and the table's answer there is
+   an invalid `BOMB`. Letting digit 6 fall through to the nearest **opponent** costs no new
+   digit — `FEATURE_SIZES` is unchanged, so the shipped table stays a valid parent — and the
+   parent's values for "walk that way" are already the right prior.
+3. **Price the only thing left to earn.** Coins are saturated: 9 shared four ways is a ~2.25
+   fair share and the floor already banks 2.18. `score = coins + 5·kills`, so **on rung 3 every
+   further point must come from kills**, and `KILLED_OPPONENT` is currently worth 0.
+
+~~Protect the warm start (ε_start, `WARM_N`)~~ — **struck**: the correction above shows there is
+no first-1 000-episode erasure to protect against. ~~The crate→coin chain is starved by
+opponents~~ — **struck**: measured at `COIN_FOUND` 2.08 vs `COIN_COLLECTED` 2.23 per round, i.e.
+the agent collects *more* coins than its own bombs reveal, at a rate above the board's 9/122.2
+density. Both were my hypotheses and both are false.
+
+**Bombing is not negative-EV either**, which kills the "the agent is behaving rationally" reading:
+for the floor policy, gain per bomb = (0.3 × 27.67 + 5 × 2.23)/27.36 = **+0.711**, suicide cost
+0.24 × 5/27.36 = −0.044, **net +0.67**. It only goes negative for an agent that is already
+incompetent (arm B at episodes 5 000–10 000: −0.03) — a self-reinforcing local optimum in which
+bombing pays iff you are good at it. Decisively, arm B's final policy is worth **−11.19**
+discounted under **its own reward table** against **−0.589** for the table it started from: it
+found a policy worse than its own initialisation, and worse than standing still (−9.82). That
+is an optimisation failure, not a reward-design one, and no retuning of rewards explains it.
+
+**Latent defect found by the audit, not the cause of anything here but in the shipped training
+code.** `end_of_round` is called with the same `last_game_state`, `last_action` and an
+*uncleared* event list as the final `game_events_occurred`, so on a round that reaches
+`MAX_STEPS` the terminal cell is updated **twice** — once bootstrapped, once not — and the last
+step's reward is double-counted into the log. Rung 2 survived 1.000 of rounds, so this fired in
+every one of its 20 000 training episodes. Fix separately, under a byte-identity control, or in
+both arms at once so it cancels.
+
+- **Verdict:** **FAILED** — survival bought at the cost of the entire scoring policy, on a
+  measurement whose arm contrast was invalid. Nothing from E25 ships. The E24 diagnosis is
+  *confirmed* (coverage was the problem, and it is now fixed); the remedy as specified is
+  refuted.
 
 ---
 

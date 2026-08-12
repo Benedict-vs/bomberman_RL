@@ -65,6 +65,16 @@ Events (`import events as e`): MOVED_{LEFT,RIGHT,UP,DOWN}, WAITED, INVALID_ACTIO
 BOMB_EXPLODED, CRATE_DESTROYED, COIN_FOUND, COIN_COLLECTED, KILLED_OPPONENT, KILLED_SELF,
 GOT_KILLED, OPPONENT_ELIMINATED, SURVIVED_ROUND.
 
+**`GOT_KILLED` means "died", not "killed by an opponent".** `environment.py:264` adds it to
+*every* agent removed by an explosion, and `environment.py:251` adds `KILLED_SELF` **in
+addition** when the blast was its own. A reward table with both therefore prices a suicide at
+the *sum* of the two and an opponent's kill at `GOT_KILLED` alone — the opposite of the
+symmetry it looks like. Discovered the expensive way in `experiments/benedict.md` E25, where an
+intended −5/−5 was really −10/−5. To price "death" once, put the whole penalty on `GOT_KILLED`
+and leave `KILLED_SELF` at 0; that is *identical* to the rung-2 table on a board with no
+opponents, since a suicide fires both events there too. Split them only when own-bomb and
+enemy-bomb deaths are deliberately priced differently, and write down which is which.
+
 ## Commands
 ```bash
 python main.py play                                     # watch rule_based_agent

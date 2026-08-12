@@ -35,17 +35,21 @@ sys.path.insert(0, str(ROOT))
 import settings as s                                    # noqa: E402
 from environment import BombeRLeWorld, WorldArgs        # noqa: E402
 
-AGENT = "benedict_task2"
 # How many steps before the fatal one to attribute the death to. A bomb is lethal
 # BOMB_TIMER steps after it is dropped, so the decision that killed the agent is
 # up to that far back.
 LOOKBACK = s.BOMB_TIMER
 
 
-def load_callbacks():
-    """Import the agent's callbacks as a module without going through main.py."""
-    path = ROOT / "agent_code" / AGENT / "callbacks.py"
-    spec = importlib.util.spec_from_file_location(f"{AGENT}_callbacks", path)
+def load_callbacks(agent: str):
+    """Import the agent's callbacks as a module without going through main.py.
+
+    The module is imported with BM_MODEL_SUFFIX already in the environment, so
+    `cb.MODEL_FILE` is exactly the table the rollout will play with -- the mask of
+    unpractised rows is then guaranteed to describe that table and not another.
+    """
+    path = ROOT / "agent_code" / agent / "callbacks.py"
+    spec = importlib.util.spec_from_file_location(f"{agent}_callbacks", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
