@@ -21,6 +21,103 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E27 — The reward table was calibrated for a board the agent had to itself
+
+- **Question:** three experiments (E25, E26) concluded that training in an opponent field
+  destroys a competent policy, and E26 wrote that off as a property of *training*. The second
+  audit (`scratchpad/audit2/`) shows it is a property of the **reward magnitudes**, which is the
+  one axis none of the three varied — even though E16 had already measured that axis as worth
+  45 crates on rung 2.
+
+  The value function's dynamic range is set by gross earnings against the **action-independent**
+  step cost. From the committed CSVs:
+
+  | | earnings | costs (step + invalid + death) | earn/cost |
+  |---|---|---|---|
+  | rung 2, solo, 400 steps | +77.3 (coins 42.4, crates 35.0) | −40.1 | **1.93** |
+  | rung 3, cc field, same reward table | +18.3 (coins 10.4, crates 7.9) | −26.1 | **0.70** |
+  | rung 3, cc field, `CRATE_DESTROYED = 1.0` | +36.7 | −26.1 | **1.41** |
+
+  Nine coins shared four ways cuts the coin stream 4× (8.47 → 2.09) and the crate stream 4.4×,
+  while steps alive only fall 1.85× (400 → 216). **The table that produced rung 2's competent
+  policy pays 2 : 1; the same table on rung 3 pays 0.7 : 1.** The return is then dominated by a
+  constant −0.1 per step, and a constant is action-independent — so the fixed point is too. That
+  is the flattening E25 measured and misattributed.
+
+  `CRATE_DESTROYED` is the right knob because it is the only **dense, positive** reward
+  attributable to a specific action (`BOMB`) that survives on a contested board: coins are
+  capped at a ~2.25 fair share and kills are rare.
+
+- **Change:** `STEP_COST` becomes an environment switch; nothing else. `callbacks.py` untouched.
+
+### Disclosure: pilot data existed before these predictions were written
+
+The audit ran single-seed screens of seven levers and a 3-seed replication; I then replicated
+independently on an unused training seed (60), 6 000 episodes, 150 rounds at ε = 0, seed 550731:
+
+| | cc field | `rule_based` field |
+|---|---|---|
+| `BM_CRATE=0.3` (= E26 arm H) | 0.660 (4.73 crates) | 0.953 (6.01 crates) |
+| **`BM_CRATE=1.0`** | **2.940** (28.25 crates) | **3.107** (29.69 crates), won 0.220 |
+| arm F, the frozen ship | 4.160 | 2.793, won 0.140 |
+
+So a trained agent already beats the frozen ship **on the tournament field** at 6 000 episodes,
+on every seed tried (audit: 3.72/3.22; mine: 3.107). It is still behind arm F on rung 3's own
+field. These predictions are written knowing that, which is disclosed rather than hidden.
+
+- **Design.** One factor — the earnings/cost ratio — reached by **two independent knobs**, so
+  the *mechanism* is falsifiable and not just the effect:
+
+  | arm | change | earn/cost |
+  |---|---|---|
+  | **C03** | `BM_CRATE=0.3` — E26 arm H exactly, the control | 0.70 |
+  | **C10** | `BM_CRATE=1.0` | 1.41 |
+  | **S03** | `BM_STEP_COST=-0.03`, crate at 0.3 | 1.53 |
+
+  5 training seeds each (`BM_RUN_INDEX` **50–54**, never used), 40 000 episodes, cc field, world
+  seed 810731, `BM_HUNT=1 BM_KILL=25`, everything else at its E26 value. **Primary checkpoint
+  20 000**, pre-registered.
+- **Measurement:** 300 rounds, ε = 0, **`BM_TIE_TOL=0.0`** — the shipped default. The tolerance
+  is *not* tuned per arm: the audit measured that it triples a broken table (0.565 → 1.555) and
+  does nothing for a healthy one (4.115 → 4.235), so tuning it would flatter precisely the arm
+  that fails. Validation seed 550731; unit of analysis is the **training run, n = 5**.
+  Rung-3 pairing is on arenas only (`MEASUREMENT.md`), so CIs are wider than fully-paired ones.
+
+### Prediction (written before the run, after the pilot above)
+
+1. **P1, primary and decisive.** C10 @20 000 beats **arm F's 4.160** on `score` in the cc field,
+   t-CI over the five runs excluding 0. **Refutation:** CI includes 0 or is negative → training
+   still does not beat the frozen table on its own rung. *If P1 fails the entry is FAILED
+   regardless of P2–P6.*
+2. **P2, the shipping decision, named in advance and reported whatever it says.** C10 @20 000
+   beats **arm F's 2.793** in the 3× `rule_based` field, CI excluding 0; `won` reported alongside
+   (F = 0.140). **Refutation:** CI includes 0 → the frozen table stays the ship *whatever P1
+   says*, because rung 4 is what the tournament scores.
+3. **P3, mechanism, decidable before any score is computed.** Visitation-weighted median decision
+   margin at 20 000: C03 below 0.01 and C10 above 0.05, in ≥ 4 of 5 seeds each. **Refutation:**
+   C10 and C03 indistinguishable → the margin collapse is not what the crate reward fixes, and
+   any score effect has another cause.
+4. **P4, mechanism, second knob.** S03 − C03 > 0 on `score` with a CI excluding 0, and S03
+   between C03 and C10. **Refutation:** S03 ≤ C03 → the earnings/cost *ratio* is not the
+   operative quantity, and the effect is specific to the crate reward being attributable to
+   `BOMB`. That is a weaker and different claim and must be written as such.
+5. **P5, horizon guard — the one I expect to bite.** C10 loses no more than 25 % of its 20 000
+   `score` by 40 000. The pilot's decision margin already decays 0.704 → 0.323 between 3 200 and
+   6 000 episodes. **Refutation:** it loses more → the crate reward *delays* the collapse rather
+   than preventing it, 20 000 is a stopping rule rather than a converged result, and the entry
+   must say so.
+6. **P6, regression guards — explicitly not evidence of success.** `suicides` ≤ 0.60,
+   `crates` ≥ 20, `think_max_ms` < 0.5 measured **serially**. E25's lesson is pre-registered
+   here: **guards passing while `score` fails is a FAIL**, and no guard may be reported as a
+   positive result.
+
+- **Cost.** 15 runs × 40 000 episodes ≈ 7 h in two waves; ~60 evaluations ≈ 2 h at 5-way, plus
+  ~10 min serial for think time. If that is too much, drop S03 to n = 3 (12 runs, ~5.5 h) — and
+  say so in the entry, never silently, because S03 is what makes P3/P4 falsifiable.
+- **Verdict:** _pending._
+
+---
+
 ## E26 — Give the agent an objective for the half of the round the board is empty
 
 - **Question:** E25's audit (`scratchpad/audit/`) moved the diagnosis off both of my hypotheses.
@@ -236,14 +333,39 @@ arm H trains with the *working* feature and loses 3.3 points of score against no
 
 Open, in order:
 1. **Flip `BM_HUNT`'s default to on** in `callbacks.py` so a bare checkout plays the rung-3
-   agent. Held back deliberately until the ship-seed confirmation existed; it now does.
-2. **Why does training destroy it?** E25 blamed coverage and was wrong; E26 rules out the reward
-   semantics (arm S) and the missing objective (arm H still collapses). The remaining suspects
-   are the learning rule itself — including the double terminal update — and the possibility that
-   40 000 episodes of a policy that dies 60 % of the time simply cannot be learnt from at
-   α = 1/N^0.7. **This is the rung-3 question**, and it is now a *training* question, not a
-   feature or reward one.
+   agent. Held back deliberately until the ship-seed confirmation existed; it now does. *(Done,
+   commit `9247948`.)*
+2. **Why does training destroy it?** — see the correction below.
 3. Rung 4 (`rule_based_agent`) is at 2.757 with `won` 0.170 — measured, not yet worked on.
+
+> **Correction added 2026-08-13, from the second independent audit (`scratchpad/audit2/`).**
+> Item 2 above framed the rung-3 question as a *training* question — "the learning rule itself,
+> including the double terminal update, or 40 000 episodes of a dying policy at α = 1/N^0.7".
+> **Both named suspects are dead and the framing was wrong.**
+>
+> - **The double terminal update fires in 100 % of rung-2 episodes** (rung 2 always survives) and
+>   only 6–38 % of rung-3 ones. It is 1 update in ~397 and it produced the healthiest table in
+>   the project. Real bug, wrong direction to explain rung 3.
+> - **α = 1/N^0.55**, i.e. more plasticity, scores 0.987 against 1.393 for the unchanged
+>   schedule. Not the lever. Cold start (no warm start at all) is 1.013 — also not the lever, and
+>   with an *identical* margin collapse, which answers "is starting from a competent table in a
+>   harder field actively worse" with **no**.
+> - **The lever is the reward magnitudes**, the one axis E26 never varied. `CRATE_DESTROYED`
+>   0.3 → 1.0 takes 6 000-episode training from 0.660 to **2.940** on the cc field and 0.953 to
+>   **3.107** against `rule_based_agent` (my own replication, fresh seed 60). E27 tests it.
+> - **Arm H did not collapse in training.** Its log is flat at 18.8 crates/episode from episode
+>   2 000 to 40 000. Reporting only the ε = 0 evaluation was correct; concluding "arm H
+>   collapses" was not — it trains a policy that is fine online and unreadable when frozen, which
+>   is a *different* failure from arms A/B/S, whose logs do collapse to 1.4.
+> - **Part of the collapse is a readout artefact.** `BM_TIE_TOL = 0.001` on arm H's frozen table
+>   recovers **3.74 → 19.11 crates** — exactly what its training log records — while arm F, whose
+>   margins are 0.669, is unaffected (4.115 → 4.235). So "every action really is worth the same,
+>   and there is no gradient back to competence" (E25) is too strong: the ordering survives, it
+>   is below the resolution of a deterministic argmax. `TIE_TOL` is a **diagnostic, never a fix**
+>   — it triples a broken table and does nothing for a healthy one, i.e. it masks the symptom.
+> - **Presentational:** P1's −1.688 is against the HUNT-**off** floor 2.517, while the results
+>   table two lines above shows arm F at 4.160. Both are called "the floor" in this entry. The
+>   gap to arm F is −3.331.
 
 - **Verdict:** **FAILED** on its pre-registered primary. The control arm ships: **+1.595 score
   [+1.342, +1.849]** over the rung-2 floor on 1 000 held-out arenas, at 0.321 ms.

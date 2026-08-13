@@ -17,7 +17,11 @@ which `save_table` refuses to do anyway)::
 agents and each reseeds the global RNG from OS entropy in `setup`, which runs
 after ours -- so nothing here can precede it. Arenas and our own exploration are
 seeded; the opponents are not. Compare arms across the five training seeds, never
-on a single run. Evaluations *are* reproducible (tools/evaluate.py seeds them).
+on a single run. **Evaluations are only partly reproducible either**:
+`tools/evaluate.py` seeds the opponents' `np.random`, but `coin_collector_agent`
+and `rule_based_agent` also shuffle with the *stdlib* `random`, which that does
+not touch -- 22.7 % of rounds repeat exactly, the means repeat to four decimals
+(`MEASUREMENT.md`). Rung-3 pairing is on arenas only.
 
 Two things that are *not* obvious and are easy to get wrong:
 
@@ -35,16 +39,15 @@ Two things that are *not* obvious and are easy to get wrong:
           BM_MODEL_SUFFIX=_parent uv run python main.py play --no-gui \\
           --agents benedict_task3 --train 1 --n-rounds 100000 --seed 810731
 
-  **`BM_HUNT=0` is not optional in either command above.** Since E26 the hunt
-  feature is on by default, and it changes what digits 6 and 7 mean; rebuilding a
-  rung-2 lineage table through the rung-3 map would produce a table that is not
-  the one it claims to reproduce, without any shape mismatch to catch it.
-
   leaves `q_table_parent__coarse.npy` (12 800 rows, with the parent's layout in
   its sidecar), which `BM_WARM=_parent__coarse` then accepts. Verified at 20 000
   episodes against the committed parent checkpoint: identical.
   **`BM_WARM=` must be empty here**, or the parent rebuild is itself warm-started
   from the parent it is meant to replace.
+- **`BM_HUNT=0` is not optional in either command above.** Since E26 the hunt
+  feature is on by default and it changes what digits 6 and 7 mean; rebuilding a
+  rung-2 lineage table through the rung-3 map produces a table that is not the one
+  it claims to reproduce, with no shape mismatch to catch it.
 
 Why these hyperparameters (evidence in `experiments/benedict_task2.md` §4)
 --------------------------------------------------------------------------
@@ -98,7 +101,12 @@ KILLED_OPPONENT     0          E26 arm H sets 25, preserving the game's own 5:1
                                score = coins + 5*kills, so every further point has
                                to come from kills.
 STEP_COST          -0.1        Shortest-path pressure; the round is capped at 400
-                               steps and 99 % of rounds hit that cap.
+                               steps and 99 % of rounds hit that cap. A switch
+                               since E27 (BM_STEP_COST): it is action-INDEPENDENT,
+                               so once it dominates the return the fixed point is
+                               action-independent too. Rung 2 earned 77.3 against
+                               40.1 of it; rung 3 earns 18.3 against 26.1 from the
+                               same table, which is the rung-3 collapse.
 WARM_N             100         E23. Not optional: alpha is exactly 1 on a cell's
                                first update, so an untouched transfer is overwritten
                                immediately. 10 000 and 100 000 are both worse -- the
@@ -129,7 +137,14 @@ except ImportError:     # tools/ is not part of the submission
 
 AGENT_NAME = "benedict_task3"
 
-STEP_COST = -0.1    # encourages shorter paths
+# E27. An environment switch because it is one of two knobs on the same quantity:
+# the value function's dynamic range is gross earnings against this cost, and the
+# cost is *action-independent*, so once it dominates, the fixed point is too.
+# Rung 2 earned 77.3 against 40.1 (ratio 1.93); rung 3 earns 18.3 against 26.1
+# (0.70) from the identical table, because nine coins shared four ways cuts
+# earnings ~4x while steps alive fall only 1.85x. BM_CRATE=1.0 and
+# BM_STEP_COST=-0.03 reach a healthy ratio from opposite directions.
+STEP_COST = float(os.environ.get("BM_STEP_COST", -0.1))
 # 0.99, not the 0.9 carried since E01: E15 measured the crate std falling from
 # 24.2 to 2.9 and the peak-then-decay of E12/E13/E14 disappearing. At gamma=0.9
 # the horizon is ~10 steps, shorter than the distance to most BFS targets.
@@ -219,7 +234,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e26"
+EXPERIMENT = "e27"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
