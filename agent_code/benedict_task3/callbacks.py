@@ -1,16 +1,18 @@
-"""Tabular Q-learning agent -- task 2 (`classic`, no opponents).
+"""Tabular Q-learning agent -- task 3 (`classic`, with opponents).
 
-Forked from `agent_code/tabular_q_task1/`, the agreed rung-1 baseline, and
-rebuilt for rung 2 in E10. The rung-1 feature map transferred *nothing*: on
-`classic` it scored 0.000 in 300 rounds, because "no coin is visible" -- the
-normal condition here, where all nine coins start under crates -- was a state it
-had only ever met at the end of a won round (E09).
+Forked from `agent_code/benedict_task2/`, the rung-2 agent, in E25.
+
+**The table is the rung-2 table, unchanged.** Every attempt to train in an
+opponent field has made it worse -- E25 lost 27.3 -> 0.12 crates, E26 scored
+0.83 against the 2.52 it started from -- so rung 3 is won by a *feature* change
+read through a frozen rung-2 policy (E26: 4.188 vs 2.593 on the ship seed, +1.595
+[+1.342, +1.849] paired over 1000 arenas). That is a finding, not a shortcut, and
+why training destroys the policy is the open rung-3 question.
 
 The state is one mixed-radix row index over eight digits. Sizes are
-`FEATURE_SIZES` below; the synthesis of what each is worth is in
+`FEATURE_SIZES` below; what each digit is worth on rung 2 is in
 `experiments/benedict_task2.md`, and the per-experiment evidence in
-`experiments/benedict.md`.The rung-3 work is in experiments/benedict.md from
-E24 on
+`experiments/benedict.md` -- rung 2 up to E23, rung 3 from E24 on.
 
     1-4  each neighbour: blocked / lethal this step / in a blast / clear
      5   moves of grace left on my own tile, 0 = safe
@@ -18,8 +20,12 @@ E24 on
          (E11, +24 crates), otherwise the nearest coin, else the nearest
          crate (E13, +57: targeting a tile that *can hit* a crate was
          satisfied on 99.7 % of free tiles, so the digit carried no gradient
-         and mirror-image rows pointed at each other)
-     7   a bomb here would open a crate, and I have one to drop
+         and mirror-image rows pointed at each other), else the nearest
+         opponent (E26, +1.60 score: four agents strip all 122 crates by
+         ~step 140, after which this digit was NO_TARGET on 26 % of safe
+         steps and the table's answer there was an invalid BOMB at -1 each)
+     7   a bomb here would open a crate -- or catch an opponent (E26) --
+         and I have one to drop
      8   how far digit 6's target is: 1 / 2 / 3-4 / 5+ (E20)
 
 4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions. Nominally large, actually sparse:
@@ -111,6 +117,12 @@ POLICY_SEED = 20260731
 # edited constant so the default in the tournament is the value in this file.
 TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
 
+# E26. **On by default: this is the rung-3 agent.** `BM_HUNT=0` restores the
+# pre-E26 map and is required to reproduce E24/E25 -- evaluating one of those
+# tables with HUNT on would not crash (the row count is identical) but would
+# silently measure it through features it was never trained on, the same hazard
+# the BM_ABLATE comment above describes.
+#
 # It changes the *meaning* of two digits without changing FEATURE_SIZES:
 #   digit 6  falls through to the nearest opponent when no coin and no crate is
 #            reachable. E25's audit measured digit 6 = NO_TARGET on 26.3 % of

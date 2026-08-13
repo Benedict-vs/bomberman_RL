@@ -9,7 +9,7 @@ Every default below is the shipped configuration, so this one command rebuilds
 it bit for bit (the suffix only keeps it from overwriting the shipped file,
 which `save_table` refuses to do anyway)::
 
-    BM_MODEL_SUFFIX=_repro uv run python main.py play --no-gui \
+    BM_HUNT=0 BM_MODEL_SUFFIX=_repro uv run python main.py play --no-gui \
         --agents benedict_task3 coin_collector_agent coin_collector_agent \
         coin_collector_agent --train 1 --n-rounds 40000 --seed 810731
 
@@ -31,9 +31,14 @@ Two things that are *not* obvious and are easy to get wrong:
   an old commit -- it can be rebuilt here, because pinning the trailing digit is
   a bijective relabeling of the coarse map (E20 finding 2)::
 
-      BM_ABLATE=target_dist BM_SAVE_PARENT=1 BM_WARM= BM_RUN_INDEX=0 \\
+      BM_HUNT=0 BM_ABLATE=target_dist BM_SAVE_PARENT=1 BM_WARM= BM_RUN_INDEX=0 \\
           BM_MODEL_SUFFIX=_parent uv run python main.py play --no-gui \\
           --agents benedict_task3 --train 1 --n-rounds 100000 --seed 810731
+
+  **`BM_HUNT=0` is not optional in either command above.** Since E26 the hunt
+  feature is on by default, and it changes what digits 6 and 7 mean; rebuilding a
+  rung-2 lineage table through the rung-3 map would produce a table that is not
+  the one it claims to reproduce, without any shape mismatch to catch it.
 
   leaves `q_table_parent__coarse.npy` (12 800 rows, with the parent's layout in
   its sidecar), which `BM_WARM=_parent__coarse` then accepts. Verified at 20 000
