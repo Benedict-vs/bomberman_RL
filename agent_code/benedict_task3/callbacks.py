@@ -111,9 +111,6 @@ POLICY_SEED = 20260731
 # edited constant so the default in the tournament is the value in this file.
 TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
 
-# E26. Off by default, so every measurement up to E25 reproduces bit for bit and
-# the shipped rung-2 behaviour is what a bare checkout plays.
-#
 # It changes the *meaning* of two digits without changing FEATURE_SIZES:
 #   digit 6  falls through to the nearest opponent when no coin and no crate is
 #            reachable. E25's audit measured digit 6 = NO_TARGET on 26.3 % of
@@ -126,7 +123,7 @@ TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
 # No digit is added, inserted or re-based, so `q_table_rung2ship` stays a valid
 # warm-start parent at factor 1 and the parent's "walk that way" values are
 # already the right prior for the new rows.
-HUNT = os.environ.get("BM_HUNT", "") not in ("", "0")
+HUNT = os.environ.get("BM_HUNT", "1") not in ("", "0")
 
 
 def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
