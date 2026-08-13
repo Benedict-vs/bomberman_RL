@@ -142,7 +142,111 @@ training must be tested against training rather than assumed to benefit from it.
 - **Custom events** — see above; the reward table stays a map of events the tournament also
   generates, at the game's own ratios.
 
-- **Verdict:** _pending._
+### Results (300 rounds, ε = 0, seed 550731, n = 5 runs per trained arm)
+
+`coin_collector` field, primary checkpoint 20 000. Arm F is a **single frozen table**, so it
+carries a per-round bootstrap CI; S and H carry t-intervals over five training runs. The two are
+not interchangeable and are not differenced against each other as if they were.
+
+| | **F** (frozen, no training) | S (trained) | H (trained) |
+|---|---|---|---|
+| **score** | **4.160** [3.74, 4.62] | 0.177 [0.12, 0.23] | 0.829 [0.60, 1.06] |
+| kills | 0.420 | 0.004 | 0.063 |
+| crates | 26.63 | 0.300 | 5.556 |
+| invalid | 1.46 | 20.34 | 1.559 |
+| survived | 0.400 | 0.926 | 0.749 |
+| won | 0.370 | 0.003 | 0.058 |
+
+**P1: arm H − floor = −1.688 [−1.916, −1.461].** Not "not demonstrated" — decisively worse.
+Same at 40 000 (−1.787) and in the transfer field (−1.537).
+
+### Verdict — **FAILED as pre-registered**, and the failure produced the rung-3 agent
+
+P1 was named as decisive and P1 failed, so the entry is FAILED regardless of the rest. **The
+trained arms are not shippable.** But the control that was added only because E25 had made me
+suspicious of training at all is the result:
+
+**Arm F — the feature change on the frozen rung-2 table, with no rung-3 training whatsoever.**
+Confirmed on the held-out **ship seed 990731, 1000 rounds, run serially**:
+
+| frozen table, `coin_collector` | HUNT off | HUNT on |
+|---|---|---|
+| **score** | 2.593 | **4.188** |
+| kills | 0.088 | **0.420** |
+| coins | 2.153 | 2.088 |
+| crates | 27.19 | 26.24 |
+| **invalid** | **24.21** | **1.43** |
+| won | 0.228 | **0.367** |
+| think_max_ms | 0.252 | **0.321** |
+
+**Paired over 1 000 identical arenas: +1.595 [+1.342, +1.849].** It clears `rule_based_agent`'s
+2.753 in the same slot. Against `peaceful_agent` it scores **17.93 and wins 100 % of rounds**;
+against `rule_based_agent` 2.757 with `won` 0.170.
+
+Every point of that comes from the mechanism the audit identified: `invalid` **24.21 → 1.43**, a
+94 % drop, because digit 6 now has an answer for the two thirds of the round after the board is
+stripped. Coins and crates are *unchanged* (2.15 → 2.09, 27.2 → 26.2) — the agent did not get
+better at the rung-2 game, it stopped burning a reward per step on an impossible `BOMB`, and the
+freed steps became kills (0.088 → 0.420).
+
+**This is the first change in the project to move the primary metric by fixing a feature rather
+than a reward or a hyperparameter**, and it needed no training at all.
+
+### Predictions
+
+| # | claim | outcome |
+|---|---|---|
+| 1 | **primary**: arm H beats the floor | **REFUTED**, −1.688 [−1.916, −1.461] |
+| 2 | arm H beats arm F | **REFUTED** — 0.829 vs 4.160. I flagged this as the one I expected to lose |
+| 3 | `invalid` < 5 in both HUNT arms | **correct** — F 1.46, H 1.56 (S, without the feature: 20.3) |
+| 4 | kills ≥ 0.30 in arm H | **refuted** — 0.063 (though arm F reaches 0.420) |
+| 5 | arm S alone does not recover the floor (< 1.5) | **correct** — 0.177. The −10/−5 semantics error was never the cure |
+| 6 | H: suicides ≤ 0.30, survived ≥ 0.40, crates ≥ 15 | **partly refuted** — 0.152 ✓, 0.749 ✓, **crates 5.6** ✗ |
+
+P3 and P5 together are the load-bearing pair: the invalid-action collapse happens **with the
+feature and without training** (F) and fails to happen **with training and without the feature**
+(S). That is the cleanest attribution in the ledger — one factor, both directions.
+
+### Is this still machine learning? — the check the result demands
+
+`AGENTS.md`'s hardest rule is that the model must *learn from* the features and that a feature
+returning "the best action" is forbidden. An agent whose table was trained only on rung 2, now
+carried by a digit that points at opponents, has to answer that. So
+`scratchpad/benedict/feature_only_probe.py` builds the strongest policy the same digits allow —
+escape if in danger, bomb if digit 7 fires, else walk digit 6 — and plays it in identical arenas:
+
+| same table, same arenas, 300 rounds | score | kills | crates | survived |
+|---|---|---|---|---|
+| **learned** (Q-table reads the digits) | **4.377** | 0.460 | 26.20 | **0.417** |
+| **features-only** (greedy on the same digits) | **0.030** | 0.000 | 4.25 | **0.000** |
+
+**The purely-feature policy dies in every single round.** The features are necessary and nowhere
+near sufficient: 146× on score, and the whole of survival. What the table contributes is *when
+not to bomb* — a judgement no digit encodes, and the one thing rung 2 spent 20 000 episodes
+learning. The digit says where the target is; the table decides whether going there is worth it.
+
+### What this means for rung 3
+
+**The rung-3 agent is the rung-2 table read through a rung-3 feature map, with no rung-3
+training.** That is an unusual thing to ship and it is a *finding*, not a shortcut: two
+independent experiments (E25, E26) now show that training in an opponent field destroys a
+competent policy, and E26 isolates the cause well enough to say the field is not the problem
+either — arm S trains in the same field with the same rewards and merely fails to improve, while
+arm H trains with the *working* feature and loses 3.3 points of score against not training at all.
+
+Open, in order:
+1. **Flip `BM_HUNT`'s default to on** in `callbacks.py` so a bare checkout plays the rung-3
+   agent. Held back deliberately until the ship-seed confirmation existed; it now does.
+2. **Why does training destroy it?** E25 blamed coverage and was wrong; E26 rules out the reward
+   semantics (arm S) and the missing objective (arm H still collapses). The remaining suspects
+   are the learning rule itself — including the double terminal update — and the possibility that
+   40 000 episodes of a policy that dies 60 % of the time simply cannot be learnt from at
+   α = 1/N^0.7. **This is the rung-3 question**, and it is now a *training* question, not a
+   feature or reward one.
+3. Rung 4 (`rule_based_agent`) is at 2.757 with `won` 0.170 — measured, not yet worked on.
+
+- **Verdict:** **FAILED** on its pre-registered primary. The control arm ships: **+1.595 score
+  [+1.342, +1.849]** over the rung-2 floor on 1 000 held-out arenas, at 0.321 ms.
 
 ---
 
