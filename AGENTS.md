@@ -134,7 +134,11 @@ Conventions we all follow, otherwise the numbers are not comparable:
   Read that row inverted wherever efficiency is the goal.
 - **Rung-3+ arms must be compared across several training seeds, never on a single run** —
   `main.py` does not seed the provided opponents, so two runs of the same command give
-  different tables. Evaluations *are* reproducible: `evaluate.py` seeds the opponents per round.
+  different tables. Evaluations are **only partly** reproducible: `evaluate.py` seeds the
+  opponents' `np.random` per round, but `coin_collector_agent` and `rule_based_agent` also
+  shuffle with the **stdlib** `random`, which that does not touch — 22.7 % of rounds repeat
+  exactly, the means repeat to four decimals. Rung-3 pairing is on arenas only
+  (`MEASUREMENT.md`).
 - Primary metric `score`. Per-task sets via `analyze.py --preset task1…task4`:
   task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
   task 3 `score`/`kills`/**`suicides`**/`survived` ·

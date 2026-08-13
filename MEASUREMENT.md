@@ -91,6 +91,27 @@ arenas are untouched and evaluations without opponents are bit-identical to befo
 
 **Numbers recorded with opponents before this date are single draws, not constants.**
 
+### That fix is INCOMPLETE, and this section claimed more than it delivered
+
+Corrected 2026-08-13, found by the E27 audit (`scratchpad/audit2/`). `coin_collector_agent:1`
+and `rule_based_agent:2` also do **`from random import shuffle`** — the *stdlib* RNG, a
+different generator that `np.random.seed()` does not touch — and shuffle their candidate moves
+with it on every step (`coin_collector_agent:44,116`, `rule_based_agent:45,140`). So seeding
+`np.random` alone fixes only part of their behaviour.
+
+Measured: re-running arm F on the committed configuration reproduces the **mean** (score 4.1600
+vs 4.1600, crates 26.63 vs 26.66) but only **22.7 % of rounds are identical**. Every claim that
+a rung-3 evaluation is reproducible round-for-round is therefore **false** — that includes this
+section as first written, the sentence in `AGENTS.md`, and E24's write-up. Rung-3 "paired"
+CIs are paired on **arenas only**, so they are wider than a fully-paired CI would be. Directions
+and magnitudes stand — E26's +1.595 is far too large to be affected — but the pairing claim does
+not.
+
+The one-line completion is `random.seed(base_seed + round_index)` beside the existing
+`np.random.seed(...)`. **Not applied yet**: it changes the opponents' realised behaviour, so it
+breaks comparability with every committed rung-3 CSV and needs its own entry with the baselines
+re-measured under it. `peaceful_agent` draws only from `np.random` and is unaffected either way.
+
 ## What is committed, and why
 
 **Measurements are versioned** (settled 2026-08-04, was the open item in `KONZEPT.md` §6.7).
