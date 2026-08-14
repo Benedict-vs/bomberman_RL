@@ -21,6 +21,104 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E29 (stage 1) — Coverage, not features: fold the table by its symmetry group
+
+- **Question:** E28 established that the rung-4 deficit is one number, `killed_by` (+0.434
+  paired), and the forensic established that **73.4 % of deaths reach the last savable step in an
+  all-zero Q-row**, where `act()` draws uniformly over six actions. That is a coverage problem,
+  and every new digit makes coverage *worse*. Two routes exist. This entry takes the cheap one.
+
+  **D₄ canonicalisation was the planned E14 and was dropped on evidence** — `cycle_dump` showed
+  the two rows of an actual period-2 cycle are not related by any group element, so merging
+  symmetric rows would not have fixed the failure it had been promoted to fix. That verdict
+  stands and is not being relitigated. What was explicitly preserved was the *other* argument:
+  "its sample-efficiency argument survives and becomes relevant again if the larger table proves
+  data-starved." The forensic is that condition, measured: 2 364 trained rows of 64 000, and the
+  rows we die in are the empty ones.
+
+  So this is not the same experiment failing twice. E14 asked D₄ to break aliasing; E29 asks it
+  to share data. Only the second claim was ever supported.
+
+- **Why it is exact rather than approximate.** The state is direction-indexed throughout: digits
+  1-4 are one per direction in `DELTAS` order, digit 6 is `direction + 1` with 0 reserved, and
+  digits 5/7/8 are invariant. `DELTAS` is listed clockwise, so every group element is
+  `g(d) = (s·d + k) mod 4` with `s ∈ {±1}`, `k ∈ {0..3}` — the whole 8-element group. The four
+  movement actions permute with it; `WAIT` and `BOMB` are fixed points. Group algebra verified in
+  `scratchpad/benedict/d4.py --self-test` (closure, inverses, injectivity on rows, identity acts
+  trivially, `g` then `g⁻¹` restores the state).
+
+- **Change:** **`callbacks.py` is untouched for arm S.** The fold averages each orbit over its
+  *trained* members only — zero is the untrained sentinel, so averaging a trained row with an
+  empty one would halve it rather than share it — and writes the result back into **every** orbit
+  member. The table keeps its 64 000 × 6 shape and the lookup path is unchanged, so there is no
+  new code in the tournament agent and no per-step cost. Runtime canonicalisation would be
+  equivalent and strictly riskier. (Sharing updates *during training* does need the runtime
+  version; that is stage 2.)
+
+  **The one honest caveat, and the reason for the second factor.** `bfs_first_step` breaks
+  distance ties by `DELTAS` order, measured at **45.5 / 30.6 / 13.5 / 10.5 %** — a bias with no
+  counterpart in the game, and already flagged in the E14 note as something that "still has to be
+  fixed before any of that". On a tied state the feature map is therefore **not** equivariant, and
+  the fold merges rows the features treat differently. Rather than assume that is harmless, the
+  tie-break is its own factor: `BM_TIEBREAK=1` draws a uniform permutation of `DELTAS` per BFS
+  call, in both `bfs_first_step` and `escape_direction`. Default 0, so the shipped agent is
+  unchanged until measured.
+
+- **Design.** 2 × 2 on the frozen table, **no training runs at all** — every arm is a table
+  transform and/or an environment switch, ~8 min per evaluation:
+
+  | arm | table | tie-break |
+  |---|---|---|
+  | **F** | frozen | `DELTAS` order (control, already measured) |
+  | **B** | frozen | uniform |
+  | **S** | D₄-folded | `DELTAS` order |
+  | **BS** | D₄-folded | uniform |
+
+  1000 rounds, ship seed 990731, 3 × `rule_based_agent`, ε = 0, `BM_HUNT=1`.
+
+- **Measurement:** task-4 preset. **`won` is primary** — `MEASUREMENT.md` makes it the ranking
+  metric on rung 4, and E28 measured our relative deficit as worse on `won` (0.584) than on
+  `score` (0.867).
+
+### Prediction (written before the fold is run)
+
+`d4.py --self-test` has been run and passes; **the orbit statistics have deliberately not been
+looked at**, because P1 is about them.
+
+1. **P1, the gate — decidable from the table alone, before a single game.** Of the **129 all-zero
+   rows** that hold the forensic's 207 degenerate deaths, **≥ 40 % gain a value from the fold**
+   (i.e. have at least one trained orbit sibling). **Refutation:** < 20 % → the empty rows are
+   empty in every orientation, folding cannot touch the dominant failure, and stage 1 stops here
+   without spending an evaluation.
+2. **P2, primary.** BS beats F on **`won`** (0.167), paired CI excluding 0. **Refutation:** CI
+   includes 0 or is negative.
+3. **P3, mechanism — the one that makes P2 falsifiable rather than just hopeful.** The gain is
+   from *folding*, not from the tie-break: `|won(B) − won(F)| < |won(BS) − won(F)|`. If B alone
+   moves `won` as much as BS does, then P2 measured a tie-break repair and D₄ is again unproven.
+4. **P4, the risk I expect to bite.** Folding **forces** symmetric Q-values in self-symmetric
+   states, which manufactures exact ties precisely where the agent has no reason to prefer a
+   direction — the period-2 cycling family. Guard: `suicides` does not rise and `invalid` does not
+   worsen beyond its CI in BS. **If P2 passes and P4 fails, the entry is a trade, not a win, and
+   must be reported as one.**
+5. **P5, guard.** `think_max_ms` unchanged (~0.3 ms). The fold is offline; only the per-call
+   permutation is new, and it is three shuffles of a 4-list per step.
+
+**Predicted magnitude, so the entry cannot be scored as a success at any outcome:** if P1 lands
+near 40 % and the sibling values are correct, roughly 40 % of 73.4 % of deaths get a real policy
+instead of a 1-in-6 draw. That is worth a few points of survival, not a doubling — I expect
+`won` +0.02 to +0.05, i.e. **0.19-0.22 against the symmetric reference's 0.25**. A result above
+0.25 would be surprising and should be checked for a harness error before it is believed.
+
+### Stage 2, sketched but not pre-registered
+
+Train on rung 4 with E27's corrected reward scale (`BM_CRATE=1.0`), warm-started from whichever
+table wins stage 1, 5 seeds. The forensic explains why this should work where E25-E27 did not:
+the missing rows exist *only* with opponents present. E27 already measured a 6 000-episode
+`BM_CRATE=1.0` table at **3.107** on the `rule_based` field against arm F's 2.793. Pre-registered
+separately, after stage 1 decides the representation.
+
+---
+
 ## E28 — Rung-4 baseline: we do not have an escape problem, we have a threat-blindness problem
 
 - **Question:** rung 4 is `classic` against **3 × `rule_based_agent`** — the tournament setting.

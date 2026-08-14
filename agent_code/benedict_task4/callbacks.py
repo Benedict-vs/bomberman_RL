@@ -138,6 +138,14 @@ TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
 # already the right prior for the new rows.
 HUNT = os.environ.get("BM_HUNT", "1") not in ("", "0")
 
+# E29 arm B: DELTAS order alone decided every distance tie, giving a first-step
+# histogram of 45.5 / 30.6 / 13.5 / 10.5 % -- a bias with no counterpart in the
+# game. A uniform permutation per call makes the feature map D4-equivariant *in
+# distribution*, which is the precondition for folding the table by its symmetry
+# group. Default off, so the shipped agent is unchanged until this is measured.
+TIEBREAK_UNIFORM = os.environ.get("BM_TIEBREAK", "0") not in ("", "0")
+_BFS_RNG = np.random.default_rng(POLICY_SEED)
+
 
 def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
     """Tiles a bomb at (x, y) covers. Mirrors `items.py:Bomb.get_blast_coords`.
@@ -234,11 +242,15 @@ def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> tuple[int, int
     head = 0
     width, height = field.shape
 
+    order = list(enumerate(DELTAS))
+    if TIEBREAK_UNIFORM:
+        order = [order[i] for i in _BFS_RNG.permutation(4)]
+
     while head < len(queue):
         (cx, cy), first, depth = queue[head]
         head += 1
 
-        for action_idx, (dx, dy) in enumerate(DELTAS):
+        for action_idx, (dx, dy) in order:
             nx, ny = cx + dx, cy + dy
             if not (0 <= nx < width and 0 <= ny < height):
                 continue
