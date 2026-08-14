@@ -114,7 +114,91 @@ field. These predictions are written knowing that, which is disclosed rather tha
 - **Cost.** 15 runs × 40 000 episodes ≈ 7 h in two waves; ~60 evaluations ≈ 2 h at 5-way, plus
   ~10 min serial for think time. If that is too much, drop S03 to n = 3 (12 runs, ~5.5 h) — and
   say so in the entry, never silently, because S03 is what makes P3/P4 falsifiable.
-- **Verdict:** _pending._
+### Results (300 rounds, ε = 0, `TIE_TOL` 0.0, seed 550731, n = 5 runs per arm)
+
+| cc field @20 000 | arm F (frozen ship) | C03 (control) | C10 (crate 1.0) | S03 (step −0.03) |
+|---|---|---|---|---|
+| **score** | **4.160** | 0.852 [0.51, 1.20] | 1.777 [1.43, 2.12] | 2.986 [0.36, 5.62] |
+| crates | 26.63 | 6.42 | 17.97 | 20.03 |
+| survived | 0.400 | 0.741 | 0.849 | 0.833 |
+| won | 0.370 | 0.067 | 0.159 | 0.317 |
+
+**P1: C10 − F = −2.383 [−2.729, −2.036].** Decisively worse.
+**P2: C10 − F on `rule_based` = −0.784 [−1.160, −0.408].** Also worse; S03 − F = +0.063
+[−0.698, +0.825], not demonstrated.
+
+### Verdict — **FAILED**. The mechanism is real, the remedy is not sufficient.
+
+P1 was named decisive and P1 failed, so the entry is FAILED. **Nothing here ships; arm F remains
+the rung-3 and rung-4 agent.**
+
+**But the mechanism is confirmed, decisively and twice.** Paired over the five shared training
+seeds, raising only the crate reward:
+
+| C10 − C03 | cc @20 k | cc @40 k | rb @20 k |
+|---|---|---|---|
+| score | **+0.925** [+0.408, +1.443] | **+1.324** [+0.542, +2.106] | **+0.826** [+0.103, +1.549] |
+| crates | **+11.5** [+5.3, +17.8] | **+9.3** [+4.4, +14.1] | **+12.1** [+5.4, +18.8] |
+
+and the decision margin — the quantity the earnings/cost story predicts — orders exactly as the
+ratio does (30 rounds, 3 seeds each, `scratchpad/audit2/d6_margins.py`):
+
+| | earn/cost | margin med | Q(chosen) med | frac < 0.01 |
+|---|---|---|---|---|
+| C03 | 0.70 | 0.0002–0.0005 | 2.0 | 0.88–0.93 |
+| C10 | 1.41 | 0.005–0.059 | 4.8 | 0.30–0.53 |
+| S03 | 1.53 | 0.003–0.244 | 5.0 | 0.005–0.59 |
+| **arm F** | — | **0.639** | 4.96 | 0.012 |
+
+**So the audit's diagnosis was right and E25/E26's was wrong**: the collapse is the reward
+magnitudes, the step cost is action-independent, and restoring the ratio restores both the value
+level (Q 2.0 → 5.0) and the decision margin (250× to 1 000×). It simply does not restore *enough*
+— the best arm is still 1.2 points short of a table that was never trained on this rung at all.
+
+### Predictions
+
+| # | claim | outcome |
+|---|---|---|
+| 1 | **primary**: C10 beats arm F on cc | **REFUTED**, −2.383 [−2.729, −2.036] |
+| 2 | C10 beats arm F on `rule_based` | **REFUTED**, −0.784 [−1.160, −0.408] |
+| 3 | C03 margin < 0.01 **and** C10 > 0.05 | **split**: C03 confirmed (3/3, ~0.0003); C10 clears 0.05 in only **1 of 3** — the threshold was miscalibrated, the *ordering* is exact |
+| 4 | S03 − C03 > 0, CI excluding 0, S03 **between** C03 and C10 | **not demonstrated on the primary field** (+2.134 [−0.504, +4.772]); demonstrated on `rb` (+1.673 [+0.641, +2.706]); "between" **refuted** — S03 is *above* C10 |
+| 5 | C10 retains ≥ 75 % of score from 20 k → 40 k | **PASS**, and my expectation was wrong: C10 retains **124.7 %**, S03 83.9 %, C03 103.4 %. The pilot's margin decay did not become a score decay |
+| 6 | suicides ≤ 0.60, crates ≥ 20 | suicides ✓ (0.13–0.50); **crates ✗ for C10** (17.97), ✓ for S03 (20.03) |
+
+P5 deserves a note: I wrote that it was "the one I expect to bite" and it did not bite at all.
+The 6 000-episode pilot's margin decay (0.704 → 0.323) was **not** the start of a collapse; more
+training helped every arm. That is the second time this rung that a pessimistic extrapolation
+from a short pilot was wrong.
+
+### Two things not to over-read, recorded so a later entry cannot mistake them for results
+
+1. **S03's mean is one seed.** Per-seed cc @20 k: **6.707**, 2.673, 1.630, 1.783, 2.137. Seed 50
+   alone beats arm F on *both* fields (6.707 vs 4.160; rb 3.700 vs 2.840, `won` 0.347 vs 0.167)
+   and has by far the healthiest table (margin 0.244, only 0.5 % of steps below 0.01). The other
+   four sit near 2. Reporting S03 as "matching arm F" would be the E23 error exactly: a mean of
+   five carried by one cell. **Its CI [0.36, 5.62] is the honest summary.**
+2. **`won` on `rule_based` is the one metric where a trained arm consistently beats arm F**, and
+   it was **not** pre-registered. S03: 0.347 / 0.277 / 0.213 / 0.217 / 0.297 — **all five seeds
+   above F's 0.167** — at a score of 2.903 against F's 2.840. `MEASUREMENT.md` says `won` matters
+   more than mean score on rung 4, which makes this interesting and *not* claimable here. It is a
+   hypothesis for E28 with a prediction written first, not a result of E27.
+
+### What this settles, and what is left
+
+- The rung-3 training collapse **has a known cause and a partial fix**. That is a real result for
+  the report even though the arm lost: three entries blamed coverage, semantics, features and the
+  learning rule, and the answer was one constant in a reward table calibrated for a board the
+  agent had to itself.
+- **A trained rung-3 agent still does not beat an untrained one.** Across E25, E26 and E27 —
+  twenty-five training runs, four reward configurations, two feature maps — nothing has beaten
+  the frozen rung-2 table read through the rung-3 map.
+- **Remaining budget should go to rung 4 on the frozen table**, not to a fourth attempt at rung-3
+  training, unless E28's `won` hypothesis survives its own pre-registration.
+
+- **Verdict:** **FAILED** on its pre-registered primary. Mechanism confirmed (paired C10 − C03
+  +0.93 score, +11.5 crates, margins 250× apart); remedy insufficient (best arm −1.17 against a
+  table that never trained here). Arm F stays the ship.
 
 ---
 
