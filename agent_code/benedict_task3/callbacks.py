@@ -29,7 +29,8 @@ The state is one mixed-radix row index over eight digits. Sizes are
      8   how far digit 6's target is: 1 / 2 / 3-4 / 5+ (E20)
 
 4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions. Nominally large, actually sparse:
-training touches ~840 rows and the greedy policy visits ~520. That sparsity is
+2 364 rows carry value in the shipped table and the greedy policy visits ~475
+of them per rung-3 rollout (E26/E27 probes). That sparsity is
 why the table is dense storage and why the warm start in `train.py` matters --
 the rows exist, they just need values.
 

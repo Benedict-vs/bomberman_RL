@@ -3,51 +3,49 @@
 Loaded only with `--train`, so nothing here runs in the tournament. That is why
 `tools/` may be imported (defensively) and why the exploration RNG lives here.
 
-Reproducing the shipped `q_table.npy`
--------------------------------------
-Every default below is the shipped configuration, so this one command rebuilds
-it bit for bit (the suffix only keeps it from overwriting the shipped file,
-which `save_table` refuses to do anyway)::
+**Nothing in this file produced the shipped `q_table.npy`, and that is the result
+of rung 3.** The shipped table is the *rung-2* table, byte for byte -- rebuild it
+with `agent_code/benedict_task2/train.py` at its defaults. Rung 3 is won by a
+feature change (`BM_HUNT`, see `callbacks.py`) read through that frozen policy.
 
-    BM_HUNT=0 BM_MODEL_SUFFIX=_repro uv run python main.py play --no-gui \
-        --agents benedict_task3 coin_collector_agent coin_collector_agent \
-        coin_collector_agent --train 1 --n-rounds 40000 --seed 810731
+Twenty-five training runs across E25-E27 -- four reward configurations, two
+feature maps, five seeds each -- and **not one beat the untrained table**. The
+cause is known and is written up in `experiments/benedict_task3.md` §3: the
+reward table was calibrated on a board the agent had to itself, where it earned
+77.3 against 40.1 of step cost. Sharing the board with three opponents cuts
+earnings ~4x while steps alive fall only 1.85x, so the same table pays 0.7:1, an
+action-independent constant dominates the return, and the fixed point becomes
+action-independent too. E27 confirmed it (raising `BM_CRATE` to 1.0 is worth
++0.93 score and +11.5 crates, paired, and moves the decision margin from 0.0003
+to 0.05) and still finished 1.2 points behind not training at all.
 
-**Not bit-reproducible, unlike rung 2.** `main.py` does not seed the provided
-agents and each reseeds the global RNG from OS entropy in `setup`, which runs
-after ours -- so nothing here can precede it. Arenas and our own exploration are
-seeded; the opponents are not. Compare arms across the five training seeds, never
-on a single run. **Evaluations are only partly reproducible either**:
-`tools/evaluate.py` seeds the opponents' `np.random`, but `coin_collector_agent`
-and `rule_based_agent` also shuffle with the *stdlib* `random`, which that does
-not touch -- 22.7 % of rounds repeat exactly, the means repeat to four decimals
+So this file is kept for the record and for rung 4, not because it is on the path
+to the shipped model. If you train with it, read `experiments/benedict_task3.md`
+first.
+
+**Reproducibility is weaker here than on rung 2, in both directions.** `main.py`
+does not seed the provided agents and each reseeds the global RNG from OS entropy
+in `setup`, which runs after ours -- so nothing here can precede it, and two runs
+of the same command give different tables. Compare arms across seeds, never on a
+single run. Evaluations are only *partly* reproducible too: `tools/evaluate.py`
+seeds the opponents' `np.random`, but `coin_collector_agent` and
+`rule_based_agent` also shuffle with the *stdlib* `random`, which that does not
+touch -- 22.7 % of rounds repeat exactly, the means repeat to four decimals
 (`MEASUREMENT.md`). Rung-3 pairing is on arenas only.
 
-Two things that are *not* obvious and are easy to get wrong:
+Three things that are easy to get wrong if you do train with this file:
 
-- **The world seed 810731 is not optional and is not the evaluation seed.**
-  Reproduction needs both it and `TRAIN_SEED + RUN_INDEX` below; either alone
-  leaves runs incomparable. Never train on 20260731 -- the agent would then be
-  measured on arenas it trained on.
-- **Training is coarse-to-fine.** `WARM_SUFFIX` starts the 64 000-row table from
-  a converged 12 800-row parent (E23). That parent is kept under version control
-  because it is an input to the shipped model, but it is *not* a dependency on
-  an old commit -- it can be rebuilt here, because pinning the trailing digit is
-  a bijective relabeling of the coarse map (E20 finding 2)::
-
-      BM_HUNT=0 BM_ABLATE=target_dist BM_SAVE_PARENT=1 BM_WARM= BM_RUN_INDEX=0 \\
-          BM_MODEL_SUFFIX=_parent uv run python main.py play --no-gui \\
-          --agents benedict_task3 --train 1 --n-rounds 100000 --seed 810731
-
-  leaves `q_table_parent__coarse.npy` (12 800 rows, with the parent's layout in
-  its sidecar), which `BM_WARM=_parent__coarse` then accepts. Verified at 20 000
-  episodes against the committed parent checkpoint: identical.
-  **`BM_WARM=` must be empty here**, or the parent rebuild is itself warm-started
-  from the parent it is meant to replace.
-- **`BM_HUNT=0` is not optional in either command above.** Since E26 the hunt
-  feature is on by default and it changes what digits 6 and 7 mean; rebuilding a
-  rung-2 lineage table through the rung-3 map produces a table that is not the one
-  it claims to reproduce, with no shape mismatch to catch it.
+- **The world seed 810731 is not the evaluation seed.** Never train on 20260731
+  or 550731 -- the agent would then be measured on arenas it trained on.
+- **`BM_HUNT=0` is required to touch anything of rung-2 lineage** (the warm-start
+  parent, an E24/E25 table). Since E26 the feature is on by default and changes
+  what digits 6 and 7 mean; the row count is identical either way, so a mismatch
+  produces a wrong table rather than an error. Coarse-to-fine parent rebuilding
+  lives in `agent_code/benedict_task2/train.py`, where that lineage belongs.
+- **`WARM_SUFFIX` warm-starts from `q_table_rung2ship`** -- same layout, so
+  `warm_start` transfers row for row at `factor = 1`. E27 measured that starting
+  cold is neither better nor worse (1.013 vs 1.393), so the warm start is a
+  convenience, not the cause of anything.
 
 Why these hyperparameters (evidence in `experiments/benedict_task2.md` §4)
 --------------------------------------------------------------------------
@@ -112,9 +110,15 @@ WARM_N             100         E23. Not optional: alpha is exactly 1 on a cell's
                                immediately. 10 000 and 100 000 are both worse -- the
                                table then cannot differentiate the rows the new digit
                                created.
-episodes           20 000      E23. Longer is worse on this map: 40 000 loses ~7
-                               crates, and E18 measured 200 000 turning the coarse
-                               map from 97.31 into 62.85 by re-rolling near ties.
+episodes           20 000      E23 on rung 2: longer is worse there. NOT true on
+                               rung 3 -- E27 measured every arm flat or improving
+                               from 20 000 to 40 000 (C10 retained 125 %).
+=================  ==========  ====================================================
+
+Every row above is a *rung-2* justification. E27 re-tested three of them in the
+opponent field and the rung-2 answer held for two: alpha (1/N^0.55 is worse,
+0.987 vs 1.393) and the warm start (cold is 1.013, indistinguishable). The one
+that does not transfer is the reward *scale* -- see the module docstring.
 =================  ==========  ====================================================
 """
 
