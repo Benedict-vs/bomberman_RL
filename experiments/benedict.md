@@ -110,6 +110,65 @@ Taken from audit 4's pre-registration, since it proposed the arm and had the pri
 record: score at 20 000 in the range **3.4-3.9**. Given how badly I have called the last two, this
 is the audit's prior rather than mine, and P1 is the claim I actually believe.
 
+### Result — 1000 rounds at validation seed 550731, n = 5 training runs (80-84)
+
+| arm | score | **won** | suicides | crates | survived | steps |
+|---|---|---|---|---|---|---|
+| E30 ctl @5 000 | 3.625 ± 0.103 | 0.347 ± 0.014 | 0.636 | 31.65 | 0.277 | 249 |
+| E30 ctl @10 000 | 3.323 ± 0.531 | 0.313 ± 0.053 | 0.551 | 29.80 | 0.391 | 270 |
+| E30 ctl @20 000 | 2.338 ± 0.546 | 0.205 ± 0.073 | 0.413 | 21.80 | 0.540 | 299 |
+| **E31 S0 @5 000** | 3.796 ± 0.095 | 0.365 ± 0.024 | 0.508 | 32.39 | 0.394 | 260 |
+| **E31 S0 @10 000** | 3.710 ± 0.086 | 0.365 ± 0.014 | 0.642 | 32.13 | 0.302 | 259 |
+| **E31 S0 @20 000** | **3.813 ± 0.114** | **0.378 ± 0.020** | **0.690** | 32.38 | 0.258 | 252 |
+
+**P3 CONFIRMED in both forms, and it is the result of the entry.** Score is **flat** —
+3.796 / 3.710 / 3.813 — against the control's 3.625 → 2.338. The peak-then-decay is gone, and the
+stronger form holds too: 3.813 beats the control's best-ever 3.625. `won` at 20 000 is
+**0.378 [0.358, 0.399]**, every seed ≥ 0.360, decisively clear of the measured 0.283 bar. Against
+the correct reference (`rule_based_agent` in slot 0 of its own field, 3.254 / 0.286) that is
+**+0.56 score and +0.09 won** — where E30 @10 000's honest out-of-sample edge was +0.04.
+
+**The methodological gain is worth as much as the points.** Because the curve is flat, @20 000 is
+simply *the end of training*, not a checkpoint hunted for after seeing the numbers. E30's headline
+needed the post-hoc-selection caveat; this one does not.
+
+**P2 CONFIRMED.** Period-2 pacing at 20 000: **0.002** against the control's 0.418 (my
+alternating-action metric; audit 4's position-cycle metric gave the control 0.462, so the two
+agree). Threshold was 0.05.
+
+**P1 PARTIAL — neither confirmed nor refuted, exactly as its three zones were written.** Pass was
+"within 10 %", refutation ">25 %"; the visit-weighted gap fell **17.4 %** (per-seed −14.8 to
+−19.4 %, fixed row set) against the control's −42 to −45 %. Its second clause passes emphatically:
+`P(gap < 0.05)` is **0.000-0.017** against 0.31-0.34, and that sub-0.05 tail is what produces the
+pacing. **So the step cost is the dominant driver of the collapse but not the only one.** Note
+also the absolute levels: E31's gap is **2.75 at 5 000 where the control's was 1.79** — the step
+cost was not merely eroding the margin over training, it was suppressing it from the start.
+
+The 17.4 % residual is most likely audit 4's H2, which is already written down with a falsifier:
+the feature map is phase-blind, `corr(Q, G) = 0.25`, so V averages the crate-rich opening with the
+barren endgame and there is little true gap to defend. That is the pre-registered follow-up.
+
+**P4 FAILED, and this is now the same guard failing twice running.** Suicides at 20 000 are
+**0.690** against the 0.636 threshold — and they *rise* with training (0.508 → 0.642 → 0.690)
+while survival *falls* (0.394 → 0.302 → 0.258). The dawdling half of the guard is fine (steps 252,
+no blow-up), so removing shortest-path pressure did not make it lazy; it made it reckless. E30
+became passive, E31 becomes aggressive, and **neither run has ever satisfied the suicide guard.**
+In the same rounds we survive 0.258 against the opponents' 0.375-0.399: **we are winning on points
+while dying most.**
+
+**Predicted magnitude was right for once** — I pre-committed to 3.4-3.9 at 20 000 and it landed at
+3.813. That is the audit's prior rather than mine, which is the honest attribution.
+
+- **Verdict: E31 SUCCEEDED on its primary and failed its guard**, and confirms audit 4's mechanism
+  in substance: an action-independent constant ratchets the argmax, and removing it removes both
+  the ratchet and the decay. **`BM_STEP_COST=0` becomes the default for rung 4.**
+- **Next, in order.** (1) The suicide guard has failed twice and is now the binding constraint —
+  0.690 own-bomb deaths with `killed_by` already near floor. (2) The 17.4 % residual gap decay →
+  audit 4's phase digit, with its stated falsifier. (3) `KILLED_OPPONENT` is still **0.0** — the
+  highest-value action in the real game has never been priced (E30 script error, uncorrected).
+  (4) `evaluate.py:258` still undercounts `killed_by`; every magnitude quoted from E28 on is
+  inflated ~2× until it is fixed and the cited runs re-measured.
+
 ---
 
 ## E30 — Train in the field we are measured in, and test D₄'s surviving claim
