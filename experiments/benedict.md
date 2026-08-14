@@ -21,6 +21,97 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E31 — The step cost is not a cost, it is a ratchet on the argmax
+
+- **Question:** E30 peaks at 5 000 episodes and decays monotonically to 20 000. I proposed two
+  causes and **an independent audit refuted both** (`scratchpad/audit4/`; it states it had not
+  opened this ledger when it formed its diagnosis). What it found instead, and what I verified
+  myself before writing this:
+
+  **The action gap collapses while the value function survives.** Visit-weighted over the rows the
+  greedy policy actually occupies, `E[Q(best) − Q(second)]` falls **1.788 → 0.668** from 5 000 to
+  20 000, and the share of decisions made at a gap below 10⁻³ rises **0.001 → 0.204** (my own
+  rollout; the audit got 1.81 → 0.67 and 0.001 → 0.206 independently).
+
+  **It is invisible without visit weighting.** Unweighted over all 4 167 valued rows the mean gap
+  *rises*, 2.589 → 2.763. I checked that first and would have "refuted" the audit with it. This is
+  the third time this project has been bitten by reading a table instead of a rollout.
+
+  Two rows make it concrete (verified directly from the checkpoints):
+
+  | row 12786 — crate adjacent, bomb in hand, only `BOMB` is right | greedy | gap |
+  |---|---|---|
+  | `rung2ship` | BOMB | 1.13 |
+  | T s60 @5 000 | BOMB | 0.95 |
+  | T s60 @10 000 | BOMB | 0.35 |
+  | T s60 @20 000 | BOMB | **6.5 × 10⁻⁴** |
+  | T s63 @20 000 | **LEFT** | **2.1 × 10⁻⁵** |
+
+  At 20 000 on seed 63 the agent **walks away from a crate it is standing next to with a bomb in
+  hand**, by two parts in a hundred thousand. In row 12774 it walks away from its own BFS target
+  by 1.6 × 10⁻⁴. And the six actions converge **to each other at ≈ 5.20, not to zero** — this is
+  not value decay, it is the *ordering* dissolving.
+
+  **The consequence is period-2 cycling.** `act()` breaks ties by exact float equality, so a
+  10⁻⁴ gap is float noise, the mirrored row picks the mirrored action, and the agent paces. Steps
+  inside a ≥ 6-step 2-cycle: **0.000 (parent) → 0.001 (5 k) → 0.088 (10 k) → 0.462 (20 k)**, and
+  100 % of those steps have `digit 6 > 0` — it has a target the whole time and ignores it. Pacing
+  is safe and earns nothing, which is precisely the reported signature.
+
+  **Mechanism.** Because V is near-constant (`corr(Q, G) = 0.25`; `E[Q]` sits at 5.2 ± 0.5 while
+  the true return swings 13 points across a round), `max Q(s′) ≈ Q(s,a)` under the greedy action,
+  so the update reduces to `Q ← Q − α(0.1 + (1−γ)Q)`. **That is a constant negative drive applied
+  only to whichever action is currently top** — it is pushed under the runner-up, which becomes
+  greedy and is pushed down in turn, and the six entries ratchet together. At `STEP_COST = 0` the
+  drive is `−α(1−γ)Q`, proportional rather than additive, and does not close the gap.
+
+  This is E27's "an action-independent constant dominates the fixed point", localised: it damages
+  the **action gap**, not the return.
+
+- **Not the cause, each refuted with a number.** Death penalty: contributes **+0.5** of the −9.6
+  fall, and the collapse is complete in rows where death is impossible. Tie tolerance: `BM_TIE_TOL`
+  destroys the cycles at evaluation and recovers **no** score (2.69 → 2.26 → 1.69 → 0.94 as it
+  rises), and training with it does not stop the gap collapse — **do not ship `BM_TIE_TOL > 0`**.
+  Stale warm-start cells: 0.04 % of visit-weighted greedy actions. Truncation-as-termination in
+  `end_of_round`: **real**, confirmed to three decimals by the reward residual (`reward −
+  reconstruction` = −0.1 × survival rate exactly), but bounded at ≲ 0.2 in Q units against a
+  1.1-point collapse, and the wrong sign. **That is the bug I was one turn from spending fifteen
+  training runs on.**
+
+- **Change:** `BM_STEP_COST=0`. One existing switch, nothing else touched.
+
+- **Design.** 5 seeds (`BM_RUN_INDEX` 80-84 — checked against E27's pilot, which used 60), 20 000
+  episodes, checkpoints 5 000 / 10 000 / 20 000, otherwise E30 arm T verbatim. Control is E30 arm T,
+  already measured. Audit 4's own probe (2 fresh seeds, 10 000 episodes) gives the prior: gap
+  −3 % against the control's −24 %, `P(gap < 0.05)` 0.001 against 0.18, no cycles, and **higher
+  discounted return scored under the control's own step-cost-bearing objective** (14.43 vs 8.94).
+- **Measurement:** 1000 rounds, ε = 0, `BM_TIE_TOL=0.0`, validation seed 550731, 3 ×
+  `rule_based_agent`, n = 5 training runs.
+
+### Prediction (written before the run)
+
+Taken from audit 4's pre-registration, since it proposed the arm and had the prior.
+
+1. **P1, mechanism, primary.** Visit-weighted `E[gap]` at 20 000 is within **10 %** of its value at
+   5 000, and `P(gap < 0.05)` stays **below 0.05**. Control: −63 % and 0.436. **Refutation:** the
+   gap still falls > 25 % → the step cost is not the levelling force and the diagnosis is wrong.
+2. **P2, symptom.** Steps in a ≥ 6-step 2-cycle at 20 000 stay **below 0.05** (control 0.462).
+   **Refutation:** above 0.15 → the cycles have another source.
+3. **P3, outcome.** **The peak-then-decay disappears**: score at 20 000 ≥ score at 5 000. And the
+   stronger form — score at 20 000 beats E30 arm T @5 000's 3.625. **Refutation:** it still decays
+   → the mechanism is real but not what costs the points.
+4. **P4, guard, the one I expect to bite.** Removing the step cost removes all shortest-path
+   pressure. `steps`-to-target and `WAITED` must not blow up, and `suicides` must not exceed
+   E30 @5 000's 0.636. If P3 passes but the agent dawdles, the answer is a **potential-based**
+   substitute (`BM_SHAPE` already exists) — a state function cancels out of the action gap the same
+   way but does not ratchet the argmax.
+
+**Pre-committed magnitude.** I expect the decay to flatten and the peak to move later, not a new
+record: score at 20 000 in the range **3.4-3.9**. Given how badly I have called the last two, this
+is the audit's prior rather than mine, and P1 is the claim I actually believe.
+
+---
+
 ## E30 — Train in the field we are measured in, and test D₄'s surviving claim
 
 - **Question:** three entries now converge on one conclusion. E28: the rung-4 deficit is a single
@@ -153,10 +244,18 @@ scores fall rather than our score being inflated. **The result stands.**
 
 **The shape of the decay matters more than the peak.** From 5 000 to 20 000 episodes `survived`
 rises monotonically 0.277 → 0.391 → 0.540 while `score` falls 3.625 → 2.338 and `kills` falls
-0.211 → 0.127. **The agent is converging on a passive survival policy**, and seed variance grows
-with it (`won` ± 0.014 at 5 000, ± 0.073 at 20 000). With `GOT_KILLED` at −5 against a −0.1 step
-cost, not dying dominates the return — the earnings/cost argument from E27, now on the death
-penalty rather than the crate reward.
+0.211 → 0.127, and seed variance grows with it (`won` ± 0.014 at 5 000, ± 0.073 at 20 000).
+
+> **Refuted, 2026-08-14 (audit 4, `scratchpad/audit4/`).** I wrote here that "the agent is
+> converging on a passive survival policy" because "with `GOT_KILLED` at −5 against a −0.1 step
+> cost, not dying dominates the return". **Both halves are wrong**, and an independent diagnosis
+> that had not read this entry when it formed its view says so with numbers: the death term
+> contributes **+0.5** of the −9.6 fall in training reward, against −5.1 from crates and −2.1 from
+> coins; the collapse is *complete in rows where death is impossible*; and if death dominated,
+> `sd[V]` would grow to separate safe from dangerous states — it *shrinks*. **Rising survival is a
+> consequence of the real mechanism, not its cause.** See E31 for what it actually is. The E27
+> half of my intuition — "an action-independent constant dominates" — was right; the "not dying"
+> half was not.
 
 ### Ship-seed confirmation — and a correction to the bar
 
