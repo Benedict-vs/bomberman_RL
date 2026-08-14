@@ -21,6 +21,71 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E30 — Train in the field we are measured in, and test D₄'s surviving claim
+
+- **Question:** three entries now converge on one conclusion. E28: the rung-4 deficit is a single
+  number, `killed_by` +0.434 paired. The forensic: 73.4 % of deaths reach the last savable step in
+  an **all-zero** row. E29: those rows are empty in **every orientation** — 89 % of each touched
+  orbit was already trained, so they are not a sampling accident but a region of state space that
+  solo training never enters. **The only thing that can fill them is playing against opponents.**
+
+  E25–E27 trained with opponents and all failed, but E27 found why (the earnings/cost ratio) and
+  measured the fix: `BM_CRATE=1.0` reached **3.107** on the `rule_based` field at 6 000 episodes
+  against arm F's 2.793 there. What has never been tried is the obvious thing — **training in the
+  `rule_based` field itself.** Every rung-3 run trained against `coin_collector_agent`, an
+  opponent that never places a bomb, and was then measured against three that do. The rows that
+  kill us cannot be visited in a field where nobody bombs.
+
+- **Change:** two, one per arm, both in `train.py` only.
+  - **T** — training field becomes 3 × `rule_based_agent`; `BM_CRATE=1.0`; warm start from the
+    frozen table. `callbacks.py` untouched.
+  - **TD** — additionally shares every TD update across the state's D₄ orbit (~5.95 cells), and
+    warm-starts from the **folded** table so the initialisation is already self-consistent.
+
+  **Why TD is worth its half of the compute.** E29 refuted D₄ as *coverage* and explicitly left
+  its *convergence-speed* claim standing — the one E14 preserved for "if the larger table proves
+  data-starved". Sharing gives each cell the samples of its whole orbit without changing what is
+  representable. This is the form of D₄ that has never been tested, and it has been deferred since
+  E14; testing it once ends the question either way.
+
+- **Design.** 5 training seeds per arm (`BM_RUN_INDEX` **60–64**, never used), **20 000 episodes**,
+  checkpoints at 5 000 / 10 000 / 20 000. Not 40 000: E27 measured the peak at ~6 000 and decay by
+  40 000, so a longer run would buy only a worse table. World seed 810731. Everything else at its
+  E27 value. Unit of analysis is the **training run, n = 5**, with t-intervals.
+- **Measurement:** 1000 rounds, ε = 0, `BM_TIE_TOL=0.0`, validation seed **550731**, 3 ×
+  `rule_based_agent`. **`won` is primary.** Control is arm F: `won` 0.167, score 2.822.
+
+### Prediction (written before the run)
+
+1. **P1, primary.** T @10 000 beats arm F on **`won`** (0.167), t-CI over the five runs excluding
+   0. **Refutation:** CI includes 0 or is negative → training in the measured field still does not
+   beat an untrained table, and rung 4 ships frozen exactly as rung 3 did.
+2. **P2, mechanism, and the reason P1 is not just hope.** Re-running the forensic pipeline on T's
+   table, **the share of deaths whose `t*` row is all-zero falls from 73.4 % to below 40 %.**
+   **Refutation:** it stays above 60 % → the rows still are not being visited, and the diagnosis
+   that opponents fill them is wrong rather than merely insufficient.
+3. **P3, D₄'s surviving claim, in falsifiable form.** **TD @5 000 ≥ T @10 000** on `won` — i.e.
+   sharing buys at least a 2× sample-efficiency factor (orbits average 5.95 members, so 2× is the
+   conservative half of the range). **Refutation:** TD @5 000 < T @10 000 → sharing does not
+   accelerate convergence, and D₄ is finished for this project in both of its forms.
+4. **P4, the named risk.** TD @20 000 is **not worse** than T @20 000. If it is, the symmetry
+   assumption is violated somewhere, and the first suspect is on record: `bfs_first_step` breaks
+   distance ties by `DELTAS` order (45.5 / 30.6 / 13.5 / 10.5 %), so on a tied state the feature
+   map is not equivariant and sharing writes one orientation's answer into another's cell. Both
+   arms run at `BM_TIEBREAK=0` deliberately, so this arm is an *approximate* symmetry and the
+   entry must say so whatever the result.
+5. **P5, guard.** `suicides` does not exceed arm F's 0.411 upper CI (0.442). Rung 3's lesson is
+   that learning aggression is exactly when an agent forgets to run from its own bomb, and arm F's
+   suicide rate is currently *better* than `rule_based_agent`'s.
+
+**Predicted magnitude, pre-committed so no outcome reads as a success.** I expect `won` **0.19 to
+0.23** against the symmetric reference's 0.25 — a real improvement that still does not clear the
+bar. Beating 0.25 in one step would be a surprise and should be checked for a harness error
+before it is believed; the published state of the art on this task is ≈ 5.0 score with a
+335-state table (`scratchpad/survey/REPORT.md`), and we are at 2.822 with 64 000.
+
+---
+
 ## E29 (stage 1) — Coverage, not features: fold the table by its symmetry group
 
 - **Question:** E28 established that the rung-4 deficit is one number, `killed_by` (+0.434

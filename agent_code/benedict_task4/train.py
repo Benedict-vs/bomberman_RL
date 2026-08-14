@@ -154,6 +154,18 @@ STEP_COST = float(os.environ.get("BM_STEP_COST", -0.1))
 # the horizon is ~10 steps, shorter than the distance to most BFS targets.
 GAMMA = float(os.environ.get("BM_GAMMA", 0.99))
 
+# E30 arm TD: share every update across the state's D4 orbit. The group acts
+# *exactly* on this encoding -- digits 1-4 are one per direction in DELTAS
+# order, digit 6 is direction+1 with 0 reserved, digits 5/7/8 are invariant --
+# so (s, a) and (g.s, g.a) are the same situation in a different orientation
+# and must carry the same value.
+#
+# E29 refuted D4 as *coverage*: folding a finished table gains 279 rows of
+# 61 636, because 89 % of every touched orbit was already trained. This is the
+# other claim, the one E14 left standing -- samples per cell. Orbits average
+# 5.95 members, so one shared update is worth up to ~6 visits.
+D4_SHARE = os.environ.get("BM_D4", "0") not in ("", "0")
+
 ALPHA = 0.1         # only used when ALPHA_MODE == "const"
 ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP", 0.7))     # in (0.5, 1]
 
@@ -250,6 +262,7 @@ def setup_training(self):
     self.eps = EPS_START
     self.gamma = GAMMA
     self.visits = np.zeros((N_STATES, len(ACTIONS)), dtype=np.int64)
+    self.d4_rows, self.d4_acts = _d4_tables() if D4_SHARE else (None, None)
     if WARM_SUFFIX:
         warm_start(self)
     self.last_phi = None
@@ -271,7 +284,7 @@ def setup_training(self):
         # Rung-2 logs go beside the rung-2 evaluations; see AGENTS.md.
         # TrainLogger anchors a relative out_dir to the repo root -- agents.py
         # chdirs into this folder around every callback, so the cwd is not it.
-        out_dir="results/train/task3_opponents",
+        out_dir="results/train/task4_tournament",
         hyperparams={"alpha": ALPHA, "alpha_mode": ALPHA_MODE, "alpha_exp": ALPHA_EXP,
                      "eps_start": EPS_START, "eps_mode": EPS_MODE, "eps_end": EPS_END,
                      "eps_decay": EPS_DECAY,
@@ -279,6 +292,7 @@ def setup_training(self):
                      "warm": WARM_SUFFIX, "warm_n": WARM_N,
                      "train_seed": TRAIN_SEED + RUN_INDEX, "run_index": RUN_INDEX,
                      "step_cost": STEP_COST,
+                     "d4": D4_SHARE,
                      "rewards": {k: v for k, v in REWARDS.items()},
                      "n_states": len(self.q),
                      "features": "4 neighbour states (blocked/lethal/in-blast/clear) "
@@ -367,7 +381,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     td_target = reward + shaping + self.gamma * np.max(self.q[s_next])
 
     td_error = td_target - self.q[s, a]
-    self.q[s, a] += learning_rate(self, s, a) * td_error
+    apply_update(self, s, a, td_error)
 
     self.episode_td.append(abs(td_error))
 
@@ -394,7 +408,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     td_target = reward + shaping
 
     td_error = td_target - self.q[s, a]
-    self.q[s, a] += learning_rate(self, s, a) * td_error
+    apply_update(self, s, a, td_error)
 
     round_no = last_game_state["round"]
     if round_no % SAVE_EVERY == 0:
@@ -536,13 +550,35 @@ def warm_start(self) -> None:
                      f"parents with value, pseudo-count {WARM_N}")
 
 
-def learning_rate(self, s: int, a: int) -> float:
-    """Per-cell learning rate. See the module docstring for why this matters."""
+def learning_rate(self, s: int, a: int, cells=None) -> float:
+    """Per-cell learning rate. See the module docstring for why this matters.
 
-    self.visits[s, a] += 1
+    `cells`, when given, is the state's whole D4 orbit: every member is
+    incremented so a later visit in any orientation sees the true sample count.
+    The rate itself is read from the cell we were actually in.
+    """
+    if cells is None:
+        self.visits[s, a] += 1
+    else:
+        self.visits.reshape(-1)[cells] += 1
     if ALPHA_MODE == "visit":
         return 1.0 / self.visits[s, a] ** ALPHA_EXP
     return ALPHA
+
+
+def apply_update(self, s: int, a: int, td_error: float) -> None:
+    """One TD update: to the cell, and under BM_D4 to its whole orbit.
+
+    np.unique is load-bearing. A state fixed by part of the group maps onto
+    itself more than once, and `+=` through repeated fancy indices would apply
+    the update once by accident of numpy's buffering rather than by intent.
+    3.2 us per update, ~9 s over a 20 000-episode run.
+    """
+    if not D4_SHARE:
+        self.q[s, a] += learning_rate(self, s, a) * td_error
+        return
+    cells = np.unique(self.d4_rows[:, s] * len(ACTIONS) + self.d4_acts[:, a])
+    self.q.reshape(-1)[cells] += learning_rate(self, s, a, cells) * td_error
 
 
 def reward_from_events(self, events: List[str]) -> float:
@@ -589,3 +625,37 @@ def phi(game_state: dict) -> float:
     if d is None:
         d = _bfs_distance(x, y, field, lambda p: field[p] == 1)
     return -SHAPE * (d or 0)
+
+def _d4_tables() -> tuple[np.ndarray, np.ndarray]:
+    """Row and action images under the 8 elements of D4.
+
+    DELTAS is listed clockwise, so every element is g(d) = (s*d + k) % 4 with
+    s in {+1,-1}, k in 0..3 -- the whole group and nothing else. Duplicated from
+    scratchpad/benedict/d4.py deliberately: this file ships with the agent and
+    may not import from scratchpad/. The group self-test lives there.
+
+    0.8 s and 2 MB, paid once per run.
+    """
+    group = [(s, k) for s in (1, -1) for k in range(4)]
+    rows = np.empty((len(group), N_STATES), dtype=np.int32)
+    acts = np.empty((len(group), len(ACTIONS)), dtype=np.int8)
+
+    for gi, (s, k) in enumerate(group):
+        image = [(s * d + k) % 4 for d in range(4)]
+        for a in range(len(ACTIONS)):
+            acts[gi, a] = image[a] if a < 4 else a      # WAIT/BOMB are fixed
+        for idx in range(N_STATES):
+            digits, rest = [], idx
+            for size in reversed(FEATURE_SIZES):
+                digits.append(rest % size)
+                rest //= size
+            digits.reverse()
+            out = list(digits)
+            for j in range(4):
+                out[image[j]] = digits[j]               # neighbour j -> slot g(j)
+            out[5] = 0 if digits[5] == 0 else image[digits[5] - 1] + 1
+            new = 0
+            for value, size in zip(out, FEATURE_SIZES):
+                new = new * size + value
+            rows[gi, idx] = new
+    return rows, acts
