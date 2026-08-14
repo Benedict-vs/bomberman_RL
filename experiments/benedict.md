@@ -237,6 +237,86 @@ byte-identical and only the seed pairing changes. **That is not a prediction, it
 — if F4 comes back materially different from 2.757, the copy or the harness is wrong and no
 other number in this entry may be read.**
 
+### Result — commit 7d9057c, 1000 paired rounds each, ship seed 990731
+
+Smoke test passes: F4 scores **2.822 [2.680, 2.970]**, and the CI contains the 2.757 measured
+under the rung-3 name. The copy is the agent.
+
+| | F4 | R4 (symmetric ref) | paired difference | |
+|---|---|---|---|---|
+| score | 2.822 | 3.254 | −0.432 [−0.644, −0.221] | WORSE |
+| **won** | **0.167** | **0.286** | **−0.119 [−0.154, −0.084]** | WORSE |
+| kills | 0.121 | 0.196 | −0.075 [−0.109, −0.041] | WORSE |
+| **suicides** | **0.411** | **0.533** | **−0.122 [−0.164, −0.079]** | **BETTER** |
+| **killed_by** | **0.525** | **0.091** | **+0.434 [+0.398, +0.469]** | WORSE |
+| survived | 0.064 | 0.376 | −0.312 [−0.345, −0.279] | WORSE |
+| invalid | 2.61 | 7.34 | −4.73 [−5.13, −4.33] | BETTER |
+| think_max_ms | 0.3 | 1.4 | −1.166 | BETTER |
+
+**P1 CONFIRMED** — +0.434, comfortably over the 0.30 threshold, CI excluding 0 by an order of
+magnitude. **P2 CONFIRMED** — −0.122, and it is a real effect, not the seed artefact the forensic
+suggested it might be (that run gave −0.064). **P3 CONFIRMED** — the relative deficit is 0.584 on
+`won` against 0.867 on `score`; deaths cost rank faster than they cost points. **P5 guard passes**
+at 0.3 ms, five times *faster* than `rule_based_agent`.
+
+**P4 REFUTED.** `BM_HUNT=0` moves `killed_by` by −0.035 [−0.078, **+0.009**] — not demonstrated.
+Walking at opponents is *not* what feeds us to `callbacks.py:173-176`. The pre-registered
+refutation clause said this would leave P1's threat-blindness reading intact; it does not, because
+the forensic had already refuted that reading on independent evidence (73.4 % of deaths are
+all-zero rows). **Both of my mechanisms for the `killed_by` gap are now dead, and the forensic's
+is the one standing.**
+
+#### The result nobody asked for, flagged as post-hoc
+
+Not pre-registered, so it is an observation and E29 must re-derive it, not cite it:
+
+| noHUNT − HUNT | | |
+|---|---|---|
+| **won** | **+0.041 [+0.008, +0.074]** | **BETTER** |
+| score | −0.076 [−0.252, +0.100] | no effect |
+| survived | +0.086 [+0.060, +0.112] | BETTER |
+| suicides | −0.051 [−0.093, −0.010] | BETTER |
+| kills | −0.042 [−0.069, −0.016] | WORSE |
+| invalid | +6.39 [+5.37, +7.42] | WORSE |
+
+**Turning off the feature that won rung 3 improves the rung-4 ranking metric at no cost in score.**
+HUNT bought +1.595 score against `coin_collector_agent`; here it buys 0.042 kills and pays 0.051
+suicides, 0.086 survival and 0.041 `won`. It also still earns its keep on the invalid-action leak
+(2.61 vs 9.00), so this is genuinely two opposite effects in one switch — exactly the entanglement
+P4 was written to warn about.
+
+**Do not flip the default on this.** The forensic gives a mechanism that predicts the sign will
+change: HUNT steers the agent into opponent-adjacent states, and those are precisely the states
+whose rows are all-zero, because the table was trained solo. HUNT's cost may be *entirely* a
+coverage artefact. Re-measure it on a table that has actually seen rung 4 before deciding what
+ships.
+
+#### The number that should open the report's rung-4 section
+
+`rule_based_agent` scores **3.847** in a field containing us and **3.254** in a field of four of
+itself — **+0.59 each, +1.78 across the field**, with kills up 0.204 → 0.319. Our own mean is
+2.822. **We do not merely lose to the reference agent; we are the reason it beats its own
+baseline**, and we hand it more than half our own score in kill credit. `won` 0.167 against a
+symmetric 0.25 follows directly.
+
+Everything else about the agent is *ahead* of the reference: fewer suicides, 64 % fewer invalid
+actions, five times faster. The entire deficit is one number, `killed_by`, and per the forensic
+73 % of it is an empty Q-row drawing uniformly over six actions.
+
+**Verdict: E28 SUCCEEDED as a measurement and killed both of the mechanisms I brought to it.**
+Rung 4's problem is not that the agent cannot see — it is that the agent has never been in these
+states. The next entry attacks coverage, not features.
+
+- **Carried to E29.** Two coverage routes, and the forensic's ranked feature is explicitly *not*
+  first: (a) train on rung 4 with E27's corrected reward scale, warm-started from the frozen
+  table, which fills exactly the rows that only exist with opponents present — E27 already
+  measured a 6 000-episode `BM_CRATE=1.0` table at **3.107** on the `rule_based` field against
+  arm F's 2.793, and the forensic now explains *why* that should work; (b) 8-fold symmetry
+  canonicalisation, ~8× coverage at zero information cost, against the survey's caution that one
+  published attempt reduced 81 → 15 states with "no noticeable improvement". Opponent BFS
+  distance (the forensic's C3, ×4 rows) comes **after** coverage, never alone, and always
+  reported next to a coverage metric.
+
 ---
 
 ## E27 — The reward table was calibrated for a board the agent had to itself
