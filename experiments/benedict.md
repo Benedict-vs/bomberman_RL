@@ -186,8 +186,83 @@ The conclusion is unchanged; the size of it is not.
 dying more often — which is the P5 failure restated, and it means the lead does not come from
 playing more safely but from earning faster in the time we have.
 
-- **Verdict: E30 SUCCEEDED on its primary and failed its guard.** First agent to beat
-  `rule_based_agent`; first entry where training beat the frozen table on any rung above 2.
+### Correction, 2026-08-14, after an adversarial audit (`scratchpad/audit3/`)
+
+An audit was commissioned with the sole remit of refuting this entry, given the CSVs and the
+code and told to form its own numbers. It ran 11 new 1000-round evaluations and 4 instrumented
+300-round runs. **Every arithmetic figure in the result table above reproduces exactly. The bar
+they are measured against does not, and the headline is attached to the wrong checkpoint.** I
+verified each load-bearing claim below myself before rewriting.
+
+**1. The pre-registered primary does not beat `rule_based_agent`.** With the bar at its measured
+0.283, `won` at @10 000 is **0.3130 ± 0.0528 → [0.260, 0.366]**, which *contains* the bar — at
+the validation seed and again at the ship seed (0.3102). @5 000 is [0.334, 0.361] and excludes
+it, at both seeds. So the claim is true of the checkpoint I selected post-hoc and **not** of the
+one I pre-registered. P1 as literally written — "T @10 000 beats **arm F**" — is confirmed and
+large; the invalid step was from "beats arm F" to "beats `rule_based_agent`".
+
+**2. "Every one of the five runs clears it" is misleading.** True of arm F's 0.178, which is what
+the sentence says; false of the `rule_based` bar, which is what the next sentence implies. At
+@10 000 seed 61 scores **0.245 at both evaluation seeds** — a genuinely worse table, not noise.
+4/5 at @10 000; 5/5 at @5 000.
+
+**3. The opponents were not beaten down — arm F simply stopped feeding them.** Coins are a fixed
+pool (8.96 in every field), so total score moves only through kills:
+
+| field | total score | total kills | opponents' mean |
+|---|---|---|---|
+| arm F | 14.331 | 1.075 | 3.814 |
+| T @10 000 | 12.718 | 0.749 | 3.102 |
+| 4 × `rule_based` | 13.020 | 0.814 | 3.255 |
+
+The audit prices it: opponents drop 0.745 each, their kill credit drops 2.16 points — **97 % of
+the effect is arm F ceasing to be food.** So "E28's +0.59 is reversed" is wrong. Against the
+correct reference — `rule_based_agent` in slot 0 of its own field — T @10 000's out-of-sample
+score edge is **+0.04**, and T @5 000's is +0.40. Comparing opponents to their score against
+arm F measures arm F, not us.
+
+**4. `killed_by_opponent` is definitionally wrong in `tools/evaluate.py`, and I own the bug.**
+`evaluate.py:258` computes `max(0, died − suicides)`. But `environment.py:243-257` evaluates each
+explosion separately: an agent standing in *both* its own blast and an opponent's gets
+`KILLED_SELF` **and** hands the opponent `KILLED_OPPONENT` (+5). It dies once, so the metric books
+a pure suicide and the opponent's kill is invisible. **The undercount scales with bombs placed**,
+which is exactly what differs between the arms being compared. Instrumented truth, per round:
+
+| | metric says | true opponent-blast deaths | bombs/round |
+|---|---|---|---|
+| arm F | 0.513 | **0.577** | 16.0 |
+| `rule_based` (4×rb) | 0.093 | **0.210** | 20.2 |
+| T @10 000 | 0.070 | **0.137** | 28.7 |
+
+**E28's "killed by opponents six times more often" is really 2.7×. E30's "0.519 → 0.058" (8.9×)
+is really 0.577 → 0.137 (4.2×).** Direction and mechanism survive everywhere; every magnitude in
+the E28-E30 chain is inflated roughly 2×.
+
+**5. `BM_RUN_INDEX` 60-64 were not "never used".** E27's disclosed pilot ran `BM_CRATE=1.0` in the
+`rule_based` field on **training seed 60** and validated on 550731. Arm T is that pilot extended.
+The ship-seed replication mitigates it, but the design sentence is false as written.
+
+**6. n = 5 understates the uncertainty.** All five runs share one arena sequence (world seed
+810731); only exploration RNG and the unseeded opponents differ, so the t-interval covers
+exploration but not arena sampling.
+
+**7. What survived the attack, having been attacked properly.** @10 000 replicates out of sample
+(0.3130 val → 0.3102 ship), so it is not a selection artefact — it is simply not far enough above
+0.283. Training beating the frozen table is real and large at any bar. **An E30 agent does beat
+`rule_based_agent`: T @5 000, `won` +0.067 over the measured bar with a CI excluding it on the
+held-out seed, 5/5 seeds, score 3.65 against 3.25.** And P5's failure is *understated* — true
+own-bomb death rate rises 0.370 (F) → 0.467 (@10 000) → **0.650** (@5 000). The checkpoint that
+wins is the one that kills itself most.
+
+**8. In-distribution by construction.** Arm T trains against 3 × `rule_based_agent` and is
+measured against 3 × `rule_based_agent`, and its winning mechanism is denying a *scripted*
+opponent its kills. That need not transfer to a tournament of unknown agents, and the report must
+say so rather than let "beats `rule_based_agent`" stand unqualified.
+
+- **Verdict after correction: E30 SUCCEEDED on P1 and P2, FAILED P5, and its headline needed
+  re-attaching.** The honest claim is: **T @5 000 beats `rule_based_agent` on the held-out seed,
+  5/5 seeds, selected post-hoc and confirmed** — not the pre-registered @10 000. First entry where
+  training beat the frozen table on any rung above 2.
 - **Next.** (a) The remaining deaths are 94 % trained-but-fatal — the forensic's C3 (opponent BFS
   distance, ×4 rows) now has a clean target and a measured lift, and coverage is no longer the
   binding constraint that argued against it. (b) The passivity gradient is a reward-balance
