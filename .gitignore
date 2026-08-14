@@ -141,6 +141,8 @@ logs/*.out
 #   git show <commit>:agent_code/<agent>/q_table.npy > scratchpad/<person>/models/q_vN.npy
 scratchpad/*/models/
 
+scratchpad/deaths/*.pkl
+
 # Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The real model is
 # q_table.npy and stays versioned; these are scratch and must never end up in
 # the submitted agent folder.
