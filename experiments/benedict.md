@@ -73,6 +73,7 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
   |---|---|
   | **F4** | `benedict_task4` + 3 × `rule_based_agent` |
   | **R4** | 4 × `rule_based_agent` (the symmetric reference) |
+  | **F4-noHUNT** | `benedict_task4` with `BM_HUNT=0` + 3 × `rule_based_agent` |
 
   1000 rounds, ship seed **990731**, ε = 0, `BM_TIE_TOL=0.0`, `BM_HUNT=1` (the default since
   E26). New tree `results/eval/task4_tournament/`. R4's reported row is agent slot 0; the other
@@ -81,6 +82,121 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
   The symmetric field is the honest ceiling: four identical policies split the wins, so
   `won ≈ 0.25` **is** the reference value and 0.280 is one slot's realisation of it. Beating
   `rule_based_agent` means `won > 0.25` in a field of three of them.
+
+### Disclosure: the third arm was designed after a teardown of the opponent
+
+The F4-noHUNT arm and P5 below were added after a subagent read `rule_based_agent/callbacks.py`
+line by line (`scratchpad/rb_teardown/`) and I verified the load-bearing lines myself. That is
+*design* input, not outcome data from E28 — no E28 number existed when it was written — but the
+ledger says so rather than presenting a three-arm design as the original plan.
+
+Two things came out of it that bear on this entry:
+
+1. **`rule_based_agent` is not anticipatory either.** It never reads `others[i][2]`
+   (`bombs_left`), never predicts opponent movement, and builds its danger model from
+   `game_state['bombs']` alone — the same input class as our digits 1-5. So the anticipatory gap
+   is a gap for *both* agents, and the question P1 poses gets sharper rather than easier: if
+   neither side can see an unplaced bomb, **why do we die to opponents six times more often?**
+2. **Its only offensive rule may be one we walk into on purpose** (`callbacks.py:173-176`,
+   verified in the source):
+
+   ```python
+   if len(others) > 0:
+       if (min(abs(xy[0] - x) + abs(xy[1] - y) for xy in others)) <= 1:
+           action_ideas.append('BOMB')
+   ```
+
+   Unconditional, no escape check, high in the proposal stack: **it bombs whenever anything
+   stands next to it.** E26's HUNT fallback makes digit 6 walk toward the nearest opponent
+   whenever no coin and no crate is reachable — which on a four-agent board is most of the round
+   after ~step 140. HUNT was measured against `coin_collector_agent`, which never places a bomb
+   at all, i.e. in a field where approaching an opponent is free. Against `rule_based_agent` the
+   same feature may be walking us into a deterministic bomb for two thirds of every round, and
+   the +1.595 that won rung 3 would not transfer.
+
+### External calibration — what rung 4 is actually worth beating
+
+From a prose-only survey of published solutions to this same course project
+(`scratchpad/survey/REPORT.md`; ~90 repos swept, **only 8 with real written prose**, no source
+code read). It changes no design and no prediction here — it sets the target, and one number in
+it is uncomfortable:
+
+- **The bar is ≈ 5.0 score against 3 × `rule_based_agent`** (Voß/Tiedl/Müller, MLE SS2024, 1000
+  rounds). We are at 2.757. Their table has **335 states**; ours has 64 000.
+- **Three independent ablations say aggressive state-space *reduction* beats richness** (72 → 12
+  features; 10⁵ → 256 states; 2²⁰ → 2160 → 335). That is in direct tension with the teardown's
+  proposal to append two digits and multiply our rows by six, and E28 cannot settle it — but the
+  next entry has to address it rather than quietly pick a side.
+- **Nobody in the corpus predicts a bomb that has not been placed yet.** The closest is one CNN
+  "opponent can drop a bomb" channel, unablated. So if P1 holds, the feature it motivates is
+  novel against the published work rather than a re-implementation.
+- **Every number in that corpus is a bare mean — not one source reports a confidence interval**,
+  so a 5.04 and our 2.757 are not as far apart as they look, and our paired-CI rule already puts
+  the method ahead of the published prior work.
+- One control we already own is worth more than I credited: `benedict_task3.md` §5.7 measured the
+  best purely-feature policy our digits allow at 0.030 against the learned 4.377. The same control
+  in the strongest published project came within 3 % of its learned agent (6.1 vs 6.3), and the
+  author concluded the features were doing the work. **Ours says the opposite, with a much larger
+  margin** — that belongs in the report next to their number.
+
+### Disclosure: a death forensic ran before E28 and largely pre-empts P1 and P2
+
+P1–P3 and the guard were committed at **98aedf7, 2026-08-14 09:44:57**, before any of the three
+surveys returned — git fixes that ordering. They are nonetheless now **confirmatory rather than
+exploratory**, and the entry says so instead of collecting a prediction it already knew.
+
+A forensic diagnostic (`scratchpad/deaths/`, 300 rounds at seed **20260731** — not E28's ship
+seed — 282 deaths over 41 945 alive steps, every death mechanically re-simulated and the killing
+bomb's owner reproduced 282/282) gives, for the same agent:
+
+| | forensic, seed 20260731 | R4 reference, same seed/n |
+|---|---|---|
+| suicides | 0.443 | 0.507 |
+| killed_by | **0.497** | **0.093** |
+| score | 2.850 | 3.290 |
+
+So P1's gap is ≈ 0.40 and will almost certainly hold. **P2 holds too, but by 0.064, not the 0.130
+the unpaired figures implied** — "we suicide 26 % less" was flattered by the seed mismatch, and
+the honest version is "slightly less".
+
+**More important: the forensic refutes the mechanism P1 was going to license.** I framed the gap
+as *threat blindness* — information the state does not carry. Measured at the last savable step
+of each death, it splits, and the halves need opposite fixes:
+
+| at the last savable step `t*` | n | share |
+|---|---|---|
+| **Q-row is all-zero — all six actions tie and `act()` draws uniformly** | 207 | **73.4 %** |
+| row is trained and every greedy action is fatal there | 73 | 25.9 % |
+| not avoidable within 5 steps | 2 | 0.7 % |
+
+**Only 26 % of deaths are a missing-information problem. 73 % are a missing-table-entry problem** —
+the state is recognised perfectly, the row is empty, and the policy is a coin flip over six
+actions. Those rows are 2.6 % of alive steps but 73.4 % of `t*` steps (28× enrichment), and 55.8 %
+of every visit to one is the last savable step of a death. They exist only with opponents present,
+and the shipped table was trained solo — this is `benedict_task3.md` §3 showing up as deaths.
+
+Three further measured results, each of which kills a proposal I would otherwise have run:
+
+- **"Is a bomb here survivable" buys nothing** — P(dead ≤ 4) is .033 with an escape and .035
+  without. It was the teardown's second-ranked digit. Only **5 of 133** own-bomb deaths came from
+  an unsurvivable drop: the agent does not bomb itself into corners, it drops a safe bomb and then
+  fails to walk out.
+- **Dead ends are *safer*, not more dangerous** (.020 against a .034 base). The intuition is
+  backwards on this board.
+- **93.3 % of deaths had a visible escape when the killing bomb appeared**, with three steps of
+  warning. The agent is essentially never ambushed — which is what makes "it cannot see an
+  unplaced bomb" the wrong diagnosis.
+
+The one candidate that survives on both volume and lift is **opponent BFS distance, bucketed**:
+at `t*` an opponent is within 2 tiles in 75 % of the trained-but-fatal deaths against a 10.5 %
+base rate, and in the ambiguous rows the fatal and safe visits have *identical digits* — row 34110
+was visited 482 times, and opponent distance was 2 in 71 % of fatal visits against 4 % of safe
+ones. That is the E29 candidate, and it must be measured **together with a coverage metric**,
+never alone, because §2 says coverage is the binding constraint and every new digit makes coverage
+worse.
+
+**None of this changes what E28 measures.** It changes what E28 is *for*: the paired arenas, the
+HUNT arm, and P3 are the parts still carrying information.
 
 - **Measurement:** task-4 preset — `score` / `won` / `kills` / `suicides` / `killed_by` /
   `think_ms` — plus `survived` and `crates`. `won` decides ranking, per `MEASUREMENT.md`.
@@ -102,7 +218,17 @@ Naming which number decides, because E25 scored four of six predictions "correct
    scoring while three opponents keep collecting, so we lose rank faster than we lose points.
    **Refutation:** the ratios come out equal or inverted → deaths are not costing us rank, and
    `won` and `score` can be optimised as one target.
-4. **P4, guard.** `think_max_ms` under 5 ms. Rung 4 is the tournament setting and the limit is
+4. **P4.** F4-noHUNT's `killed_by` is **lower** than F4's, CI excluding 0 — i.e. the rung-3
+   feature win is what feeds us to `callbacks.py:173-176`. **Refutation:** no difference, or the
+   wrong sign → we end up adjacent to opponents for some other reason and P1's threat-blindness
+   reading survives intact.
+
+   **P4 is deliberately not primary, because it sets a trap.** HUNT also removed the
+   `INVALID_ACTION` leak worth −24.25 per round on rung 3. If `killed_by` falls *and* `score`
+   falls, the two effects are entangled and neither number decides on its own — the honest
+   verdict then is "HUNT is doing two opposite things on rung 4" and the next entry has to
+   separate them (a fallback objective that is neither `NO_TARGET` nor "walk at the enemy").
+5. **P5, guard.** `think_max_ms` under 5 ms. Rung 4 is the tournament setting and the limit is
    500 ms on hardware far slower than this one; arm F measured 0.351 ms on rung 3, so anything
    near the guard means the copy is not the agent I think it is.
 
