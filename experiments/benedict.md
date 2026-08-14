@@ -158,6 +158,34 @@ with it (`won` ± 0.014 at 5 000, ± 0.073 at 20 000). With `GOT_KILLED` at −5
 cost, not dying dominates the return — the earnings/cost argument from E27, now on the death
 penalty rather than the crate reward.
 
+### Ship-seed confirmation — and a correction to the bar
+
+`@5 000` was chosen *after* seeing validation numbers, so it is confirmed at ship seed 990731,
+1000 rounds, n = 5 runs. **The selection cost nothing:**
+
+| T @5 000 | validation 550731 | ship 990731 |
+|---|---|---|
+| score | 3.625 ± 0.103 | **3.621 ± 0.117** |
+| **won** | 0.347 ± 0.014 | **0.354 ± 0.012** |
+| suicides | 0.636 | 0.621 |
+| killed_by | 0.087 | 0.092 |
+| survived | 0.277 | 0.287 |
+
+Per-seed `won` on the ship seed: 0.355 / 0.365 / 0.338 / 0.354 / 0.357. In those same rounds we
+beat all three opponents on both metrics — us 3.621 / 0.354, them 3.041-3.094 / 0.265-0.271.
+
+**Correction, and it matters for how the claim is stated.** This entry and E28 both quote "the
+symmetric bar is 0.25" on the reasoning that four identical policies split the wins. That is the
+idealised value and it is wrong: **ties mean win rates sum to more than 1** — 1.157 in these
+rounds — and E28's *measured* self-play figure is 0.266-0.300, mean **≈ 0.282**. So the margin is
+0.354 against 0.282, **+0.072 and not +0.10.** Every "0.25" in E28-E30 should be read as ≈ 0.282.
+The conclusion is unchanged; the size of it is not.
+
+**And the win is fragile in a way the score hides.** We survive *less* than the reference
+(0.287 against 0.380) and suicide far more (0.621 against ~0.47). We are ahead on points while
+dying more often — which is the P5 failure restated, and it means the lead does not come from
+playing more safely but from earning faster in the time we have.
+
 - **Verdict: E30 SUCCEEDED on its primary and failed its guard.** First agent to beat
   `rule_based_agent`; first entry where training beat the frozen table on any rung above 2.
 - **Next.** (a) The remaining deaths are 94 % trained-but-fatal — the forensic's C3 (opponent BFS
