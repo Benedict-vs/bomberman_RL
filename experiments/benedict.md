@@ -109,6 +109,47 @@ instead of a 1-in-6 draw. That is worth a few points of survival, not a doubling
 `won` +0.02 to +0.05, i.e. **0.19-0.22 against the symmetric reference's 0.25**. A result above
 0.25 would be surprising and should be checked for a harness error before it is believed.
 
+### Result — P1 REFUTED at the gate, no evaluation spent
+
+```
+trained_before 2364   trained_after 2643   gained 279
+orbits_total  10750   orbits_trained  531
+```
+
+| | | |
+|---|---|---|
+| all-zero death rows that gain a value | **1 / 129** | **0.8 %** |
+| deaths whose `t*` row gains a value | **1 / 207** | **0.5 %** |
+| whole table: empty rows that gain a value | 279 / 61 636 | 0.45 % |
+
+Threshold was ≥ 40 %, refutation below 20 %. **This is 0.8 %.** Arms B, S and BS are not run.
+
+The check independently reproduces the forensic's 129 rows / 207 degenerate deaths from a
+separate pickle, and confirms all 129 were untrained before the fold — so the two analyses agree
+on the object being measured.
+
+**Why, and it is a sharper result than the one I predicted.** 2 364 trained rows sit in only 531
+orbits whose total membership is 2 643 — **89 % of every touched orbit was already trained.**
+When the agent visits a state it visits that state's rotations and mirrors too, because the board
+is symmetric and the agent moves in all four directions. The empty rows are therefore **not a
+sampling accident that symmetry can repair: they are empty in every orientation.** They are a
+region of state space that solo training never enters at all, in any symmetry class.
+
+That strengthens the forensic's conclusion rather than merely failing to help it. The missing
+rows exist only with opponents on the board, and **the only thing that can fill them is playing
+against opponents.** Route (b) is closed; route (a) is now the whole plan.
+
+**What is *not* refuted, and must not be reported as if it were.** This measures D₄ as a
+**coverage** fix, which is what E29 promoted it for. It says nothing about D₄ as a
+**convergence-speed** measure during training: orbits average 5.95 members, so folding updates
+would give each canonical cell roughly 6× the samples even though the row count barely moves.
+That is the original E14 sample-efficiency argument, it survives untouched, and it is a stage-2
+question with its own test. `scratchpad/benedict/d4.py` is kept for it.
+
+**Verdict: FAILED, at a cost of one table transform and zero evaluations.** The gate earned its
+place — without it this entry would have spent four 1000-round runs to learn the same thing from
+noisier evidence.
+
 ### Stage 2, sketched but not pre-registered
 
 Train on rung 4 with E27's corrected reward scale (`BM_CRATE=1.0`), warm-started from whichever
