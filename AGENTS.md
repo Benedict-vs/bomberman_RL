@@ -182,7 +182,7 @@ Conventions we all follow, otherwise the numbers are not comparable:
 - `tools/` holds our measurement chain; it is **not** submitted, so nothing in
   `agent_code/<name>/callbacks.py` may import from it.
 - `results/eval/` CSVs and `results/train/` logs are grouped per task with the same names in both
-  trees (`task1_coin_collectors/`, `task2_crates/`, `task3_opponents/`), plus
+  trees (`task1_coin_collectors/`, `task2_crates/`, `task3_opponents/`, `task4_tournament/`), plus
   `results/eval/baselines/` for the provided agents — a provided agent measured *in an opponent
   field* is a reference, not a result (`ref_<agent>__task3_<field>.csv`). Underscores, never
   spaces: a directory with a space silently breaks unquoted globs in analysis scripts.

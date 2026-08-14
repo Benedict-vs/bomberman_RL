@@ -21,6 +21,98 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E28 — Rung-4 baseline: we do not have an escape problem, we have a threat-blindness problem
+
+- **Question:** rung 4 is `classic` against **3 × `rule_based_agent`** — the tournament setting.
+  Before changing anything I need the floor and the ceiling on the *same* arenas, and I need to
+  know **which of the two death causes** the gap lives in. That decides the whole rung: `suicides`
+  is an escape-logic problem (features 1–5, the blast digits), `killed_by` is a positioning and
+  threat-anticipation problem (information the map does not carry at all).
+
+  The two numbers I already have say something I did not expect, and they say it loudly:
+
+  | | arm F (the rung-3 ship) | `rule_based` in a field of itself |
+  |---|---|---|
+  | score | 2.757 | 3.290 |
+  | won | 0.170 | 0.280 |
+  | **suicides** | **0.377** | **0.507** |
+  | **killed_by** | **0.553** | **0.093** |
+  | total deaths | 0.930 | 0.610 |
+
+  **We kill ourselves 26 % less often than `rule_based_agent` does, and are killed by opponents
+  six times more often.** If that survives a paired re-measurement it inverts the priority I
+  carried out of rung 3, where I wrote that "it dies to itself almost as often as to them" and
+  filed escape logic as the rung-4 problem (`experiments/benedict_task3.md` §6.4). The correct
+  reading of the same split is that our escape logic is *better* than the reference's, and the
+  entire deficit is in deaths we do not cause.
+
+  **The two numbers above are not comparable and that is exactly why this entry exists.** They
+  come from different base seeds (990731 vs 20260731) and different n (1000 vs 300), so they
+  share no arenas. The effect is far too large to be seeding noise, but "too large to be noise"
+  is a guess, and E25 is the entry that records what my guesses are worth.
+
+  Why it would be true, mechanistically: **digits 1–5 are all computed from bombs already on the
+  board.** Digits 1–4 classify each neighbour as blocked / lethal this step / in a blast / clear,
+  and digit 5 counts moves of grace on my own tile — every one of them reads `game_state['bombs']`
+  and `explosion_map`. Nothing in the state conditions on a bomb that has *not been placed yet*.
+  The agent can see a fuse; it cannot see a threat. `rule_based_agent` drops a bomb whenever an
+  opponent is adjacent and then flees, so against it, reacting to placed bombs is reacting one
+  step too late by construction — and 0.553 is what that looks like from the inside.
+
+- **Change:** **none to the agent.** `agent_code/benedict_task4/` is `callbacks.py`, `train.py`
+  and `q_table.npy` copied from `benedict_task3` — `q_table.npy` verified byte-identical, so this
+  measures the rung-3 ship under its rung-4 name. A pure measurement entry; the first rung-4
+  change is written after the three surveys land, not before.
+
+- **Design.** Two evaluations on **identical arenas** — same base seed, same n, so
+  `analyze.py --compare` is paired on the arena the way `MEASUREMENT.md` defines pairing for
+  rung 3+ (arenas only; the provided opponents also shuffle with the stdlib RNG, which
+  `evaluate.py` does not reach — §5.5 of `experiments/benedict_task3.md`):
+
+  | label | field |
+  |---|---|
+  | **F4** | `benedict_task4` + 3 × `rule_based_agent` |
+  | **R4** | 4 × `rule_based_agent` (the symmetric reference) |
+
+  1000 rounds, ship seed **990731**, ε = 0, `BM_TIE_TOL=0.0`, `BM_HUNT=1` (the default since
+  E26). New tree `results/eval/task4_tournament/`. R4's reported row is agent slot 0; the other
+  three slots are the spread of the same policy and bound the arena noise for free.
+
+  The symmetric field is the honest ceiling: four identical policies split the wins, so
+  `won ≈ 0.25` **is** the reference value and 0.280 is one slot's realisation of it. Beating
+  `rule_based_agent` means `won > 0.25` in a field of three of them.
+
+- **Measurement:** task-4 preset — `score` / `won` / `kills` / `suicides` / `killed_by` /
+  `think_ms` — plus `survived` and `crates`. `won` decides ranking, per `MEASUREMENT.md`.
+
+### Prediction (written before the run)
+
+Naming which number decides, because E25 scored four of six predictions "correct" on an agent
+20 × worse and every one of them was a guard metric.
+
+1. **P1, primary and decisive.** On paired arenas, F4's `killed_by` exceeds R4's by **≥ 0.30 per
+   round**, CI excluding 0. **Refutation:** gap < 0.30 or CI includes 0 → the split above was an
+   artefact of the seed/n mismatch, the rung-4 story is not "threat blindness", and the feature
+   work aimed at anticipating opponents' bombs is aimed at nothing.
+2. **P2, the counter-intuitive half, and the one that redirects effort.** F4's `suicides` is
+   **lower** than R4's, CI excluding 0. **Refutation:** F4 ≥ R4 → escape logic is back on the
+   table and rung 3's §6.4 stands as written.
+3. **P3.** The relative deficit on `won` is larger than on `score`: `won_F/won_R < score_F/score_R`
+   (the unpaired figures give 0.61 vs 0.84). Mechanism: dying at 0.93 deaths/round ends *our*
+   scoring while three opponents keep collecting, so we lose rank faster than we lose points.
+   **Refutation:** the ratios come out equal or inverted → deaths are not costing us rank, and
+   `won` and `score` can be optimised as one target.
+4. **P4, guard.** `think_max_ms` under 5 ms. Rung 4 is the tournament setting and the limit is
+   500 ms on hardware far slower than this one; arm F measured 0.351 ms on rung 3, so anything
+   near the guard means the copy is not the agent I think it is.
+
+I expect F4's score to land within noise of the 2.757 already measured, since the agent is
+byte-identical and only the seed pairing changes. **That is not a prediction, it is a smoke test
+— if F4 comes back materially different from 2.757, the copy or the harness is wrong and no
+other number in this entry may be read.**
+
+---
+
 ## E27 — The reward table was calibrated for a board the agent had to itself
 
 - **Question:** three experiments (E25, E26) concluded that training in an opponent field
