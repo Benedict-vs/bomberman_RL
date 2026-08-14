@@ -626,6 +626,7 @@ def phi(game_state: dict) -> float:
         d = _bfs_distance(x, y, field, lambda p: field[p] == 1)
     return -SHAPE * (d or 0)
 
+
 def _d4_tables() -> tuple[np.ndarray, np.ndarray]:
     """Row and action images under the 8 elements of D4.
 
