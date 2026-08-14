@@ -84,6 +84,89 @@ bar. Beating 0.25 in one step would be a surprise and should be checked for a ha
 before it is believed; the published state of the art on this task is ≈ 5.0 score with a
 335-state table (`scratchpad/survey/REPORT.md`), and we are at 2.822 with 64 000.
 
+### Result — commit a4872b1, 1000 rounds each at validation seed 550731, n = 5 training runs
+
+t-intervals over the five runs (t₀.₉₇₅, df = 4), not per-round bootstrap.
+
+| arm | score | **won** | suicides | killed_by | survived | kills |
+|---|---|---|---|---|---|---|
+| **F** frozen control | 2.890 | 0.178 | 0.403 | 0.519 | 0.078 | 0.119 |
+| **S** folded, untrained | 1.178 | 0.058 | 0.613 | 0.346 | 0.041 | 0.051 |
+| **T @5 000** | **3.625 ± 0.103** | **0.347 ± 0.014** | 0.636 ± 0.045 | 0.087 | 0.277 | 0.211 |
+| **T @10 000** (primary) | 3.323 ± 0.531 | **0.313 ± 0.053** | 0.551 ± 0.117 | 0.058 | 0.391 | 0.188 |
+| **T @20 000** | 2.338 ± 0.546 | 0.205 ± 0.073 | 0.413 ± 0.061 | 0.046 | 0.540 | 0.127 |
+| **TD @5 000** | 1.876 ± 0.860 | 0.155 ± 0.089 | 0.545 | 0.048 | 0.407 | 0.108 |
+| **TD @10 000** | 1.661 ± 0.530 | 0.125 ± 0.056 | 0.480 | 0.070 | 0.449 | 0.108 |
+| **TD @20 000** | 2.131 ± 0.373 | 0.187 ± 0.047 | 0.515 | 0.037 | 0.448 | 0.136 |
+
+**P1 CONFIRMED.** T @10 000 wins 0.313 against F's 0.178, and **every one of the five runs**
+clears it (0.313 / 0.245 / 0.326 / 0.319 / 0.362). **This is the first time the agent beats
+`rule_based_agent`:** the symmetric bar is `won` = 0.25, and in these rounds the three opponents
+score **2.99-3.17** against the 3.77-3.84 they take off arm F. E28's headline — that we are worth
++0.59 to each of them — is not merely fixed but reversed.
+
+**P2 CONFIRMED, and it is the load-bearing number.** Re-running E28's forensic classifier against
+the trained table (`scratchpad/deaths/p2_check.py`, which reproduces E28's 73.4 % exactly on the
+frozen table, so the two are the same object):
+
+| at `t*` | F | T @10 000 |
+|---|---|---|
+| degenerate row — uniform draw over six actions | **73.4 %** | **3.1 %** |
+| trained, every greedy action fatal | 25.9 % | **93.9 %** |
+| deaths per 300 rounds | 282 | **163** |
+
+Threshold was below 40 %. `killed_by` falls 0.519 → 0.058 and non-zero rows grow 2 364 → 3 859.
+**The rows that were killing us are filled, and the failure mode has changed identity** — from
+"empty row, coin flip" to "trained row, confidently wrong". That second category is exactly the
+one the forensic ranked opponent-BFS-distance for (42.9 % within-row lift), and it is now 94 % of
+what remains.
+
+**P5 FAILED, and it is not a technicality.** Suicides at the primary are **0.551** against a 0.442
+guard, and 0.636 at the peak checkpoint — up from F's 0.403, which was *better* than
+`rule_based_agent`'s. **E30 bought its opponent-deaths with own-bomb deaths.** Rung 3 wrote down
+that learning aggression is exactly when an agent forgets to run from its own bomb; this is that,
+measured. The entry is a large win **and** a real regression, and both belong in the report.
+
+**P3 REFUTED.** TD @5 000 wins 0.155 against T @10 000's 0.313 — sharing does not accelerate
+convergence, it retards it.
+
+**P4 passes, but only at 20 000 and confounded.** TD @20 000 (0.187 ± 0.047) overlaps T @20 000
+(0.205 ± 0.073). TD is still climbing where T is collapsing, so the two converge — but arm S
+prices the handicap TD carried: **the folded table scores 1.178 against the frozen table's
+2.890.** Folding *halves* it.
+
+**So my "the group acts exactly on this encoding" claim was wrong, and arm S is what caught it.**
+The group *algebra* is exact — `d4.py --self-test` verifies closure, inverses and injectivity.
+The *feature map* is not equivariant, because `bfs_first_step` breaks distance ties by `DELTAS`
+order, and averaging orbits therefore destroys real information rather than pooling equivalent
+information. This was written down as P4's named risk before the run; the number is worse than I
+expected. **D₄ is now finished in all three of its forms** — refuted as coverage (E29: 279 rows
+of 61 636), refuted as an exact symmetry (arm S: −59 % score), refuted as sample sharing (P3).
+After four deferrals since E14, that question is closed.
+
+**My predicted magnitude was too pessimistic and I pre-committed to checking that.** I wrote
+"0.19 to 0.23 … beating 0.25 in one step would be a surprise and should be checked for a harness
+error before it is believed." It reached 0.313. Checks run: the checkpoints differ from the
+frozen table and from each other; `won` is `score == best`, not a survival proxy, and only 108 of
+333 wins involved surviving the round; `think_max` 3.4 ms with zero steps over the limit; opponent
+scores fall rather than our score being inflated. **The result stands.**
+
+**The shape of the decay matters more than the peak.** From 5 000 to 20 000 episodes `survived`
+rises monotonically 0.277 → 0.391 → 0.540 while `score` falls 3.625 → 2.338 and `kills` falls
+0.211 → 0.127. **The agent is converging on a passive survival policy**, and seed variance grows
+with it (`won` ± 0.014 at 5 000, ± 0.073 at 20 000). With `GOT_KILLED` at −5 against a −0.1 step
+cost, not dying dominates the return — the earnings/cost argument from E27, now on the death
+penalty rather than the crate reward.
+
+- **Verdict: E30 SUCCEEDED on its primary and failed its guard.** First agent to beat
+  `rule_based_agent`; first entry where training beat the frozen table on any rung above 2.
+- **Next.** (a) The remaining deaths are 94 % trained-but-fatal — the forensic's C3 (opponent BFS
+  distance, ×4 rows) now has a clean target and a measured lift, and coverage is no longer the
+  binding constraint that argued against it. (b) The passivity gradient is a reward-balance
+  question: `GOT_KILLED` −5 against `STEP_COST` −0.1. (c) Selection discipline — 5 000 was chosen
+  *after* seeing validation numbers, so whatever ships must be confirmed at ship seed 990731
+  before any number is quoted.
+
 ---
 
 ## E29 (stage 1) — Coverage, not features: fold the table by its symmetry group
