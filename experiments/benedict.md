@@ -21,6 +21,90 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E32 — Withdrawn before it ran, and replaced
+
+**The design below was written, verified by an audit (`scratchpad/audit5/`), and abandoned. It
+was never run.** Kept because the reasons it was wrong are worth more than the entry would have
+been, and because the audit found a ceiling in the process.
+
+**Why it was withdrawn**, in the order that matters:
+
+1. **The control does not replicate (audit 5, R0).** E31's `suicides` = 0.690 is bimodal on the
+   argmax of a single row (55060); two independent re-runs of the identical configuration give
+   0.500 / 0.533 with zero overlap. E32 planned to measure both arms against that number. See the
+   correction block in E31.
+2. **Both levels were past saturation (R1).** Measured flip threshold over 83 fatal cells: median
+   Δ = **1.08**, p90 = 5.17. `KILLED_SELF` at −10 and at −25 flip the *same* 90.4 % of cells. P3
+   was written to read "K30 ≈ K15 on suicides" as *non-response*; it would in fact have been
+   *saturation*, so a likely outcome was pre-registered to be interpreted backwards.
+3. **A probe ran the arms and the middle dose is catastrophic.** 3 arms × 2 seeds × 20 000
+   episodes against a *contemporaneous* control: K15 score **−1.240 [−1.490, −0.990]**, `won`
+   **−0.160 [−0.210, −0.110]**, collapsing on both seeds into bomb-spam-and-hide (crates/bomb
+   1.02 → 0.71). K30 was roughly neutral. **I pre-committed to K15 as the good arm at `won`
+   0.36-0.40; it measured 0.245**, tripping my own P2 refutation. The dose-response is
+   non-monotone with the *middle* dose breaking, and `suicides` — the primary — ranks the
+   catastrophic arm as the better one.
+4. **The motivation does not hold (R3).** Across the 15 existing E31 evaluations (suicides
+   0.49-0.74), `won ~ suicides` has slope **+0.038 [−0.054, +0.143]** and `score ~ suicides`
+   −0.180 [−0.594, +0.181] — no relationship either way. Forcing the single-cell flip directly
+   gives suicides −0.116 (significant) with score −0.124 and `won` −0.027 (both n.s.). And
+   `rule_based_agent` suicides **0.533** in its own field. **A lower suicide rate is not
+   demonstrably worth anything**; E30's P5 and E31's P4 may both be mis-specified guards rather
+   than agent defects.
+5. **My arithmetic was wrong twice.** A death does not cost 5: the terminal update supplies no
+   bootstrap, so it forfeits `V ≈ 5.98` as well — ≈ **11**. And a suicide's terminal reward is
+   **−4.33**, not −5, because `update_bombs()` credits the killing bomb's crates *before*
+   `evaluate_explosions()` kills the agent — 3.7 % of suicides are net **positive**.
+6. **One thing I got right, recorded because the audit expected otherwise.** It predicted the
+   penalty would ratchet the argmax the way the step cost did. Measured visit-weighted gap at
+   20 000: ctl 2.218, K15 2.391, K30 **2.734** — it *widens*. A death penalty is action-*dependent*,
+   so audit 4's ratchet argument does not apply, exactly as P4 argued a priori.
+
+### What the audit found instead — a measured ceiling
+
+**35.4 % of all deaths are one `(row, action)` pair.** Row 55060: in danger, escape digit says
+`UP`, the table prefers `DOWN` by **0.055** out of Q ≈ 7.9. Replaying the opponents' recorded
+moves, `cf_k = 1` for all 74 and the unique surviving action is `UP` — **the direction digit 6
+already reports.** The 5 k → 20 k regression is one near-tie flipping in an upstream row (59160,
+greedy goes `RIGHT` → `DOWN` by 0.079 on 4/5 seeds), routing **17.8×** more traffic into 55060.
+
+Forcing the argmax to equal the table's **own** escape digit whenever `own_danger > 0` — 200 rows,
+17.4 % of steps, **zero training** — pooled over 3 seeds × 300 paired arenas:
+
+| | E31 | argmax forced to digit 6 |
+|---|---|---|
+| score | 3.827 | **4.432** (+0.606 [+0.362, +0.847]) |
+| won | 0.390 | **0.448** (+0.058 [+0.014, +0.100]) |
+| suicides | 0.677 | **0.304** |
+| survived | 0.274 | **0.647** |
+
+Not shippable — it is a rule, and `AGENTS.md` forbids a feature that returns the best action — but
+it **bounds what is available from the information the agent already has**, and it exceeds every
+number E32 pre-committed to.
+
+Two further measured facts for whatever comes next: **49.3 % of deaths are "chose a safe tile, an
+opponent took it"**, which `NB_CLEAR` structurally cannot express; and **7.5 bombs per round are
+placed with `bomb_useful = 0`** — 26 % waste, never costed.
+
+### Carried forward
+
+1. **A contemporaneous control and `--seed` in every launcher.** Nothing downstream is
+   interpretable until the control is re-established; the arena RNG has never been set.
+2. **The escape-follow decision is the lever, not the price.** A dense `FOLLOWED_ESCAPE` /
+   `IGNORED_ESCAPE` event while `own_danger > 0` is the learnable form of the ceiling above; the
+   visit-weighted gap to overcome is measured at **1.59-1.78**, which sets the sweep. **This needs
+   an explicit argument in the report** — rewarding agreement with a hand-computed direction is
+   shaping, not a policy feature, but it is close enough to the line that it must be defended
+   rather than slipped in.
+3. **One appended binary digit: "digit 6's target tile is adjacent to an opponent"** (64 000 →
+   128 000 rows, `warm_start` valid at factor 2). The 49.3 % category, which no existing candidate
+   digit encodes.
+4. **If the price question is revisited:** drop the middle dose, sweep small (Δ ≈ 1-3), pair every
+   arm with a contemporaneous control, and add a **placebo arm** (e.g. `BM_COIN` 5 → 7) —
+   otherwise "price" and "any perturbation ≥ 1 Q-unit" are not separable by the design.
+
+---
+
 ## E31 — The step cost is not a cost, it is a ratchet on the argmax
 
 - **Question:** E30 peaks at 5 000 episodes and decays monotonically to 20 000. I proposed two
@@ -147,6 +231,27 @@ cost was not merely eroding the margin over training, it was suppressing it from
 The 17.4 % residual is most likely audit 4's H2, which is already written down with a falsifier:
 the feature map is phase-blind, `corr(Q, G) = 0.25`, so V averages the crate-rich opening with the
 barren endgame and there is little true gap to defend. That is the pre-registered follow-up.
+
+> **Correction, 2026-08-15 (audit 5, `scratchpad/audit5/`). The suicide number below is not
+> established, and neither is the "world seed 810731" in E30's design.**
+>
+> 1. **No training run in E30, E31 or E32 was ever arena-seeded.** Neither launcher passes
+>    `--seed`, so `main.py` never reset the world RNG. E30's "World seed 810731" and my statement
+>    that "all five runs share one arena sequence" are both false: every run saw different arenas.
+>    (This cuts in our favour on one point — the n = 5 t-intervals *do* cover arena variance, where
+>    I claimed they did not — and against us on reproducibility, which is nil.)
+> 2. **The suicide rate is bimodal on a single Q-cell.** Audit 5 re-ran this exact configuration
+>    on two fresh seeds: identical warm-start parent (same md5), identical logged hyperparameters,
+>    only `EXPERIMENT` differing. It reproduced ep5000 to three digits (gap 2.727 vs 2.728,
+>    suicides 0.513 vs 0.508) and then landed at **suicides 0.500 / 0.533 and survived 0.480 /
+>    0.407**, against these five runs' 0.587-0.747 and 0.197-0.363 — **zero overlap**. The
+>    mechanism is one row: in **55060** all five runs here are greedy-`DOWN`, both replications are
+>    greedy-`UP` (verified directly; margins 0.055 to 1.71, so it is a real bifurcation, not a
+>    float tie). The *training* curves are indistinguishable — the split only appears at ε = 0.
+>
+> So P4's failure below may be a property of these five runs rather than of the reward table, and
+> **anything comparing arms against it needs a contemporaneous control.** Score and `won` look
+> stable across the replications; `suicides` and `survived` do not.
 
 **P4 FAILED, and this is now the same guard failing twice running.** Suicides at 20 000 are
 **0.690** against the 0.636 threshold — and they *rise* with training (0.508 → 0.642 → 0.690)
