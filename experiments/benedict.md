@@ -21,6 +21,112 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E36 — The map is blind exactly where it dies, and the fix costs zero rows
+
+- **Question:** rung-4 optimisation stopped after E33, E34 and E35 all failed. An audit
+  commissioned to **break** that decision (`scratchpad/audit7/`) broke it, and the hole is one I
+  should have seen: **none of the five failed interventions changed the feature map.** E19, E32,
+  E33 moved the reward; E34 the initial condition; E35 a price. The last feature change was E26,
+  on rung 3, and it was worth **+1.595 score**.
+
+  E28 ranked the one surviving feature candidate — opponent BFS distance — and deferred it
+  explicitly: *"comes **after** coverage, never alone… every new digit makes coverage worse."*
+  **That condition expired at E30 and nobody re-checked it.** Measured share of ε = 0 alive steps
+  landing in an all-zero row: **0.026** on E28's solo-trained table, **0.0001** on the shipped
+  rung-4 table (4 steps in 46 424). Coverage is solved.
+
+- **The structural finding, verified directly in `callbacks.py` and by row count.** In
+  `state_to_features`, when `own_danger > 0` the escape branch overwrites digit 6 **and pins
+  digit 8 to `DIST_NONE`**:
+
+  ```python
+  if own_danger and ABLATE != "escape":
+      target = escape_direction(x, y, field, danger, occupied)
+      target_dist = DIST_NONE
+  ```
+
+  So digit 8 is 0 on **every** danger step — 43.9 % of all steps, and where essentially 100 % of
+  deaths occur — and **40 960 of 64 000 rows (64.0 %) are structurally unreachable.** In the rows
+  where the agent dies, the state carries **no opponent information at all**, and a whole digit
+  sits idle.
+
+- **The variable that is missing is opponent proximity, measured three ways** (audit 7, and the
+  first two re-verified here):
+
+  1. **Deaths.** At the last step before death, the nearest opponent is at BFS ≤ 2 in **93.3 %** of
+     cases, against a base rate of 15.3 % — a **6.1× lift**. 94 % of those are *own-bomb* deaths.
+  2. **The decisive row is a mixture, not a fixed point.** Row 55060 — the row audit 6's whole
+     "second Bellman fixed point" diagnosis rested on, and which I built E34 on — takes 809 visits
+     that split **148 / 354 / 301** across opponent bands, with **zero deaths in the 655 far
+     visits** and 36.5 % fatality in the near ones (permutation p < 1e-4). Pooled over 41 rows:
+     observed 39.81 against a null of 3.68 ± 0.79, p < 0.0005, and **58.5 % of the death mass sits
+     in rows the digit separates at p < 0.05.**
+  3. **It changes what the escape is worth.** Audit 7 re-ran the ceiling rule restricted to each
+     half (n = 1000, validation seed, paired). Score gained per death avoided: **far 1.10, near
+     0.28.** `far − ctl` score **+0.418 [+0.178, +0.660]**; `near − ctl` +0.102, not demonstrated.
+
+  **This refines E33's headline negative rather than contradicting it.** E33 concluded "survival is
+  not worth points on this board" — measured *conditionally*, survival bought in the far sub-state
+  is worth four times what it is worth in the near one. **E33's conclusion was an average over an
+  interaction the feature map hides**, which is exactly why paying for the escape everywhere (E33)
+  and forcing it everywhere (E34) both installed the behaviour and lost the benefit.
+
+  **So "a second Bellman fixed point" was the wrong diagnosis** — mine, carried from audit 6 and
+  quoted as the headline of E34. The row is not one state Q-learning priced correctly at 5.1 %
+  death; it is a 0 %-fatal sub-state glued to a 36 %-fatal one, and the fixed point is the average
+  of two states that want different actions. **Aliasing, not a competing optimum.**
+
+- **Change: one line, and it costs zero new rows.** `BM_OPPDIST` (default 0). When on, the
+  `own_danger` branch sets `target_dist` to a bucketed opponent BFS distance
+  {0 none/unreachable, 1 ≤ 2, 2 3-5, 3 ≥ 6} instead of `DIST_NONE`. **`FEATURE_SIZES` is
+  untouched** — 64 000 rows either way — because the digit is already there and idle. The shipped
+  table stays a valid **factor-1** warm-start parent; the 1 131 valued danger rows are broadcast
+  into their four siblings, and the 820 danger rows holding stale pre-E20 `d8 > 0` values are
+  overwritten, not preserved. Measured cost of the extra BFS: **0.028 ms mean, 0.220 ms max**
+  against a 500 ms budget.
+
+  **This is precisely the move that won rung 3.** E26 gave an idle digit a meaning and bought
+  +1.595. It also answers the survey's "reduction beats richness" caution head-on: information
+  added at **zero** state-space cost.
+
+- **Design.** 3 arms × 5 seeds, `BM_RUN_INDEX` **100-104** (paired at run level with the E33
+  control; `--seed 810731`), 20 000 episodes, checkpoints 5 000 / 10 000 / 20 000, E33 ctl config
+  verbatim. `ctl` is E33 ctl, already measured. **`PLB` is a placebo carrying an information-free
+  bucket of matched marginals** (`(x+y) mod 4`) — not optional here, because filling 40 960
+  previously-dead rows is itself a perturbation.
+- **Measurement:** 1000 rounds, ε = 0, validation seed 550731, n = 5, reported at @20 000.
+
+### Prediction (written before the run)
+
+1. **P1, primary.** `OPP`'s `won` at 20 000 beats the control's **0.372**, paired t-CI over the
+   five runs excluding 0. **Magnitude 0.395-0.430** (score 3.95-4.25), derived from the far-rule's
+   +0.418 score / +0.040 `won` measured on a table that never trained with the split.
+   **Refutation:** CI includes 0 → the conditional policy is not learnable even once it is
+   *expressible*, the representation premise is then properly tested for the first time, and the
+   stop is justified on evidence rather than on an untested inference.
+2. **P2, mechanism.** Escape-follow rate measured **separately in the near and far sub-row
+   families** (control: 0.634 in both, by construction). **Prediction: follow(far) − follow(near)
+   ≥ 0.15.** **Refutation:** |difference| < 0.05 → the split is unused and P1, if positive, is
+   something else.
+3. **P3, coverage guard — the condition that deferred this feature in the first place.** Share of
+   ε = 0 alive steps in an all-zero row stays **< 0.01** (shipped 0.0001; E28's solo table 0.026).
+   **Refutation:** ≥ 0.01 → the information was bought at a coverage cost and E28/E29's warning
+   applies after all.
+4. **P4, guards.** `crates` ≥ **31.0** — the measured failure mode of every escape intervention so
+   far (E33 30.81, E34 29.86). `think_max_ms` < 5 ms.
+5. **P5, placebo, declared now.** If `PLB` moves `won` by more than **half** of `OPP`'s move, the
+   entry is **inconclusive by construction**.
+
+**Pre-committed magnitude:** `OPP` `won` **0.395-0.430**, follow-rate split ≥ 0.15, crates ≥ 31.0.
+**Audit 7 flags the weak point in its own evidence and I am carrying it forward rather than hiding
+it:** `far − near` is established on `score` (+0.316 [+0.079, +0.545]) but only **at the boundary on
+`won` (+0.040 [−0.002, +0.082])**. `won` is still the primary, because switching to `score` now —
+the metric the effect is strongest on — would be choosing the measure after seeing which one moved.
+
+**Cost: 10 new runs, ~2.5 h, one of roughly 30 sweeps the remaining five weeks allow.**
+
+---
+
 ## E35 — Thirty per cent of our score comes from an event priced at zero
 
 - **Question:** `score = coins + 5·kills`, exactly (2.613 + 5 × 0.221 = 3.719). **Kills are 30 % of
@@ -90,6 +196,69 @@ whole point of including it.
 escape-ceiling line is closed. **If E35 also fails P1, rung-4 optimisation stops** — 3.719 / 0.372
 against a measured 0.283 bar already beats the reference, and five pre-registered negatives plus
 the second-fixed-point diagnosis is a better Experiments chapter than a sixth attempt.
+
+---
+
+### Result — 1000 rounds at validation seed 550731, n = 5 runs, paired to the E33 control
+
+| arm @20 000 | score | **won** | **kills** | coins | crates | suicides |
+|---|---|---|---|---|---|---|
+| **ctl** (E33) | 3.719 ± 0.055 | 0.372 ± 0.009 | 0.221 ± 0.016 | 2.61 | 32.13 | 0.616 |
+| **K5** (`BM_KILL=5`) | 3.707 ± 0.179 | 0.367 ± 0.045 | 0.216 ± 0.023 | 2.63 | 32.20 | 0.653 |
+| **K25** (`BM_KILL=25`) | 3.713 ± 0.109 | 0.359 ± 0.024 | 0.219 ± 0.014 | 2.62 | 32.17 | 0.651 |
+| **PLB** (placebo) | 3.697 ± 0.087 | 0.368 ± 0.021 | 0.218 ± 0.013 | 2.61 | 32.06 | 0.702 |
+
+Paired against the control, every arm on every metric: **`won` −0.005 / −0.013 / −0.004,
+`score` −0.012 / −0.006 / −0.021, `kills` −0.005 / −0.002 / −0.003.** Not one CI excludes 0.
+**Nothing moved.**
+
+**P3 PASSES, and it is read first by design.** The placebo moved `won` by −0.0044 against K25's
+−0.0130 — a ratio of **0.338**, inside the 0.5 threshold. So the design is *not* inconclusive and
+the rest of the numbers may be interpreted. (Reading P1 first and the placebo second is how one
+argues past a placebo; the order was fixed in advance.)
+
+**P1 REFUTED.** K25's `won` is −0.013 [−0.044, +0.018].
+
+**P2 REFUTED — and this is the entry's content.** `kills` moved by −0.002. **Paying 25 per kill,
+five times the price of a coin, changed kill behaviour by nothing.**
+
+**The reward demonstrably reached the learner**, so this is not a plumbing failure. Training reward
+over the last 500 episodes: **ctl 26.82 → K25 31.31**, of which 3.59 is kill income. **A 17 %
+increase in total reward, concentrated entirely on kills, produced no change in the policy.**
+
+**The mechanism is the one P2's refutation clause named in advance.** The only action that can
+produce a kill is `BOMB`, and **digit 7 is a single bit that fires for "a bomb here opens a crate"
+*or* "a bomb here catches an opponent"** (the E26 HUNT change merged them). So the agent has no
+representation in which "bomb for a kill" and "bomb for a crate" are different decisions. **The
+price cannot be paid to a decision the state cannot express.**
+
+> **Correction, 2026-08-16 (audit 7).** I first wrote that digit-7 rows "are dominated ~145:1 by
+> crate opportunities (32.2 crates against 0.22 kills per round)". **That ratio is computed from
+> *outcomes*, and it is the wrong quantity** — what determines whether a price can change a policy
+> is how often the *state* occurs. Measured over 46 424 instrumented steps: of the 16.0 % of steps
+> where digit 7 = 1, **58.5 % are crate-only and 35.9 % are opponent-only — 1.63 : 1, not 145 : 1**
+> (verified independently). The conflation is real and the refutation of P2 stands; the reason I
+> gave for it being unfixable was wrong by ~90×, and it made a splittable digit look hopeless.
+> That is E37 in the queue, and it is E35's own refutation clause taken literally: *"the answer is
+> a feature, not a price."*
+
+- **Verdict: E35 FAILED its primary, with the placebo clean.** Not a failure of the reward — a
+  failure of the *representation* to carry the distinction the reward is about.
+- **The stopping rule fired, and was then reversed on evidence — see E36.** E33, E34 and E35 all
+  failed their primaries, so rung-4 optimisation stopped as pre-registered. An audit commissioned
+  to *break* that decision (`scratchpad/audit7/`) broke it: **not one of the five failed
+  interventions changed the feature map**, and the condition that deferred the one ranked feature
+  candidate (E28's coverage gate) expired at E30 and was never re-checked. The stop rested on an
+  untested premise. **The shipped agent stands at score 3.719 / `won` 0.372** against a measured
+  symmetric bar of 0.283 and `rule_based_agent`'s 3.254 / 0.286, and remains what ships unless E36
+  beats it.
+- **What the three negatives establish together**, which is the Experiments chapter rather than a
+  footnote: the +0.68 escape ceiling is unreachable by reward (E19, E32, E33) *or* by initial
+  conditions (E34), because the table has converged to a second Bellman fixed point that unforced
+  learning independently re-derives (26.3 % agreement in danger rows learned from scratch); and the
+  one large aligned reward channel left, kills, cannot be spent because one bit of the feature map
+  conflates it with crates. **Both remaining routes are blocked by the eight-digit representation,
+  not by the learning rule or the reward.**
 
 ---
 
