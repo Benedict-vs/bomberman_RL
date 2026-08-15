@@ -21,6 +21,78 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E35 — Thirty per cent of our score comes from an event priced at zero
+
+- **Question:** `score = coins + 5·kills`, exactly (2.613 + 5 × 0.221 = 3.719). **Kills are 30 % of
+  our score and `KILLED_OPPONENT` has been priced `0.0` in every rung-4 run** — an uncorrected
+  script error of mine since E30, visible in every `.meta.json`. `train.py:234-236` argues in a
+  comment that it should not be, and nobody acted.
+
+  It has also never been tested under a *healthy* configuration. E26 arm H used `BM_KILL=25` with
+  `STEP_COST=−0.1` and `CRATE=0.3` — precisely the setting E27 measured at earn/cost 0.70 and E31
+  showed ratchets the argmax. `STEP_COST` has been 0 since E31.
+
+  And the headroom is where kills are, not where coins are. `COIN_COUNT = 9` (`settings.py:28`),
+  so the fair share is 2.25 and **we already take 2.613** — coin headroom is thin. Meanwhile
+  **1.847 opponent deaths per round occur in our field and we are credited with 0.221 (12 %)**;
+  ~82 % are their own suicides, so the pool is not free, but it is the only channel with 5×
+  leverage. The ceiling arm reached its +0.68 as ⅓ coins and **⅔ kills**.
+
+- **Change:** `BM_KILL`, and in one arm `BM_COIN`. Nothing else.
+
+- **Design.** 5 seeds, `BM_RUN_INDEX` **100-104** — the same indices as the E33 control, so with
+  `--seed 810731` the arenas and the exploration stream match and the comparison is **paired at the
+  run level**. 20 000 episodes, checkpoints 5 000 / 10 000 / 20 000, otherwise E33 ctl verbatim.
+  Control is E33 ctl, already measured (score 3.719, `won` 0.372, kills 0.221).
+
+  | arm | change | rationale |
+  |---|---|---|
+  | **K5** | `BM_KILL=5` | one coin's worth at this table's scale |
+  | **K25** | `BM_KILL=25` | the game's own 5:1 kill:coin ratio, given `BM_COIN=5` |
+  | **PLB** | `BM_COIN` 5 → 7, `BM_KILL=0` | **placebo** — comparable Q-magnitude, no kill information |
+
+  **The placebo is E32's carried-forward requirement #4, never honoured.** Without it, "pricing
+  kills" and "any perturbation of a few Q-units" are not separable by this design, and E32 was
+  withdrawn partly for that. **The middle dose is deliberately omitted** — E32's other instruction,
+  after its middle dose was the one that collapsed.
+
+- **Measurement:** 1000 rounds, ε = 0, `BM_TIE_TOL=0.0`, validation seed 550731, n = 5 runs,
+  reported at @20 000.
+
+### Prediction (written before the run)
+
+1. **P1, primary.** K25's `won` at 20 000 beats the control's **0.372**, t-CI over the five runs
+   excluding 0. **Magnitude: K25 0.39-0.43, K5 0.375-0.40.** `won` stays the primary because
+   `MEASUREMENT.md` makes it the rung-4 ranking metric and E30-E34 all used it; switching to
+   `score` now — the metric kills feed most directly — would be choosing the measure after knowing
+   the mechanism.
+2. **P2, mechanism.** `kills` is monotone in `BM_KILL`, **K25 in 0.30-0.42** (from 0.221). The
+   bound is not arbitrary: 1.847 opponent deaths/round exist, we take 12 %, and ~82 % are their own
+   suicides, so cheap conversion tops out near 0.35-0.45, nowhere near 1.8. **Refutation:** neither
+   arm raises `kills` by ≥ 0.05 with a CI excluding 0 → the agent cannot convert a kill price into
+   kills on these digits — digit 7 shares one bit between "a bomb here opens a crate" and "a bomb
+   here catches an opponent" — and the answer is a feature, not a price.
+3. **P3, the placebo, which is what makes this an experiment.** If PLB moves `won` by more than
+   **half** of K25's move, the design cannot attribute the gain and **the entry is inconclusive by
+   construction** — declared now, not after seeing it.
+4. **P4, guard.** `crates` ≥ **30.0** (control 32.13) and `won` ≥ 0.34. The predicted failure mode
+   is bomb-chasing: an agent paid 25 for a kill may abandon crates to hunt. **`suicides` is not a
+   guard** — E33 falsified it by intervention and E30's P5 / E31's P4 are both retired.
+5. **P5.** `think_max_ms` unchanged (~0.5 ms against the 500 ms limit), recorded because
+   `AGENTS.md` says always watch it.
+
+**Pre-committed magnitude.** K25 `won` **0.39-0.43** with `kills` 0.30-0.42; K5 `won`
+**0.375-0.40**; PLB within noise of the control. **If K25 beats the control but PLB moves nearly as
+much, I will report the entry as inconclusive** rather than claim the kill price — that is the
+whole point of including it.
+
+**Stopping rule, stated before the result.** E33 and E34 both failed their primaries, and the
+escape-ceiling line is closed. **If E35 also fails P1, rung-4 optimisation stops** — 3.719 / 0.372
+against a measured 0.283 bar already beats the reference, and five pre-registered negatives plus
+the second-fixed-point diagnosis is a better Experiments chapter than a sixth attempt.
+
+---
+
 ## E34 — Is the ceiling a *reachable* fixed point?
 
 - **Question:** four attacks on the escape gap have failed — E19 (potential-based shaping, −9.17
