@@ -88,31 +88,6 @@ if ABLATE not in ("", "escape", "crate_target", "danger", "bomb_digit", "target_
         "silently train the full agent under an arm's label -- fail instead."
     )
 
-ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
-
-# (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
-DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
-
-# Digits 1-4, one per direction. Ordered so a larger value is never a worse tile
-# to step onto, which makes a printed row readable without decoding it.
-NB_BLOCKED = 0      # wall, crate, bomb or other agent -- invalid move
-NB_LETHAL = 1       # free, but blast lands here at the end of the step
-NB_IN_BLAST = 2     # free and survivable this step, but a live bomb covers it
-NB_CLEAR = 3        # free and outside every blast
-
-# Digit 6: 0 = nothing reachable, 1..4 = ACTIONS[0..3].
-NO_TARGET = 0
-
-# 'danger' entry for a tile no bomb reaches.
-SAFE = s.BOMB_TIMER + 1
-
-# 4 neighbour states + steps of grace on my own tile + target direction
-# + a bomb here would pay off + how far the target is
-FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2, 5)
-N_STATES = int(np.prod(FEATURE_SIZES))
-
-POLICY_SEED = 20260731
-
 # How close two actions must be to count as tied in `act`. 0.0 reproduces every
 # measurement up to E22 exactly. Set as an environment switch rather than an
 # edited constant so the default in the tournament is the value in this file.
@@ -144,6 +119,51 @@ HUNT = os.environ.get("BM_HUNT", "1") not in ("", "0")
 # distribution*, which is the precondition for folding the table by its symmetry
 # group. Default off, so the shipped agent is unchanged until this is measured.
 TIEBREAK_UNIFORM = os.environ.get("BM_TIEBREAK", "0") not in ("", "0")
+
+# E36: digit 8 is idle in the escape branch -- it has no "target distance", so
+# every danger row pinned it to DIST_NONE and 40 960 of 64 000 rows became
+# structurally unreachable. That is 43.9 % of all steps and essentially 100 % of
+# deaths, spent in rows carrying no opponent information at all.
+#
+# Audit 7 measured what that hides: at the last step before a death the nearest
+# opponent is within BFS 2 in 93.3 % of cases against a 15.3 % base rate, and row
+# 55060 -- the row E34 was built on -- takes 809 visits that are 36.5 % fatal
+# when an opponent is near and 0 % fatal across 655 far visits. That row is an
+# alias for two states wanting different actions, not the competing optimum E34
+# assumed.
+#
+# Giving the idle digit the opponent bucket costs NO new rows: FEATURE_SIZES is
+# unchanged and the shipped table stays a factor-1 warm-start parent. Same move
+# as E26, which gave an idle digit a meaning and bought +1.595 score.
+OPPDIST = os.environ.get("BM_OPPDIST", "0") not in ("", "0")
+OPPDIST_PLB = os.environ.get("BM_OPPDIST_PLB", "0") not in ("", "0")
+
+
+ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+
+# (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
+DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
+
+# Digits 1-4, one per direction. Ordered so a larger value is never a worse tile
+# to step onto, which makes a printed row readable without decoding it.
+NB_BLOCKED = 0      # wall, crate, bomb or other agent -- invalid move
+NB_LETHAL = 1       # free, but blast lands here at the end of the step
+NB_IN_BLAST = 2     # free and survivable this step, but a live bomb covers it
+NB_CLEAR = 3        # free and outside every blast
+
+# Digit 6: 0 = nothing reachable, 1..4 = ACTIONS[0..3].
+NO_TARGET = 0
+
+# 'danger' entry for a tile no bomb reaches.
+SAFE = s.BOMB_TIMER + 1
+
+# 4 neighbour states + steps of grace on my own tile + target direction
+# + a bomb here would pay off + how far the target is
+FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2, 5)
+N_STATES = int(np.prod(FEATURE_SIZES))
+
+POLICY_SEED = 20260731
+
 _BFS_RNG = np.random.default_rng(POLICY_SEED)
 
 
@@ -387,6 +407,25 @@ def distance_bucket(distance: int) -> int:
     return 4
 
 
+def opponent_bucket(x: int, y: int, field: np.ndarray, others: list) -> int:
+    """0 = none or unreachable, 1 = within 2 tiles, 2 = 3-5, 3 = 6 or more.
+
+    Deliberately coarse, and deliberately *not* a direction: this says how much
+    trouble is nearby, not what to do about it. Digit 6 already carries the way
+    out; the agent still has to learn that the way out is worth more when
+    somebody is close enough to contest the tile.
+
+    Measured at 0.028 ms mean / 0.220 ms max against a 500 ms budget.
+    """
+    if not others:
+        return 0
+    other_set = set(others)
+    _, distance = bfs_first_step(x, y, field, lambda pos: pos in other_set)
+    if not distance:
+        return 0
+    return 1 if distance <= 2 else 2 if distance <= 5 else 3
+
+
 def state_to_features(game_state: dict) -> int:
     """Map a game state onto a row index of the Q-table."""
 
@@ -424,10 +463,17 @@ def state_to_features(game_state: dict) -> int:
     # a coin four tiles away is irrelevant if the agent is dead in three.
     if own_danger and ABLATE != "escape":
         target = escape_direction(x, y, field, danger, occupied)
-        # E20: digit 8 is the *target* distance, and there is no target here.
-        # Digit 5 already carries the scarce resource while escaping.
-        target_dist = DIST_NONE
-    else:
+        # E20 pinned this to DIST_NONE because the escape branch has no target
+        # distance. E36 measured that 64 % of the table was unreachable as a
+        # result, and gives the idle digit the one variable that separates the
+        # fatal danger rows from the safe ones.
+        if OPPDIST:
+            target_dist = opponent_bucket(x, y, field, others)
+        elif OPPDIST_PLB:
+            target_dist = (x + y) % 4      # placebo: matched arity, no opponent info
+        else:
+            target_dist = DIST_NONE
+    else:                                                    # <-- restore these three lines
         target, distance = target_direction(x, y, field, game_state['coins'], others)
         target_dist = distance_bucket(distance)
 
