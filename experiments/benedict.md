@@ -105,6 +105,75 @@ land in the **mixed** band, i.e. tie-breaking is worth something real but not mo
 
 ---
 
+### Result — 1000 rounds at validation seed 550731, n = 5 runs (100-104), first arena-seeded sweep
+
+| @20 000 | score | **won** | suicides | survived | crates | **follow rate** |
+|---|---|---|---|---|---|---|
+| **ctl** | 3.719 ± 0.055 | **0.372 ± 0.009** | 0.616 | 0.333 | 32.13 | 0.634 |
+| F005 | 3.702 ± 0.069 | 0.368 ± 0.011 | 0.568 | 0.384 | 32.22 | 0.671 |
+| F020 | 3.717 ± 0.155 | 0.368 ± 0.025 | 0.613 | 0.344 | 31.62 | 0.692 |
+| F080 | 3.523 ± 0.707 | 0.344 ± 0.076 | **0.496** | **0.451** | **30.81** | **0.872** |
+| *ceiling (rule, not an arm)* | *4.399 ± 0.060* | *0.442 ± 0.010* | *0.292* | *0.660* | *34.15* | *1.000* |
+
+**P2 CONFIRMED.** The follow rate rises monotonically 0.634 → 0.872 and clears 0.85 at F080.
+**The intervention did exactly what it was designed to do.**
+
+**P1 REFUTED.** `G(0.05) = −0.004`, `G(0.20) = −0.004`, `G(0.80) = −0.028`. No arm beats the
+contemporaneous control.
+
+**P3 is INAPPLICABLE, not "mixed".** Its ratio test presupposes `G(0.80) > 0`; every `G` is ≤ 0,
+so the split cannot be evaluated. Recorded as written rather than reinterpreted to fit a sign it
+did not anticipate.
+
+**P4 passes** (nothing near the ceiling). **P5:** the control's suicides are **0.616**, inside the
+pre-registered [0.45, 0.75] and *between* E31's 0.690 and audit 5's 0.500/0.533 — so the
+bimodality is bounded but not resolved. The control otherwise **replicates E31** (`won` 0.372 vs
+0.378, score 3.719 vs 3.813, flat 5 k → 20 k), so E31's headline survives arena seeding.
+
+### The result is a negative one, and it is worth more than the arm
+
+**Suicides were manipulated, not observed, and `won` did not follow.** Suicides 0.616 → 0.496 and
+survival 0.333 → 0.451 while `won` *fell* 0.372 → 0.344. Audit 5's R3 argued from a correlation
+(`won ~ suicides` slope +0.038 [−0.054, +0.143]); this is the intervention. **Survival is not
+worth points on this board**, now shown three ways: E30 went passive and lost, E31 went reckless
+and won, E33 was made safe deliberately and gained nothing.
+
+**So the guard that "failed" in E30 (P5) and E31 (P4) was measuring something that does not
+matter.** Both should be read as mis-specified guards, not agent defects. `rule_based_agent`
+suiciding 0.533 in its own field was the tell and I did not take it.
+
+### Why the rule works and the shaping does not — and the mistake was mine
+
+Re-running audit 5's ceiling on **E33's own control** reproduces it exactly: **+0.680 score
+[+0.611, +0.749], +0.070 won [+0.057, +0.083]**, five seeds out of five, against audit 5's
++0.606/+0.058 on different tables. So the ceiling is real and is not seed-specific.
+
+**The discriminating number is `crates`.** The rule *raises* them 32.13 → 34.15; the shaping
+*lowers* them 32.13 → 30.81, at nearly the same follow rate. The rule is applied at evaluation to
+a table trained without it, so the agent keeps its bombing policy intact and only its escapes
+improve — it bombs identically and lives longer, so it clears more crates. The shaping is applied
+during **training**, so the agent learns that following digit 6 pays and takes escape steps in
+states where it should be bombing.
+
+**`AGENTS.md` states the reason outright: "Potential-based shaping (Ng et al. 1999) depends on
+*states*, not actions."** `FOLLOWED_ESCAPE`/`IGNORED_ESCAPE` is conditioned on the **action
+taken**, so it is not potential-based and it therefore *changes the optimal policy* — that is the
+theorem, not a side effect. The crate loss is precisely what it predicts. I designed the arm
+anyway, and the audit that checked the design did not catch it either.
+
+- **Verdict: E33 FAILED its primary and is a clean negative result** — the causal chain was
+  verified end to end and the outcome did not move. Both `BM_ESCAPE` and the suicide guard are
+  retired.
+- **E34 is the correct instrument, and it is already half-built.** Potential-based shaping,
+  Φ(s) = −distance to safety while `own_danger > 0`. Provably policy-invariant, so it cannot cost
+  crates the way this did, and `train.py` already carries `BM_SHAPE` and a `phi()` that is
+  documented as "deliberately the safe branch only" — the danger branch is exactly what is
+  missing. **Falsifier:** if potential-based shaping also fails to close the gap to the ceiling,
+  then the gap is not learnable from these eight digits and the answer is a feature (the 49.3 %
+  "an opponent took my escape tile" category) rather than a reward.
+
+---
+
 ## E32 — Withdrawn before it ran, and replaced
 
 **The design below was written, verified by an audit (`scratchpad/audit5/`), and abandoned. It
