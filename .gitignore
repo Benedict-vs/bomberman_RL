@@ -165,5 +165,19 @@ checkpoints/benedict_task2/*
 # append-only assumption is unchecked instead of enforcing it.
 !checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy.layout.json
 
+# Same exception for the rung-4 parent, and for a stronger reason: the claim
+# above that checkpoints are "reproducible from the commit plus the BM_*
+# variables" is FALSE from rung 3 on. main.py does not seed the provided
+# opponents (AGENTS.md), and audit 5 established that no E30-E33 run passed
+# --seed either, so two runs of the same command give different tables -- E31's
+# suicide rate is bimodal across replications of an identical configuration.
+# This file is therefore an *input* to the submitted agent, not an output of a
+# recorded command: agent_code/benedict_task4/q_table.npy is a byte-identical
+# copy of it (E33 arm ctl, seed 104, 20 000 episodes; selected on validation
+# seed 550731 at won 0.382 and confirmed on ship seed 990731 at 0.372).
+!checkpoints/benedict_task4/
+checkpoints/benedict_task4/*
+!checkpoints/benedict_task4/q_table_e33_ctl_s104__ep20000.npy
+
 # macOS
 .DS_Store
