@@ -166,6 +166,30 @@ GAMMA = float(os.environ.get("BM_GAMMA", 0.99))
 # 5.95 members, so one shared update is worth up to ~6 visits.
 D4_SHARE = os.environ.get("BM_D4", "0") not in ("", "0")
 
+# E33: pay the agent for taking the escape step its own feature map already
+# found. Digit 5 is the grace left on the agent's own tile (0 = safe), digit 6
+# is the BFS first step out of the blast, so `d5 > 0 and d6 > 0` is exactly
+# "I am in a blast and I already know the way out". Whether it *takes* that step
+# is what audit 5 priced: 35 % of all deaths are one row (55060) where the table
+# prefers DOWN by 0.055 and UP -- what digit 6 says -- is the only survivor.
+# Forcing the argmax to digit 6 in every danger row, untrained, takes score
+# 3.827 -> 4.432 and won 0.390 -> 0.448. That rule cannot ship; this is its
+# learnable form.
+#
+# The differential is 2r, so r selects which decisions get overridden: 0.05
+# flips near-ties only, 0.80 flips the mean danger-row gap (1.59-1.78), i.e. the
+# rule. E33 sweeps that deliberately -- how much of the ceiling is tie-breaking
+# is the measurement, not a magnitude to tune.
+#
+# Shaping on a feature the agent already carries, not a policy: the table may
+# still override the direction, and must still learn when to bomb, when to be in
+# danger at all, and where to go when safe. Close enough to the AGENTS.md line
+# against a feature that returns the best action that the report has to argue
+# it rather than slip it in.
+FOLLOWED_ESCAPE = "FOLLOWED_ESCAPE"
+IGNORED_ESCAPE = "IGNORED_ESCAPE"
+ESCAPE_R = float(os.environ.get("BM_ESCAPE", 0))
+
 ALPHA = 0.1         # only used when ALPHA_MODE == "const"
 ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP", 0.7))     # in (0.5, 1]
 
@@ -211,6 +235,11 @@ REWARDS = {
     # share, and the rung-2 table already banks 2.18 of it. score = coins + 5*kills,
     # so every further point of score has to come from kills.
     e.KILLED_OPPONENT: float(os.environ.get("BM_KILL", 0)),
+    # E33. Not events the tournament generates -- these two are ours, fired in
+    # `tag_escape` below. Balanced by construction, so a danger step is priced
+    # only by *which* way it moves, never by being in danger at all.
+    FOLLOWED_ESCAPE: ESCAPE_R,
+    IGNORED_ESCAPE: -ESCAPE_R,
 }
 
 # --- Experiment switches --------------------------------------------------
@@ -250,7 +279,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e31"
+EXPERIMENT = "e33"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
@@ -355,6 +384,13 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
                          new_game_state: dict, events: List[str]):
     """One Q-learning update per step."""
 
+    # E33: the escape tag has to be appended before the reward is summed, and it
+    # needs the row -- so `s` moves above the tally instead of below the guard.
+    # Still exactly one `state_to_features` call per state, which is what costs.
+    s = state_to_features(old_game_state) if old_game_state is not None else None
+    if s is not None:
+        tag_escape(s, self_action, events)
+
     reward = reward_from_events(self, events)
 
     # Tally before the guard: the first call of a round has no old state to
@@ -365,7 +401,6 @@ def game_events_occurred(self, old_game_state: dict, self_action: str,
     if old_game_state is None:
         return
 
-    s = state_to_features(old_game_state)
     s_next = state_to_features(new_game_state)
     a = ACTIONS.index(self_action)
 
@@ -391,6 +426,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     s = state_to_features(last_game_state)
     a = ACTIONS.index(last_action)
+    tag_escape(s, last_action, events)      # E33: the fatal step counts too
     reward = reward_from_events(self, events)
 
     # E19: transition into terminal -- Phi(terminal) = 0, so F = -Phi(s_last).
@@ -579,6 +615,38 @@ def apply_update(self, s: int, a: int, td_error: float) -> None:
         return
     cells = np.unique(self.d4_rows[:, s] * len(ACTIONS) + self.d4_acts[:, a])
     self.q.reshape(-1)[cells] += learning_rate(self, s, a, cells) * td_error
+
+
+def decode_row(idx: int) -> tuple:
+    """Row index -> digit tuple. Inverse of `callbacks.encode`; digit 0 is the
+    most significant, matching the mixed-radix encoding there."""
+
+    digits = []
+    for size in reversed(FEATURE_SIZES):
+        digits.append(idx % size)
+        idx //= size
+    return tuple(reversed(digits))
+
+
+def tag_escape(state_row: int, action: str, events: List[str]) -> None:
+    """Append FOLLOWED_ESCAPE / IGNORED_ESCAPE when the agent is in danger.
+
+    Fires only where digit 5 > 0 (a blast covers my tile) and digit 6 > 0 (the
+    escape BFS found a way out) -- on the E31 policy that is 43.4 % of all steps,
+    and the agent already takes the indicated step 61.2 % of the time.
+
+    Takes the row rather than the game state so `state_to_features` is still
+    called exactly once per step: it runs three BFS traversals and dominates the
+    cost of the callback. Decoding the row is arithmetic on eight digits.
+    """
+
+    if not ESCAPE_R:
+        return
+    digits = decode_row(state_row)
+    if digits[4] == 0 or digits[5] == 0:
+        return                      # safe, or no escape route known
+    events.append(FOLLOWED_ESCAPE if action == ACTIONS[digits[5] - 1]
+                  else IGNORED_ESCAPE)
 
 
 def reward_from_events(self, events: List[str]) -> float:

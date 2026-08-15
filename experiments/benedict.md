@@ -21,6 +21,90 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E33 — How much of the ceiling is tie-breaking?
+
+- **Question:** audit 5 measured a ceiling. Forcing the argmax to the table's **own** escape digit
+  whenever `own_danger > 0` — 200 rows, 17.4 % of steps, zero training — takes score 3.827 →
+  **4.432** and `won` 0.390 → **0.448**, with suicides 0.677 → 0.304. That is headroom sitting in
+  information the agent already has and does not use, and **35 % of all deaths are one row**
+  (55060) where the table prefers `DOWN` by **0.055** and `UP` — what digit 6 says — is the only
+  survivor.
+
+  The rule itself cannot ship: `AGENTS.md` forbids a feature that returns the best action. The
+  learnable form is a dense event that pays the agent for agreeing with digit 6 while in danger.
+
+  **Measured baseline (300 rounds, E31 s80 @20 000):** 43.7 % of all steps are danger steps, the
+  escape direction is known in 99.2 % of them, and the agent already follows it **61.2 %** of the
+  time. So this is not teaching it to escape — it escapes correctly three times in five. It is
+  about the other two.
+
+- **The design question is the level, and it is not a magnitude search.** The shaping differential
+  is `2r`, so **r selects which decisions get overridden**:
+
+  | r | flips gaps below | what that means |
+  |---|---|---|
+  | **0.05** | 0.10 | near-ties only — row 55060's 0.055 flips, everything else keeps its own answer |
+  | **0.20** | 0.40 | modest disagreements |
+  | **0.80** | 1.60 | ≈ the mean danger-row gap (1.59-1.78) — i.e. *the rule*, in reward form |
+
+  **That makes the sweep a measurement rather than a tuning exercise**, and it is the honest way
+  to handle the machine-learning objection: if r = 0.05 captures most of the gain, the table's own
+  judgement was right and it needed a tie-break. If only r = 0.80 works, the rule is doing the
+  work and we should say so in the report rather than claim the agent learned it.
+
+- **Change:** two custom events, `FOLLOWED_ESCAPE` / `IGNORED_ESCAPE`, fired in `train.py` when
+  digit 5 > 0 and digit 6 > 0, priced `+r` / `−r`. `callbacks.py` untouched; `BM_ESCAPE` defaults
+  to 0, so unset this is E31 bit-for-bit.
+
+  **This must be defended in the report, not slipped in.** It is shaping on a feature the agent
+  already carries, and the table stays free to override it — the agent must still learn when to
+  bomb, when to be in danger at all, and where to go when safe. But it is close to the line, and
+  P3 below is what decides how the report has to describe it.
+
+- **Design.** 4 arms × 5 seeds (`BM_RUN_INDEX` **100-104**, unused), 20 000 episodes, checkpoints
+  5 000 / 10 000 / 20 000, `BM_STEP_COST=0` and `BM_CRATE=1.0` as E31.
+
+  | arm | `BM_ESCAPE` |
+  |---|---|
+  | **ctl** | 0 — **contemporaneous**, not E31's numbers |
+  | **F005** | 0.05 |
+  | **F020** | 0.20 |
+  | **F080** | 0.80 |
+
+  **`--seed 810731` is passed to `main.py` for the first time.** Audit 5 found no training run in
+  E30-E32 was ever arena-seeded, contrary to what those entries claim.
+- **Measurement:** 1000 rounds, ε = 0, validation seed 550731, n = 5 runs, reported at @20 000.
+
+### Prediction (written before the run)
+
+1. **P1, primary.** F020 or F080 beats the **contemporaneous** control on `won` at 20 000, t-CI
+   over the five runs excluding 0. **Refutation:** neither does → the ceiling is not reachable by
+   shaping and the remaining gap is a feature problem (the 49.3 % "an opponent took my escape
+   tile" category, which `NB_CLEAR` cannot express).
+2. **P2, mechanism.** The follow rate `P(action = digit 6 | in danger)` rises monotonically with r
+   from the measured **0.612**, and exceeds **0.85** at F080. **Refutation:** flat in r → the
+   events are not reaching the decision and P1's result, if any, is something else.
+3. **P3, the interpretation split, pre-registered so it cannot be chosen afterwards.** Let
+   `G(r) = won(r) − won(ctl)`. **If `G(0.05) ≥ 0.5 · G(0.80)`, the gain is tie-breaking** and the
+   report says the table's judgement was sound where it was confident. **If `G(0.05) < 0.25 ·
+   G(0.80)`, the rule is doing the work** and the report says so plainly, including in the
+   Experiments chapter's discussion of what the model actually learned. Between those, it is
+   mixed and both get reported.
+4. **P4, guard.** No arm exceeds the ceiling — `won` at 20 000 below **0.448** and score below
+   **4.432**. Beating a rule that has perfect access to the same digit would mean the shaping is
+   doing something other than what it says, and I would want to find out what before believing it.
+5. **P5, and this is a free replication.** The contemporaneous control's `suicides` at 20 000
+   lands somewhere in **[0.45, 0.75]**, spanning both modes audit 5 found (E31's five runs gave
+   0.587-0.747; two replications gave 0.500/0.533). With n = 5 fresh arena-seeded runs this
+   settles whether E31's 0.690 was a property of the reward table or of five unlucky runs —
+   **which is a result either way**, and the reason the control is worth its five runs.
+
+**Pre-committed magnitude.** F020 `won` **0.39-0.43**, F080 **0.41-0.45** (approaching the ceiling
+from below), F005 **0.38-0.41**. Follow rate F005 ≈ 0.68, F020 ≈ 0.78, F080 ≈ 0.90. I expect P3 to
+land in the **mixed** band, i.e. tie-breaking is worth something real but not most of it.
+
+---
+
 ## E32 — Withdrawn before it ran, and replaced
 
 **The design below was written, verified by an audit (`scratchpad/audit5/`), and abandoned. It
