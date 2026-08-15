@@ -206,7 +206,7 @@ SAVE_EVERY = 100
 # curve can be measured at eps = 0 afterwards instead of read off the training
 # log. Learning is untouched -- these are extra writes, not extra updates, so
 # every checkpoint is exactly the table a run of that length would have left.
-CHECKPOINTS = (5_000, 10_000, 20_000)
+CHECKPOINTS = (500, 2_000, 5_000, 10_000, 20_000)
 
 # The two swept in E16. Both were guesses -- the coin in E01, the crate in E10 --
 # and E15's change of gamma rescaled every reward against the step cost by a
@@ -279,7 +279,7 @@ TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e33"
+EXPERIMENT = "e34"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 

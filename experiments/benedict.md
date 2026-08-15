@@ -21,6 +21,98 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E34 — Is the ceiling a *reachable* fixed point?
+
+- **Question:** four attacks on the escape gap have failed — E19 (potential-based shaping, −9.17
+  crates), E32 (death price; saturates, middle dose collapses), E33 (action-conditioned shaping;
+  follow rate moved 0.634 → 0.872 exactly as designed and `won` **fell**). Audit 6 explains all
+  four at once, and the diagnosis is the entry's real content:
+
+  **The table sits at its own Bellman fixed point on the decisive row.** Measured over 300 rounds
+  of E31 s80 @20 000:
+
+  | row, action | transitions | terminal | Q | empirical 1-step target under π | residual |
+  |---|---|---|---|---|---|
+  | **55060, DOWN** — the fatal one; digit 6 says UP | 1 457 | 74 | 7.867 | 7.780 | **−0.087** |
+  | 59160, DOWN | 1 486 | 0 | 8.261 | 8.277 | +0.016 |
+  | 35032, UP | 279 | 0 | 8.868 | 8.466 | −0.402 |
+
+  Death fires on 74/1457 = **5.1 %** of visits and the row prices that correctly at ≈ −0.2. `DOWN`
+  still wins. **Q-learning has not failed to converge — it converged to a worse policy.**
+
+  **And a second fixed point demonstrably exists at these hyperparameters.** This is audit 5's own
+  datum, whose significance I missed at the time: identical configuration, greedy-`DOWN` in row
+  55060 on E31's five seeds and greedy-`UP` on two replications, **zero overlap** in suicides
+  (0.587-0.747 against 0.500/0.533), with indistinguishable training curves.
+
+  **A reward change moves *where* the fixed points are; it cannot move *which one you land in*.
+  Only an initial-condition change can.** That is why every reward-side instrument failed, and it
+  is the one class of instrument never tried.
+
+- **Change:** the **initial condition only**. Each run warm-starts from its own E33 control table
+  with the argmax re-pointed to digit 6 in every row where digit 5 > 0 and digit 6 ≠ 0 — the exact
+  construction that measured the ceiling (`scratchpad/benedict/force_escape.py`, a parameterised
+  version of `scratchpad/audit5/mkesc.py`). Then it trains the **E33 control configuration
+  verbatim**: same rewards, γ, ε schedule, `BM_STEP_COST=0`, `BM_CRATE=1.0`, `--seed 810731`,
+  20 000 episodes. **The objective is untouched.** The rule runs once, offline, before training —
+  nothing rule-like runs at inference, and the artifact remains a Q-table read by `argmax`.
+
+- **Design.** 5 runs, `BM_RUN_INDEX` **100-104** — deliberately the *same* indices as the E33
+  control, because each E34 run starts from *that same run's* forced table. With `--seed 810731`
+  every run shares one arena sequence and the exploration stream is matched, so the comparison is
+  **paired at the run level** rather than arm-mean against arm-mean.
+
+  Checkpoints **500 / 2 000 / 5 000 / 10 000 / 20 000**. The early ones matter more than usual:
+  **the decay curve is the measurement**, not the endpoint.
+- **Measurement:** 1000 rounds, ε = 0, `BM_TIE_TOL=0.0`, validation seed 550731, n = 5 runs.
+  Control is E33 ctl, already measured at score 3.719 / `won` 0.372. Reference ceiling (the rule,
+  untrained): score 4.399 / `won` 0.442.
+
+### Prediction (written before the run)
+
+1. **P1, primary.** `won` at 20 000 beats the control's **0.372**, t-CI over the five runs
+   excluding 0. **Magnitude 0.390-0.425** — retaining 25-75 % of the ceiling's +0.070.
+   **Refutation:** CI includes 0 → the forced policy is not a fixed point, the operator drains
+   back to where the control sits, and **the +0.68 is unreachable by value learning on these eight
+   digits.** That closes the line, and it is the most valuable negative still available here.
+2. **P2, mechanism.** Escape-follow rate `P(greedy = digit 6 | digit 5 > 0)` per checkpoint. It
+   starts at **1.000** by construction; the control is **0.634**. **Prediction: monotone decay
+   settling in [0.70, 0.85].** **Refutation:** within 0.02 of 0.634 by 20 000 → the control's fixed
+   point is uniquely attracting, and together with a failed P1 the line is finished.
+3. **P3, the interpretation split, fixed now so it cannot be chosen afterwards.** Let *f* = follow
+   rate at 20 000 and *m* = fraction of re-pointed rows whose argmax training moved back off
+   digit 6.
+   - *f* ∈ [0.70, 0.90] **and** *m* ≥ 0.30 → **the agent learned which re-pointings to keep.**
+     Report as learned, with the initialisation declared, and cite it against the survey's
+     precedents (E's pretraining curriculum, K's imitation scaffolding).
+   - *f* > 0.97 **and** *m* < 0.05 → **training did nothing and the rule shipped by hand.** Report
+     it as a hand-initialised policy **and do not ship it** — that is the `AGENTS.md` prohibition
+     on a feature returning the best action, wearing a `.npy` extension.
+   - Between: mixed, and both halves reported.
+
+   This is E33's P3 done properly. That one presupposed a sign and became inapplicable; this one is
+   evaluable under every outcome, including P1's refutation.
+4. **P4, guard, with evidence behind it.** `crates` ≥ **31.0** (control 32.13). E33 measured the
+   real failure mode of an escape intervention *during* training: the agent stops bombing
+   (32.13 → 30.81 at follow rate 0.872). **The suicide guard is not reinstated** — E33 falsified it
+   by intervention, and E30's P5 and E31's P4 are both retired as mis-specified.
+5. **P5.** Suicides at 20 000 in **[0.25, 0.50]** (ceiling 0.292, control 0.616). If P1 passes with
+   suicides *high*, the mechanism is not the claimed one and the entry is inconclusive whatever the
+   score does.
+
+**Named confound, declared in advance.** `warm_start` sets `visits = WARM_N = 100` for every row
+carrying value, so the forced cells begin at α = 1/100^0.7 ≈ 0.04. Those values are *fabricated*
+(max + 1.0), unlike every previous warm start where they were learned — so a pseudo-count of 100
+asserts a confidence we do not have, and it biases P3 toward the "training did nothing" branch.
+**If P3 lands there, WARM_N is the first thing to vary before concluding anything**, not the last.
+Left at the default here so the run is comparable to E33 ctl.
+
+**Pre-committed magnitude:** `won` **0.390-0.425**, follow rate **0.70-0.85**, crates ≥ 31.0. I
+expect a partial retention — the forced policy holds where it is genuinely better and drains where
+it is not, which is the outcome P3's middle band describes.
+
+---
+
 ## E33 — How much of the ceiling is tie-breaking?
 
 - **Question:** audit 5 measured a ceiling. Forcing the argmax to the table's **own** escape digit
