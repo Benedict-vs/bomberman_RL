@@ -113,6 +113,78 @@ it is not, which is the outcome P3's middle band describes.
 
 ---
 
+### Result — 1000 rounds at validation seed 550731, n = 5 runs (100-104), paired to the E33 control
+
+| E34 checkpoint | score | **won** | suicides | survived | crates |
+|---|---|---|---|---|---|
+| *forced table, untrained (the ceiling)* | *4.399* | *0.442* | *0.292* | *0.660* | *34.15* |
+| ep 500 | 3.936 ± 0.104 | 0.392 ± 0.013 | 0.406 | 0.552 | 32.27 |
+| ep 2 000 | 3.920 ± 0.148 | 0.390 ± 0.024 | 0.436 | 0.525 | 32.14 |
+| ep 5 000 | 3.830 ± 0.173 | 0.376 ± 0.020 | 0.419 | 0.533 | 32.15 |
+| ep 10 000 | 3.838 ± 0.217 | 0.376 ± 0.045 | 0.404 | 0.556 | 32.05 |
+| **ep 20 000 (primary)** | **3.564 ± 0.150** | **0.350 ± 0.025** | 0.380 | 0.583 | 29.86 |
+| E33 control @20 000 | 3.719 ± 0.055 | 0.372 ± 0.009 | 0.616 | 0.333 | 32.13 |
+
+Paired against the control: ep500 **won +0.020 [+0.003, +0.038]**, score **+0.217 [+0.060, +0.375]**;
+ep2000 score +0.201 [+0.008, +0.395]; ep5000 and ep10000 not demonstrated;
+**ep20000 won −0.022 [−0.049, +0.005], score −0.155 [−0.252, −0.058]**.
+
+**P1 REFUTED at the pre-registered checkpoint.** The forced policy is worth something early and
+loses it monotonically: 4.399 → 3.936 → 3.830 → 3.564, ending *below* the control it started from.
+
+**P2 REFUTED, and this is where the entry becomes interesting.** I predicted the follow rate would
+decay into [0.70, 0.85]. It sits at **0.938 ± 0.003** across all five seeds. Decomposed (seed 100):
+
+| valued danger rows at ep 20 000 | n | still following digit 6 |
+|---|---|---|
+| re-pointed by the transform | 712 | **0.962** |
+| already agreed in the base | 845 | 0.992 |
+| **new rows, learned during E34** | 95 | **0.263** |
+
+So the drop from 1.000 is almost entirely the 95 newly-learned rows, **not reversion**:
+`m` = **0.030**, i.e. **97 % of the forced re-pointings survived 20 000 episodes.**
+
+**Therefore my own refutation clause — "the operator drains back" — is wrong in detail, and the
+detail is the finding.** The forced *policy* is preserved; what drains is the *benefit*. Bombs
+placed are flat (31.92 → 32.10) while crates fall 32.27 → 29.86, so crates per bomb goes
+**1.011 → 0.930**. **Training keeps the escape behaviour and degrades the bombing around it** —
+the same signature E33 produced by reward, reached here by initialisation instead. Two instruments
+of opposite kinds, one outcome: making the agent escape reliably makes it bomb worse.
+
+**P3: the "rule shipped by hand" branch, and it decides the shipping question against us.** With
+`f` = 0.938 and `m` = 0.030, the letter of the split is the middle band (`f` misses the > 0.97
+threshold). The substance is not ambiguous: training moved 3 % of the forced rows. **At ep500 —
+the only checkpoint that beats the control — `f` = 0.992 and `m` = 0.017, firmly inside the
+don't-ship band.** So the one arm with a real advantage is the hand-written rule with 500 episodes
+of polish, and the pre-registered rule says do not ship it. **Recorded and honoured.**
+
+**P4 FAILED** at ep20000 (crates 29.86 < 31.0) — and passed at every earlier checkpoint, which is
+the same story as P1. **P5 passes** (suicides 0.380, inside [0.25, 0.50]).
+
+**The named confound is now the live question, exactly as pre-registered.** `WARM_N = 100` gives
+the forced cells α ≈ 0.04 on fabricated values, so `m` ≈ 0 is partly guaranteed by construction. A
+`WARM_N = 1` replication separates "the forced policy is a genuine second fixed point" from "α was
+too small to move it". **But note this cuts against reachability either way:** if α was the reason
+the argmax held, then a table that *can* move will move — toward the control's answer, since that
+is what unforced learning produces (26.3 % agreement in the 95 rows learned from scratch).
+
+**That 26.3 % is the most transferable number in the entry.** The disagreement with digit 6 is not
+a stale artefact of the rung-2 warm start: **when rung-4 training meets a danger row with no prior,
+it chooses against the escape direction three times in four.** The table's answer is a genuine
+second optimum, arrived at independently, which is why four reward interventions (E19, E32, E33)
+and now one initialisation intervention have all failed to hold the first one.
+
+- **Verdict: E34 FAILED its primary.** Taken with E33, **the +0.68 ceiling is not reachable by
+  value learning on these eight digits** — not by reward (E19, E32, E33) and not by initial
+  conditions (E34). The line is closed, which is what P1's refutation clause pre-committed it to
+  mean.
+- **Next:** E35 (price `KILLED_OPPONENT`, still 0.0 since E30, with a placebo arm). **And the
+  stopping rule stands: if E35 also fails its primary, stop optimising rung 4.** 3.719 / 0.372
+  against a measured 0.283 bar already beats the reference, and five pre-registered negatives plus
+  the fixed-point diagnosis is a better Experiments chapter than a sixth attempt.
+
+---
+
 ## E33 — How much of the ceiling is tie-breaking?
 
 - **Question:** audit 5 measured a ceiling. Forcing the argmax to the table's **own** escape digit
