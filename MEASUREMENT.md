@@ -149,3 +149,42 @@ scenario config — plus the git commit and seed. It does **not** snapshot the w
 rule is therefore visible in the metadata; anything else is not. Log levels, for instance, are not
 snapshotted, so an edit there is invisible. This is the reason training-only changes should be
 environment switches with the upstream value as default.
+
+**`bm_env` — every `BM_*` variable in the launching environment — is recorded by both writers from
+2026-08-16.** Until then the sentence above about reproducing a run "from the commit plus the
+`BM_*` arm variables recorded in each run's `.meta.json`" was simply false: nothing recorded them.
+Audit 8 found it, and E37 found what it costs. **Runs before 2026-08-16 have no `bm_env` key**, so
+for those the arm is recoverable only from the `run` name and the committed `*_arms.sh` launcher.
+The E37 sweep straddles the fix — `ctl2` seeds 100-109 launched at 06:22 and hold the old module in
+memory, so they are the last records without it.
+
+**Why it is not cosmetic, stated once so nobody has to rediscover it.** A `BM_*` switch that lives
+in `train.py` (`BM_ESCAPE`, `BM_D4`, `BM_KILL`) changes rewards or updates, so it matters at
+training time and is irrelevant afterwards. A switch that lives in `callbacks.py` (`BM_OPPDIST`,
+`BM_D8`, `BM_ABLATE`) changes what a *digit means*, hence which row of the table a state indexes —
+so **it must be exported at evaluation time too, with exactly the value the table was trained
+with.** A table trained under `BM_D8=parity` and evaluated without it is read at the wrong indices
+and the arm silently measures noise. E36 is the only rung-4 entry where this applied, and it was
+done correctly; the point is that it was only checkable from a script in `/tmp`.
+
+**How to check it after the fact, and which metric to check.** Re-evaluate the table both ways at
+n = 1000 and compare against the committed CSV — at 1000 rounds the means reproduce to four
+decimals, which n = 100 does not (27/100 vs 19/100 exact round matches, both inside the documented
+22.7 % reproduction rate, i.e. undecidable). Settled for E36 arm `OPP` s100 on 2026-08-16:
+
+| | score | crates | suicides | survived |
+|---|---|---|---|---|
+| committed | 3.644 | 32.15 | **0.450** | **0.502** |
+| re-run `BM_OPPDIST=1` | 3.627 | 32.12 | **0.423** | **0.501** |
+| re-run `BM_OPPDIST=0` | 3.593 | 32.20 | **0.751** | **0.193** |
+
+**Read the behavioural metrics, not the headline.** `score` separates the two readings by 0.017 vs
+0.051 — useless. `suicides` and `survived` separate them by 3-4×: through the wrong map the same
+table is a different agent, one that dies to its own bombs and survives a fifth as often. This is
+the general shape of the failure — nothing raises, the array shapes match, and only behaviour
+gives it away.
+
+Hence: **sweep-watchers and eval launchers belong in `scratchpad/benedict/` beside the
+`*_arms.sh` files and get committed with the results, never in `/tmp`.** A launcher that is
+deleted on reboot is not evidence, and "which environment did that number come from" is a question
+that gets asked months later, in the report.

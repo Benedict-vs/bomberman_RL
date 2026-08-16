@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import platform
 import subprocess
 import sys
@@ -296,6 +297,19 @@ def evaluate(
         "base_seed": base_seed,
         "seeds": [base_seed, base_seed + n_rounds - 1],
         "wall_clock_s": round(time.time() - started, 1),
+        # Every BM_* switch in this process's environment. `MEASUREMENT.md` has
+        # always claimed a run is reproducible "from the commit plus the BM_*
+        # variables recorded in each run's .meta.json" -- and until now they were
+        # not recorded, so the claim was false.
+        #
+        # It is not cosmetic. BM_OPPDIST / BM_D8 / BM_ABLATE change what a digit
+        # *means*, so they change which row a state indexes. A table trained with
+        # a switch and evaluated without it is read at the wrong indices, the
+        # shapes still match, nothing errors, and the number is silently wrong.
+        # After E36 that question could only be settled by re-running the
+        # evaluation two ways, because the artifact did not say.
+        "bm_env": {k: v for k, v in sorted(os.environ.items())
+                   if k.startswith("BM_")},
         # Snapshot the rules, so we notice if someone evaluated against edited
         # settings (the classic "why can't I reproduce this" cause).
         "settings": {

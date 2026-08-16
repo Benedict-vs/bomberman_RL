@@ -132,6 +132,12 @@ class TrainLogger:
             "git_commit": _git_commit(),
             "python": platform.python_version(),
             "hyperparams": hyperparams,
+            # Every BM_* switch this run was launched with. The arm variables
+            # decide what the digits mean and what the rewards are, so without
+            # them the row is not reproducible from the commit -- which is what
+            # MEASUREMENT.md has always claimed it was.
+            "bm_env": {k: v for k, v in sorted(os.environ.items())
+                       if k.startswith("BM_")},
             "columns": self.columns,
         }
         history = []

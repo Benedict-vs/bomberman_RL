@@ -81,8 +81,25 @@ only if H1 and (H2 or H3) hold does anything else run; otherwise rung 4 closes.*
   hardcodes `target_dist = DIST_NONE`; correct for everything before E36, wrong after.
 - `end_of_round` treats truncation at `MAX_STEPS` as termination (no bootstrap) on 33 % of rounds;
   measured at ≈8.8 Q units, never fixed alone.
-- `.meta.json` does not record the `BM_*` arm variables although `MEASUREMENT.md` says it does.
-- `agent_code/benedict_task4/callbacks.py` may still carry `# <-- restore these three lines`.
+- ~~`.meta.json` does not record the `BM_*` arm variables~~ — **fixed 2026-08-16** in both writers
+  (`tools/evaluate.py`, `tools/trainlog.py` now record a `bm_env` dict). Runs before that date have
+  no `bm_env`. E37 straddles the fix: batch 1 is `ctl2` seeds **100-109** (launched 06:22, old
+  module in memory, no `bm_env`); `ctl2` 110-114 and all of `PLB2`/`PAR`/`SHF` have it. So the
+  gap is 10 of 60 runs but **10 of the control arm's 15**. See `MEASUREMENT.md`.
+- ~~`agent_code/benedict_task4/callbacks.py` may still carry `# <-- restore these three lines`~~ —
+  removed with the E37 edits, verified absent 2026-08-16.
+
+## Sweep scripts go in `scratchpad/benedict/`, never `/tmp`
+
+Learned 2026-08-16. "Did E36's evaluations export `BM_OPPDIST`?" was unanswerable from the repo —
+the eval launcher had been written to `/tmp/e36_watch.sh`, and only survived by luck. The answer
+was yes, but a switch that lives in `callbacks.py` changes **which row a state indexes**, so
+getting it wrong would have invalidated the arm rather than just annoying the reader.
+
+So: **every watcher and eval launcher lives beside its `*_arms.sh` and is committed with the
+results.** Naming is `eNN_arms.sh` / `eNN_eval.sh`. The eval launcher must set the same
+`callbacks.py` switches its arm trained with, derived from the *same case block* as the training
+launcher so the two cannot drift.
 
 **Project deliverables:** agent code due **21.09.2026**, report due **28.09.2026** (~4 000 words per
 team member; "Experiments and Results" is the most important section and the scientific method is
