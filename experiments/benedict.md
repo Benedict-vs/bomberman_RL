@@ -21,6 +21,95 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E37 — Is the danger-row lattice class worth points, and is it the lattice or the label?
+
+- **Question:** E36's intended placebo beat its treatment. `(x+y) mod 4` in the danger rows is
+  worth **+0.980 crates** and **+0.211 score** against the control (5/5 seeds, monotone across
+  checkpoints, replicated in the training stream at +0.94), while opponent distance is worth
+  nothing. But E36 **cannot go into the report as it stands** — audit 8 found three defects: its
+  arms and control had different warm-start parents, its verdict label was wrong, and its primary
+  metric was untestable at its own predicted magnitude. One sweep removes all three.
+
+  And there is a real question underneath. `(x+y) mod 4` is **not** "position parity" as the survey
+  uses the term. Its low bit *is* the lattice class exactly — pillars sit at (even, even), so a
+  free tile has `x+y` even ⟺ both coordinates odd ⟺ a **crossing** (4 structural exits, own bomb
+  clears 12 tiles); `x+y` odd ⟺ a **corridor** (2 exits, 6 tiles). Verified on 17 904 danger steps:
+  11 477/11 477 and 6 427/6 427, zero exceptions. Its high bit is an arbitrary diagonal stripe.
+
+  Three measurements say the lattice bit is the part that matters. **It is 94.6 % but not 100 %
+  predictable from digits 1-4** — H(lattice) = 0.942 bits, H(lattice | digits 1-4) = 0.192 —
+  because `NB_BLOCKED` merges wall with crate, so a corridor's two permanent walls look like two
+  crates. **The trained policy splits on it 4.8× harder than on the arbitrary component**: moving
+  digit 8 *across* parity changes the greedy action on 5.75 % of danger steps, moving it *within*
+  parity 1.20 % (null calibration on the control table: 18.29 % vs 18.29 %, exactly symmetric).
+  **And E36's own P2 points the same way** — the only bucket where the opponent digit changed
+  behaviour was bucket 0, which is 73.4 % "opponents alive but walled off", i.e. structural.
+
+  So the hypothesis is specific: **the missing information is about the board, not the opponents**,
+  and it is the wall lattice the neighbour code throws away.
+
+- **Change:** digit 8's meaning in the `own_danger` branch only. `FEATURE_SIZES` untouched.
+  Four arms, **all warm-started from `_e36parent`** — which is the matched control E36 never had.
+
+  | arm | digit 8 in the danger branch | role |
+  |---|---|---|
+  | **ctl2** | `DIST_NONE` (unchanged) | **the control E36 lacked** |
+  | **PLB2** | `(x + y) % 4` | direct replication |
+  | **PAR** | `(x + y) % 2` | the lattice class alone, no positional component |
+  | **SHF** | fixed relabelling of free tiles into 4 groups, **balanced within each lattice class** | position *without* the lattice — the true null |
+
+  `SHF` is the control E36 should have had: same arity, same "fills 40 960 dead rows" perturbation,
+  and by construction it carries **no** crossing/corridor information.
+
+- **Design.** **n = 15 seeds** (`BM_RUN_INDEX` 100-114), 20 000 episodes, checkpoints
+  5 000 / 10 000 / 20 000, otherwise E33 ctl verbatim, `--seed 810731`, paired at run level.
+  1000 rounds at ε = 0, validation seed 550731.
+
+  **n = 15 is chosen from the measured variance, not from habit.** Paired SD of `score`
+  differences over eight arm sets is **0.1825**:
+
+  | n | 80 %-power MDE on `score` | on `won` |
+  |---|---|---|
+  | 5 | 0.352 | 0.045 |
+  | 10 | 0.210 | 0.027 |
+  | **15** | **0.164** | **0.021** |
+
+  The expected effect is ~0.20 on `score`. **At n = 10 the MDE is 0.210 — the design would be
+  ~50 % powered, which is the exact mistake this entry exists to correct.** (Audit 8 proposed
+  n = 10 quoting an MDE of 0.165; recomputed from the committed CSVs it is 0.210, so its own
+  recommendation was underpowered.)
+
+- **Primary metric: `score`, committed now with the reason.** `won` at n = 15 has MDE 0.021
+  against an expected +0.024 — a coin flip by construction. **This is not metric-shopping only
+  because the question under test is "is E36's effect real, and is its mechanism the lattice?",
+  not "do we have a better tournament agent".** `won` is reported alongside with its CI and the
+  MDE quoted next to it, and **no tournament-ranking claim is made from `score`.**
+
+### Prediction (written before the run)
+
+1. **H1, replication, primary.** `PLB2 − ctl2` on `score` ≥ **+0.10**, CI excluding 0.
+   **Magnitude 0.15-0.30.** **Refutation:** CI includes 0 → E36's PLB was the warm parent or noise.
+   **Rung-4 optimisation then stops for good** and E36 is written as a clean negative.
+2. **H2, mechanism.** `PAR − ctl2` on `score` ≥ **0.5 ×** `(PLB2 − ctl2)`, CI excluding 0.
+   **Refutation:** `PAR` ≈ 0 while `PLB2` > 0 → the gain rides on the arbitrary positional
+   component, i.e. it is overfitting to the training arenas. **Stop, and report it as such.**
+3. **H3, specificity — the control E36 should have had.** `SHF − ctl2` on `score` CI **includes 0**
+   *and* `SHF < PAR`. **Refutation:** `SHF ≈ PLB2` → any 4-way positional split works, so the gain
+   is capacity rather than information. **Stop.**
+4. **Guards.** `won` ≥ 0.36 · `crates` ≥ 31.0 · all-zero-row share < 0.01 · `think_max_ms` < 5.
+5. **Secondary, reported not tested.** `won` per arm with CI, **with the n = 15 MDE of 0.021
+   printed beside it**, so that a null is not read as a refutation the way E33-E36's were.
+
+**Continuation rule, pre-committed.** Only if **H1 and (H2 or H3)** hold does a `won`-powered
+confirmation at n = 20-30 follow. Otherwise **rung 4 closes** and the remaining weeks go to the
+report. This is one terminal experiment, not a new programme.
+
+**Cost:** 60 runs ≈ 11 h unattended, ~2 of the ~30 sweeps the remaining five weeks allow.
+**Fallback if that is too long:** drop `PAR` (45 runs, ≈ 9 h); H1 and H3 still resolve and H2
+becomes an inference from `SHF` alone.
+
+---
+
 ## E36 — The map is blind exactly where it dies, and the fix costs zero rows
 
 - **Question:** rung-4 optimisation stopped after E33, E34 and E35 all failed. An audit

@@ -138,6 +138,46 @@ TIEBREAK_UNIFORM = os.environ.get("BM_TIEBREAK", "0") not in ("", "0")
 OPPDIST = os.environ.get("BM_OPPDIST", "0") not in ("", "0")
 OPPDIST_PLB = os.environ.get("BM_OPPDIST_PLB", "0") not in ("", "0")
 
+# E37: E36's intended *placebo* beat its treatment -- `(x+y) % 4` was worth
+# +0.980 crates while the opponent bucket was worth nothing. It was never a
+# placebo. Its LOW bit is the lattice class exactly: pillars sit at (even, even),
+# so a free tile has x+y even <=> both coordinates odd <=> a *crossing* (4 exits,
+# own bomb clears 12 tiles); x+y odd <=> a *corridor* (2 exits, 6 tiles).
+# Verified 11 477/11 477 and 6 427/6 427 over 17 904 danger steps. Its HIGH bit
+# is an arbitrary diagonal stripe.
+#
+# Digits 1-4 nearly carry this already -- H(lattice | digits 1-4) = 0.192 bits of
+# 0.942 -- but not quite, because NB_BLOCKED merges wall with crate, so a
+# corridor's two permanent walls look exactly like two crates.
+#
+#   parity   (x+y) % 2  -- the lattice class alone, no positional component
+#   stripe   (x+y) % 4  -- E36's PLB verbatim, for replication
+#   shuffle  a fixed relabelling BALANCED within each lattice class: same arity,
+#            same "fills 40 960 dead rows" perturbation, and by construction no
+#            crossing/corridor information. The control E36 should have had.
+#
+# Takes precedence over BM_OPPDIST/BM_OPPDIST_PLB, which are kept unchanged so
+# E36's launcher still reproduces E36 rather than silently measuring something
+# else -- the failure mode AGENTS.md records for BM_ABLATE.
+D8_MODE = os.environ.get("BM_D8", "")
+if D8_MODE not in ("", "parity", "stripe", "shuffle"):
+    raise ValueError(
+        f"BM_D8={D8_MODE!r} is not a known mode. A typo must fail here rather "
+        "than silently train the full agent under an arm's label."
+    )
+
+# Built once at import, deterministically. Balanced *within* each lattice class,
+# so the label cannot leak the class it is the control for.
+_SHUFFLE: dict[tuple[int, int], int] = {}
+if D8_MODE == "shuffle":
+    _shf_rng = np.random.default_rng(20260731)
+    for _parity in (0, 1):
+        _tiles = [(_cx, _cy)
+                  for _cx in range(1, s.COLS - 1) for _cy in range(1, s.ROWS - 1)
+                  if (_cx + _cy) % 2 == _parity and not (_cx % 2 == 0 and _cy % 2 == 0)]
+        for _rank, _i in enumerate(_shf_rng.permutation(len(_tiles))):
+            _SHUFFLE[_tiles[_i]] = _rank % 4
+
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
@@ -467,13 +507,21 @@ def state_to_features(game_state: dict) -> int:
         # distance. E36 measured that 64 % of the table was unreachable as a
         # result, and gives the idle digit the one variable that separates the
         # fatal danger rows from the safe ones.
-        if OPPDIST:
+        # E37 modes take precedence; the E36 switches below them are unchanged so
+        # that entry's launcher still reproduces that entry.
+        if D8_MODE == "parity":
+            target_dist = (x + y) % 2
+        elif D8_MODE == "stripe":
+            target_dist = (x + y) % 4
+        elif D8_MODE == "shuffle":
+            target_dist = _SHUFFLE.get((x, y), 0)
+        elif OPPDIST:
             target_dist = opponent_bucket(x, y, field, others)
         elif OPPDIST_PLB:
-            target_dist = (x + y) % 4      # placebo: matched arity, no opponent info
+            target_dist = (x + y) % 4      # E36's arm, not a placebo -- see E37
         else:
             target_dist = DIST_NONE
-    else:                                                    # <-- restore these three lines
+    else:
         target, distance = target_direction(x, y, field, game_state['coins'], others)
         target_dist = distance_bucket(distance)
 
