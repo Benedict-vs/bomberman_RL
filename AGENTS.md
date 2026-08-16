@@ -125,6 +125,22 @@ Conventions we all follow, otherwise the numbers are not comparable:
   Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
 - **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
   "not demonstrated". Negative results stay in the report.
+- **Audit before concluding, and brief the auditor to refute.** Eight independent audits have run
+  on this project (`scratchpad/audit*/`); **seven overturned a claim the author was confident
+  about** — including the shipped agent being the wrong table for four experiments, a
+  `killed_by` metric that undercounted by ~2×, a "second Bellman fixed point" that was really one
+  aliased row, and a placebo that was a real feature. Get a second pair of eyes before: writing a
+  verdict into this ledger, committing to a multi-hour sweep, or **deciding to stop**. Two rules
+  make the difference between an audit and a rubber stamp:
+  - **Ask it to break the claim, not to check it.** "Find what is wrong with X" and "is X right?"
+    produce different work.
+  - **Do not state your own hypothesis when the question is diagnostic.** Have it form one from
+    the data first, then compare. Agreement is only evidence if it was reached independently.
+
+  Two practical notes, both learned the expensive way: bound the read of this file
+  (`offset`/`limit`) — it is thousands of lines and reading it whole has stalled an agent — and
+  ask for the report to be written to disk incrementally, since several agents returned paths they
+  never created.
 - **A training curve is not a result.** Nothing is claimed until measured at ε = 0 with
   `evaluate.py` — a broken policy looks healthy in the training log.
 - **`steps` is only meaningful over completed rounds**, and from task 2 on completion rate is

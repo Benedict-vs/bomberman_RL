@@ -127,6 +127,148 @@ the metric the effect is strongest on — would be choosing the measure after se
 
 ---
 
+### Result — 1000 rounds at validation seed 550731, n = 5 runs, paired to the E33 control
+
+| @20 000 | score | **won** | crates | suicides | survived | kills |
+|---|---|---|---|---|---|---|
+| **ctl** | 3.719 ± 0.055 | 0.372 ± 0.009 | 32.13 | 0.616 | 0.333 | 0.221 |
+| **OPP** | 3.726 ± 0.087 | 0.365 ± 0.024 | 32.10 | **0.422** | **0.525** | 0.220 |
+| **PLB** (placebo) | 3.930 ± 0.177 | 0.385 ± 0.020 | **33.11** | 0.516 | 0.435 | 0.236 |
+
+**P5 FAILS, and it is read first by design. The placebo moved more than the treatment.**
+`won`: OPP **−0.0068**, PLB **+0.0126** — ratio **1.853** against a 0.5 threshold. **E36 is
+INCONCLUSIVE BY CONSTRUCTION**, as pre-registered. Paired, PLB is the only arm with a significant
+effect anywhere: **crates +0.980 [+0.340, +1.620]**, score +0.211 [−0.018, +0.440], `won` +0.013
+[−0.010, +0.036].
+
+**P1 REFUTED independently.** OPP `won` −0.007 [−0.031, +0.017].
+
+**P2 REFUTED.** Follow-rate split between the near and far sub-families: **+0.029**, needing
+≥ 0.15. **P3 PASSES** (all-zero-row share 0.00023 < 0.01, so the information cost no coverage —
+E28/E29's deferral condition was correctly judged expired). **P4 PASSES** (crates 32.10 and 33.11,
+both ≥ 31.0).
+
+**My placebo was not a placebo, and that is the entry's real content.** `(x + y) mod 4` is
+**position parity**, which on this board encodes the wall lattice — pillars sit at (even, even).
+`scratchpad/survey/REPORT.md` records it as a *real feature* used deliberately by another project
+("position parity (x,y even/odd → 3 cases), cheap encoding of the wall lattice"). I chose, as a
+control, a feature the survey I commissioned had already catalogued as useful. **So E36 did not
+test "does new information help?" against a null — it ran two features against each other, and the
+one I labelled the control won.**
+
+**The one number worth keeping:** giving the danger rows *structural* information (where the walls
+are) is worth **+0.98 crates**, and giving them *opponent* information is worth nothing. That
+inverts audit 7's ranking, which put opponent proximity first on the strength of a 6.1× death lift
+— a lift that is real (verified) and still did not convert.
+
+**And the agent did use the digit, just not on the predicted axis.** Follow rate by bucket:
+**0.826** where no opponent is reachable, ~0.65 everywhere else. It conditions on "is anyone
+around at all", not on how far away they are.
+
+**Fourth replication of E33's finding.** OPP cut suicides 0.616 → **0.422** and raised survival
+0.333 → **0.525** with `won` unchanged. E30 (passive), E31 (reckless), E33 (shaped safe), E34
+(forced safe) and now E36 all agree: **on this board, survival does not convert into points.**
+
+**Tool defect found and not yet fixed.** `scratchpad/deaths/collect.py` *reimplements*
+`state_to_features` (lines 110-120) instead of calling it, and hardcodes `target_dist = DIST_NONE`
+in the danger branch. Its docstring claims the opposite ("digits are computed by it, not by us"),
+and that was true for every entry before this one — the reimplementation matched exactly until
+E36 changed the danger branch. My first P2/P3 measurement was taken on pre-E36 rows and was void;
+the numbers above come from a rollout through the agent's real `state_to_features`. **Every
+forensic result from E28 on is unaffected, but the file must call the function it documents.**
+
+### Correction, 2026-08-16 (audit 8) — three defects, two of them mine
+
+Audit 8 reproduced **every number in the table above to four decimals**. The arithmetic is right;
+the design and the verdict label are not. All three findings verified independently before being
+written here.
+
+**1. The arms and the control had different warm-start parents. E36 is not "E33 ctl verbatim".**
+From `hyperparams.warm` across all 55 rung-4 runs:
+
+| runs | warm parent | valued rows |
+|---|---|---|
+| E30 `T`, E31 `S0`, E33 all four arms, E35 all three — **45 runs** | `_rung2ship` | **2 364** |
+| **E36 `OPP`, `PLB` — 10 runs** | **`_e36parent`** | **7 879** |
+
+**E36 is the only rung-4 entry whose arms do not share the control's initial condition** — in
+precisely the dimension E34 was about. My launcher did it and my entry claimed the opposite. It was
+also avoidable: `_rung2ship` already carries 1 025 valued danger rows, so a matched parent could
+have been broadcast from *it*.
+
+Consequences, which differ per comparison:
+- **P1's refutation is unharmed and is conservative** — `OPP` had the *richer* parent and still
+  returned `won` −0.007. It stands as written.
+- **PLB − ctl is confounded.** The +0.980 crates contains a parent effect of unknown size.
+- **PLB − OPP is clean** — same parent, same 4-way split of the same idle digit, same run indices,
+  same arenas. It is the only uncontaminated contrast E36 contains, and I never computed it:
+  **score +0.203 [+0.046, +0.360], coins +0.122 [+0.034, +0.210], 5/5 seeds.**
+
+**2. P5 was UNDEFINED, not failed — so "inconclusive by construction" is the wrong verdict.** The
+ratio 0.0126 / 0.0068 = 1.853 is arithmetically right, but the denominator is `OPP`'s `won` move of
+**−0.0068 with CI [−0.031, +0.017]** — indistinguishable from zero. **A ratio against a zero
+denominator is undefined**, and the gate would have fired for almost any placebo value including
+zero. A placebo test is informative only *conditional on the treatment having moved*, and P1 was
+already refuted on its own, so P5 carried no information. **Corrected scoring: P1 refuted, P2
+refuted, P3 and P4 passed, P5 undefined** — and PLB is an *exploratory positive* in a
+pre-registered arm on a pre-registered metric (`crates` was P4's guard). The label I chose demoted
+the one result in the entry that pointed forward, and I had an incentive to stop.
+
+**3. The entry was underpowered on its own primary metric.** Paired SD of `won` differences across
+nine arm × checkpoint sets is **0.0231**, so the 80 %-power minimum detectable effect is:
+
+| n | MDE on `won` |
+|---|---|
+| **5** | **0.0446** |
+| 10 | 0.0267 |
+| 20 | 0.0177 |
+
+**E36 pre-registered `won` 0.395-0.430, i.e. +0.023 to +0.058 — the lower two-thirds of its own
+target range sat below its detection threshold.** E35's +0.018 to +0.058 has the same problem. And
+the conversion rate is measurable: over 45 run-level points, `won ≈ −0.056 + 0.113 × score`
+(r = 0.76), so **+0.211 score predicts +0.024 `won`** — 54 % of the n = 5 MDE.
+
+**So "five pre-registered `won` negatives" partly measures the design rather than the
+interventions.** That is a methods finding that recontextualises E33, E34, E35 and E36 at once, and
+it belongs in the report ahead of any of them. **A rung-4 experiment expecting a moderate effect
+needs n ≈ 10-20 seeds, not 5.**
+
+**Two smaller corrections.** The placebo is described as having "matched marginals" — it is matched
+in *arity* only (danger-step marginals PLB {0.316, 0.175, 0.325, 0.184} vs OPP {0.162, 0.197,
+0.380, 0.261}). And the reading of P2's bucket 0 as *"it conditions on whether anyone is around at
+all"* is about a quarter right: of the 16.2 % of danger steps in bucket 0, **73.4 % have opponents
+alive but BFS-unreachable** behind crates, and only 26.6 % have none left. Bucket 0 is mostly a
+statement about **board enclosure** — which points the same way as everything else in this entry.
+
+**What audit 8 could not break.** PLB's crates effect survives every robustness test available:
+5/5 seeds positive (min +0.237, paired p = 0.013), coherent secondaries (`coins` +0.137 p = 0.025,
+`score` +0.211, and the arithmetic closes — 0.137 + 5 × 0.015 = 0.212), **monotone across
+checkpoints** (+0.093 → +0.608 → +0.980, with the missing ctl@10 000 measured by the audit), and it
+**replicates in an independent stream** — `CRATE_DESTROYED` in the training logs builds monotonically
+and plateaus at **+0.94** against the evaluation's +0.98. The strongest case against it is also
+recorded: **`OPP`'s own crates was +0.710 [+0.231, +1.190] at 10 000, 5/5 seeds, and −0.030 by
+20 000** — a 5/5 CI-excluding-zero crates result in this exact design has evaporated once at n = 5.
+What separates them is that PLB's is monotone where OPP's was a bump, and the training stream
+discriminates them (PLB builds and holds, OPP decays to +0.02). Under a full 66-test Bonferroni
+family PLB's crates does **not** survive (p ≈ 0.87); "post-hoc" is fair for the metric selection,
+"likely false positive" is not supported.
+
+- **Verdict: E36 is INCONCLUSIVE by its own pre-registered placebo rule, with P1 and P2 refuted
+  and P3 and P4 passed.** Audit 7's premise — that no feature-map change had ever been tested on
+  rung 4 — was correct and is now tested. The specific feature it ranked first does not convert.
+- **What survives for the report.** Coverage does not bind (P3), so a feature *can* be added at
+  zero state cost; opponent distance is not the feature; and a structural feature accidentally
+  beat it. The eight-digit map is still the binding constraint, but the missing information is
+  about **the board**, not about **the opponents** — which is the opposite of what five entries
+  of death forensics implied.
+- **Next, and the honest framing:** PLB's +0.98 crates is a **post-hoc** finding from an arm that
+  existed to be a null. Chasing it directly is how a project talks itself into a false positive.
+  If it is run, it must be as a *pre-registered* arm with a genuinely information-free control
+  (a fixed random relabelling of the danger rows, not a function of position), and the stopping
+  rule stands: this is one experiment, not a new programme.
+
+---
+
 ## E35 — Thirty per cent of our score comes from an event priced at zero
 
 - **Question:** `score = coins + 5·kills`, exactly (2.613 + 5 × 0.221 = 3.719). **Kills are 30 % of
