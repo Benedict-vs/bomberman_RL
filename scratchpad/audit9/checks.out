@@ -1,0 +1,22 @@
+runs where score != coins + 5*kills: 0 of 180
+global max think_max_ms: 53.4012  rounds over 5ms: 389 of 180000
+any think_over_limit: 0
+
+PLB2-ctl2 score@20k diffs: [-0.172 -0.042  0.025  0.133  0.138  0.167  0.211  0.224  0.23   0.299
+  0.324  0.388  0.401  0.446  1.421]
+ shapiro p=0.0009  skew=2.16  kurtosis=5.17
+ bootstrap 95% CI over seeds: [0.1331, 0.4815]  (t-CI [0.0812, 0.4779])
+ sign test p=0.0074 (13/15)
+
+=== crates per bomb (run-level ratio of means) ===
+ ep5000: ctl2 1.0291  PLB2 1.1233  PAR 1.0369  SHF 1.1363  
+ ep10000: ctl2 1.0064  PLB2 1.0845  PAR 1.0297  SHF 1.1006  
+ ep20000: ctl2 0.9996  PLB2 1.1291  PAR 1.0564  SHF 1.0456  
+  PLB2-ctl2 crates/bomb @20k +0.1295 [+0.0609,+0.1982] 12/15
+  PAR-ctl2 crates/bomb @20k +0.0568 [+0.0016,+0.1121] 13/15
+  SHF-ctl2 crates/bomb @20k +0.0460 [-0.0206,+0.1126] 9/15
+
+bombs mean @20k: {'ctl2': np.float64(31.649), 'PLB2': np.float64(29.394), 'PAR': np.float64(30.802), 'SHF': np.float64(29.921)}
+steps mean @20k: {'ctl2': np.float64(278.78), 'PLB2': np.float64(271.89), 'PAR': np.float64(274.14), 'SHF': np.float64(278.23)}
+
+share of rounds counted as 'won' with our score == 0 (10 runs): 0.0

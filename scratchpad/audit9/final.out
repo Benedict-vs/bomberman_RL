@@ -1,0 +1,33 @@
+paired SD of score diffs (the number n=15 was chosen from; pre-reg used 0.1825):
+  ep 5000  PLB2: SD=0.3724   (excl s105: 0.2849)
+  ep 5000   PAR: SD=0.3292   (excl s105: 0.2702)
+  ep 5000   SHF: SD=0.3343   (excl s105: 0.2427)
+  ep10000  PLB2: SD=0.2600   (excl s105: 0.1476)
+  ep10000   PAR: SD=0.3352   (excl s105: 0.1780)
+  ep10000   SHF: SD=0.3129   (excl s105: 0.1289)
+  ep20000  PLB2: SD=0.3582   (excl s105: 0.1754)
+  ep20000   PAR: SD=0.3123   (excl s105: 0.1272)
+  ep20000   SHF: SD=0.3437   (excl s105: 0.2480)
+  mean SD=0.3287 -> 80%-power MDE at n=15 = 0.256   (pre-registered claim: 0.164)
+  excl s105: mean SD=0.2003 -> MDE at n=14 = 0.162
+
+=== split-half over evaluation arenas (PLB2-ctl2 score @20k) ===
+ rounds 0-499: +0.2664 [+0.0618,+0.4710] 14/15
+ rounds 500-999: +0.2927 [+0.0889,+0.4964] 12/15
+
+=== per-round distribution: is the gain broad or arena-concentrated? (pooled over seeds, @20k) ===
+  1000 arenas: mean diff +0.2795, median +0.2667, share>0 0.591
+  top-50 arenas contribute 48.1% of the total gain
+  deciles: [-1.133 -0.467  0.267  1.     1.667]
+
+=== ctl2 seed 105: is it an evaluation artifact or a trained-table property? ===
+  ep5000: s105 score 2.824 vs others 3.682 (z=-3.5)
+  ep10000: s105 score 2.629 vs others 3.708 (z=-13.2)
+  ep20000: s105 score 2.596 vs others 3.688 (z=-8.4)
+  (training log: s105 mean score over ep15000-20000 = 1.992 vs 2.72 for the other 14 ctl2 runs)
+
+=== how many 'collapsed' runs per arm? (run mean score @20k < 3.3) ===
+   ctl2: ['s105=2.596', 's107=3.354']  min=2.596
+   PLB2: []  min=3.680
+    PAR: []  min=3.643
+    SHF: ['s107=2.930']  min=2.930

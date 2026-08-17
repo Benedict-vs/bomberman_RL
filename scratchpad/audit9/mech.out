@@ -1,0 +1,14 @@
+=== PLB2: ACROSS-class (crossing vs corridor) vs WITHIN-class (0 vs 2, 1 vs 3) split of max_a Q ===
+  |across| = 1.0354   |within| = 0.3898   ratio = 2.66   (paired over 15 seeds, across>within in 15/15, p=1.86e-17)
+
+=== the same split, stratified by own_danger (digit 5: moves left incl. this one) ===
+  PLB2:
+    own_danger=1: maxQ(crossing)-maxQ(corridor) = +0.3230  (0/15 negative)
+    own_danger=2: maxQ(crossing)-maxQ(corridor) = -0.2346  (15/15 negative)
+    own_danger=3: maxQ(crossing)-maxQ(corridor) = -0.1445  (15/15 negative)
+    own_danger=4: maxQ(crossing)-maxQ(corridor) = -0.2212  (15/15 negative)
+  PAR:
+    own_danger=1: maxQ(crossing)-maxQ(corridor) = +0.4682  (0/15 negative)
+    own_danger=2: maxQ(crossing)-maxQ(corridor) = -0.2998  (15/15 negative)
+    own_danger=3: maxQ(crossing)-maxQ(corridor) = -0.0800  (12/15 negative)
+    own_danger=4: maxQ(crossing)-maxQ(corridor) = -0.1196  (14/15 negative)

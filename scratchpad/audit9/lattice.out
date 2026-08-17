@@ -1,0 +1,11 @@
+=== max_a Q in touched danger rows, by digit-8 class ===
+(PLB2/PAR: even d8 = crossing (x+y even), odd = corridor.  SHF: labels balanced within class => no meaning)
+  PLB2: mean maxQ(even d8) - maxQ(odd d8) = -0.1096 +- 0.0175   (0/15 positive, mean 184 bases)
+   PAR: mean maxQ(even d8) - maxQ(odd d8) = -0.0555 +- 0.0250   (2/15 positive, mean 180 bases)
+   SHF: mean maxQ(even d8) - maxQ(odd d8) = -0.0048 +- 0.0161   (5/15 positive, mean 857 bases)
+
+=== BOMB attractiveness in NON-danger touched rows (semantics identical in all arms) ===
+  ctl2: share argmax==BOMB 0.1810   mean Q(BOMB)-max(other) -4.6753   non-danger touched rows 1685
+  PLB2: share argmax==BOMB 0.1790   mean Q(BOMB)-max(other) -4.6560   non-danger touched rows 1660
+   PAR: share argmax==BOMB 0.1789   mean Q(BOMB)-max(other) -4.7151   non-danger touched rows 1663
+   SHF: share argmax==BOMB 0.1790   mean Q(BOMB)-max(other) -4.6056   non-danger touched rows 1663

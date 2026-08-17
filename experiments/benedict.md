@@ -108,6 +108,152 @@ report. This is one terminal experiment, not a new programme.
 **Fallback if that is too long:** drop `PAR` (45 runs, ≈ 9 h); H1 and H3 still resolve and H2
 becomes an inference from `SHF` alone.
 
+### Result — 1000 rounds at validation seed 550731, n = 15 runs, paired at run level
+
+Sweep ran 2026-08-16, 06:22-15:12; 180/180 checkpoints, no tracebacks. Two structural checks that
+E36 failed both pass, and the second was **impossible to run before this morning**: all 60 runs
+share `warm = _e36parent` with identical reward tables, and **180/180 evaluations read their table
+under the correct `BM_D8`**, verified from the new `bm_env` field in each `.meta.json`.
+
+| @20 000 | score | **won** | crates | coins | suicides | survived | kills |
+|---|---|---|---|---|---|---|---|
+| **ctl2** | 3.615 | 0.3595 | 31.38 | 2.539 | 0.530 | 0.420 | 0.216 |
+| **PLB2** `(x+y)%4` | **3.895** | 0.3833 | **33.13** | 2.763 | 0.503 | 0.440 | 0.228 |
+| **PAR** `(x+y)%2` | 3.770 | 0.3672 | 32.43 | 2.650 | 0.534 | 0.414 | 0.225 |
+| **SHF** null | 3.694 | 0.3607 | 31.24 | 2.596 | 0.522 | 0.423 | 0.221 |
+
+Paired differences vs `ctl2`, 95 % t-CI, seeds positive:
+
+| | score | crates | coins | won |
+|---|---|---|---|---|
+| **PLB2** | **+0.280 [+0.081, +0.478]** 13/15 | **+1.757 [+0.892, +2.622]** | **+0.224 [+0.129, +0.318]** | +0.024 [−0.006, +0.054] |
+| **PAR** | +0.155 [−0.018, +0.328] 13/15 | **+1.057 [+0.233, +1.881]** | **+0.111 [+0.038, +0.184]** | +0.008 [−0.016, +0.031] |
+| **SHF** | +0.079 [−0.111, +0.269] 9/15 | −0.136 [−1.442, +1.170] | +0.057 [−0.057, +0.172] | +0.001 [−0.025, +0.027] |
+
+**H1 HOLDS.** +0.280, p = 0.0091, inside the pre-registered 0.15-0.30 band, monotone across
+checkpoints (+0.097 → +0.198 → +0.280; crates +0.512 → +0.889 → +1.757). **E36's PLB effect
+replicates with the warm-start confound removed, and larger** (E36's confounded estimate: +0.211).
+
+**H2 REFUTED as written** — `PAR` needed ≥ +0.140 *and* a CI excluding 0; it reaches +0.155 but
+p = 0.076. **The refutation reading pre-registered for it does not apply.** That text says "`PAR`
+≈ 0 while `PLB2` > 0 → the gain rides on the arbitrary positional component". `PAR` is not ≈ 0: it
+moves crates and coins with CIs excluding zero, and the table measurements below show the opposite
+of what the refutation asserts. H2 failed on power, not on its mechanism.
+
+**H3 HOLDS as written but is UNDEFINED at this power, and this is the entry's methodological
+finding.** `SHF − ctl2` = +0.079 [−0.111, **+0.269**]: an accept-the-null test whose CI tolerates
+**96 % of `PLB2`'s own effect**. Low power makes such a test *easier* to pass. **H3 is a leg of the
+continuation rule**, so the rule fires `CONTINUE` on evidence that cannot distinguish "the null
+does nothing" from "the null does most of what the treatment does". **This is E36's P5 error —
+scoring a ratio against a denominator indistinguishable from zero — relocated onto the go/no-go
+decision.** `e37_analyse.py` printed the underpower caveat for `won` and not for H3; fixed.
+
+**Guards (P4).** `crates` ≥ 31.0 passes everywhere (31.24-33.13). `won` ≥ 0.36 passes in all three
+arms; `ctl2` misses at 0.3595, which is the control, not an arm regressing. **Coverage passes with
+a ≥ 125× margin** — all-zero-row share `ctl2` 0.00000, `PLB2` 0.00008, `PAR` 0.00004, `SHF` 0.00006
+over ~66 000 ε = 0 alive steps per arm (`scratchpad/benedict/e37_coverage.py`, which calls the
+agent's own `state_to_features` rather than reimplementing it). E28's deferral condition stays
+expired for the third measurement running: 0.026 → 0.0001 → 0.00006.
+**`think_max_ms` < 5 ms FAILS in all four arms** (14.5-41.5, global max 53.4). It carries no
+information: the control fails identically, mean think time is 0.134-0.138 ms in every arm, and the
+constraint it proxies — `TIMEOUT = 0.5 s` per step — is met with **0 breaches in 180 000 rounds**.
+It is a max over ~2.7 M steps taken under ten concurrent evaluations, i.e. an OS-scheduling
+outlier. **Future entries should guard on `think_over_limit > 0` or a p99, not on a max.**
+
+**P5, `won` reported not tested.** `PLB2` +0.024 [−0.006, +0.054] against an observed MDE of 0.042.
+Null, and **underpowered — not evidence of absence**, exactly as point 5 required it be stated.
+
+### Audit 9 — the effect survives; the design and my analysis do not
+
+Briefed to break H1, analysis-only. It could not kill the effect. Everything below was re-derived
+independently before being written here.
+
+**The headline is inflated by one collapsed control run.** `ctl2` s105 evaluates at 2.596 against
+3.688 for the other fourteen (z = −8.4 against them), and it is a genuine *training* collapse. Its
+paired difference is +1.42, 3.2× the next largest. **Drop it: +0.198 [+0.097, +0.299], p = 0.0010**
+— the effect becomes *more* significant and the SD halves. Leave-one-out never leaves
+[+0.198, +0.312]. **The honest magnitude is ≈ +0.20, not +0.28**, and H1 clears +0.10 on every
+estimator.
+
+**The t-CI is not valid.** Shapiro p = 0.0009, skew +2.16. Bootstrap over seeds gives
+**[+0.133, +0.482]**; Wilcoxon p = 0.0015; sign test p = 0.0074. The +0.081 lower bound was a
+normal-fit artifact.
+
+**"Paired at run level" bought nothing.** corr(arm, ctl2) at matched seed runs −0.47 to +0.44, and
+`SD_paired/SD_unpaired` exceeds 1 in 5 of 9 cells — the unseeded training opponents destroy the
+pairing that the design's power calculation assumed.
+
+**So E37 was underpowered on its own primary, which is what it existed to fix.** Realised paired SD
+is **0.358**, not the 0.1825 assumed → 80 %-power MDE **0.256**, not 0.164; the design was ~60 %
+powered. The pre-registered MDE table was also internally inconsistent before the sweep ran: 0.352
+/ 0.210 / 0.164 back-solves to SD = 0.211 at every n, not the 0.1825 quoted beside it. And
+`e37_analyse.py` used the large-sample constant 2.8 for (t₀.₉₇₅ + t₀.₈₀), understating every MDE by
+7.6 %. Both fixed.
+
+**The clean contrast is one this entry never pre-registered.** `PLB2 − SHF`: **+0.2005
+[+0.0437, +0.3572]**, 11/15, Shapiro 0.718, and +0.183 without s105. Same arity, same parent, same
+learning-rate dilution, differing only in whether the label tracks the lattice. It is immune to the
+outlier, to the α confound, and to "any 4-way split works" — and it is the number this entry should
+be built on.
+
+**`SHF` is not inert either.** In the training stream it beats `ctl2` by +0.146 (p = 0.030, 13/15
+over ep 15-20 k), indistinguishable from `PAR`. **Changing digit 8 at all buys something**, which is
+the perturbation effect the entry predicted and which is visible at 5 000, where all three arms sit
+at ~+0.10 and are indistinguishable. Only `PLB2` keeps building.
+
+### Mechanism — the lattice bit does the work, conditional on the fuse
+
+Measured on the Q-tables themselves, which no previous entry did. **A row counts only if training
+*changed* it** (|q − parent| > 1e-12); "the row carries value" is not the same test, because the
+warm parent is a factor-1 broadcast, so every warm-valued base is non-zero in all five siblings.
+
+**My first derivation used the wrong filter and was falsified on the control.** Pooling over rows
+that merely carry value returns **+0.4522 on `ctl2`** — a table whose digit 8 is pinned and which
+can carry no lattice information at all. That estimator measures visit coverage × uplift, not
+value: crossings are updated on 75 % of danger bases and corridors on 21 %, because a corridor has
+two permanently blocked neighbours. The coverage gap alone manufactures the number.
+
+Under the corrected filter, on rows training actually touched:
+
+- **`max_a Q`(crossing) − `max_a Q`(corridor) = −0.060 (14/15 seeds) for `PLB2`, −0.056 (13/15) for
+  `PAR`, +0.013 for `SHF`.** The arms carrying the lattice split it; the null does not.
+- **The informative bit does ~3× the work of the arbitrary one.** Within `PLB2`, the mean split
+  *across* lattice classes is **1.123** against **0.361** *within* them — **ratio 3.12, 15/15
+  seeds**. This is the direct refutation of H2's canned reading: the gain does **not** ride on the
+  arbitrary positional component.
+- **And the information is conditional on the fuse:** crossings are worth **more** with one move
+  left (+0.246, 15/15) and **less** at 2/3/4 (−0.189, −0.092, −0.108, 15/15 or 14/15). That is
+  board physics — one move needs exits (4 at a crossing vs 2), two or more needs to clear a blast
+  covering 12 tiles at a crossing and 6 in a corridor. `ctl2` learns the average of the two.
+  **The same aliasing diagnosis as E36's row 55060, in a new place.**
+
+**Pathway: bomb siting, not survival.** BOMB attractiveness in non-danger rows is identical across
+arms (0.1810/0.1790/0.1789/0.1790), yet `PLB2` drops 2.26 *fewer* bombs and destroys 1.76 *more*
+crates — crates per bomb **+0.130 [+0.061, +0.198]**. The score closes entirely on that route:
++0.224 coins + 5 × 0.011 kills = +0.279 of the +0.280. Survival moves +0.020, not significant.
+**Sixth replication that survival does not convert into points on this board.**
+
+**Why `PLB2` beats `PAR` is not settled.** The leading explanation is a learning-rate artifact:
+α = 1/visits^0.7 per cell, so a 4-way split keeps α 2^0.7 = 1.62× higher than a 2-way one for the
+whole run, and `PAR` is still climbing at 20 000. It is untested. **The cheapest test is a 2-way
+`SHF`-style null arm**, and it belongs in any follow-up. Note also that `SHF` is not only "position
+without the lattice" — it is spatially *white*, where `(x+y) mod 4` changes by ±1 along a
+trajectory, so it nulls two things at once.
+
+- **Verdict: BESSER for `PLB2` on `score`** — +0.20 by the robust estimators, CI excluding 0 under
+  t, bootstrap, Wilcoxon and sign test, monotone across checkpoints, replicated in the independent
+  training stream, and with a mechanism measured in the tables. **The first feature-map gain on
+  rung 4, and the first positive result since E26.**
+- **H1 holds · H2 refuted (but not for its stated reason) · H3 holds as written but is undefined at
+  this power · P4 mixed · P5 null and underpowered.**
+- **The continuation rule fires `CONTINUE`, and it should not be obeyed as written.** It fires on
+  H1 ∧ (H2 ∨ H3), and the leg supplying it is H3 — the one that cannot distinguish its null from
+  the full treatment effect. Any confirmation sweep must be sized from the **realised** SD of 0.358
+  (n ≈ 30-40 for `score` at +0.20, and `won` is out of reach at any n this project can afford),
+  must report **`PLB2` − `SHF`** as primary rather than `PLB2` − `ctl2`, and should add the 2-way
+  null that tests the α explanation. **Otherwise rung 4 closes here on a positive result** — which
+  is a better place to stop than the five negatives that preceded it.
+
 ---
 
 ## E36 — The map is blind exactly where it dies, and the fix costs zero rows

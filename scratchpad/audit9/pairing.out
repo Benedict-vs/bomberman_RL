@@ -1,0 +1,20 @@
+=== does run-level pairing buy anything? (score) ===
+ ep 5000  PLB2: corr(arm,ctl2)=-0.472  SD_paired=0.3724 SD_unpaired=0.3360  ratio=1.109  Welch p=0.2785
+ ep 5000   PAR: corr(arm,ctl2)=+0.044  SD_paired=0.3292 SD_unpaired=0.3321  ratio=0.991  Welch p=0.2038
+ ep 5000   SHF: corr(arm,ctl2)=-0.042  SD_paired=0.3343 SD_unpaired=0.3316  ratio=1.008  Welch p=0.2502
+ ep10000  PLB2: corr(arm,ctl2)=+0.441  SD_paired=0.2600 SD_unpaired=0.3218  ratio=0.808  Welch p=0.0269
+ ep10000   PAR: corr(arm,ctl2)=-0.169  SD_paired=0.3352 SD_unpaired=0.3161  ratio=1.060  Welch p=0.2181
+ ep10000   SHF: corr(arm,ctl2)=-0.058  SD_paired=0.3129 SD_unpaired=0.3072  ratio=1.018  Welch p=0.2464
+ ep20000  PLB2: corr(arm,ctl2)=-0.216  SD_paired=0.3582 SD_unpaired=0.3337  ratio=1.073  Welch p=0.0043
+ ep20000   PAR: corr(arm,ctl2)=+0.112  SD_paired=0.3123 SD_unpaired=0.3225  ratio=0.968  Welch p=0.0810
+ ep20000   SHF: corr(arm,ctl2)=+0.301  SD_paired=0.3437 SD_unpaired=0.4105  ratio=0.837  Welch p=0.4620
+
+=== same, excluding seed 105 ===
+ ep20000  PLB2: corr=+0.070  paired-t p=0.0010  Welch p=0.0004
+ ep20000   PAR: corr=+0.403  paired-t p=0.0339  Welch p=0.0757
+ ep20000   SHF: corr=+0.457  paired-t p=0.8212  Welch p=0.8545
+
+=== how many arm x checkpoint x metric contrasts exist, and how many are 'significant'? ===
+ contrasts vs ctl2: 135, p<0.05: 46 (34.1%); expected under the null 5%
+ Bonferroni threshold 0.00037;  smallest p=1.67e-15
+ PLB2 score@20k p=0.0091 -> Bonferroni over the 135-test family: p_adj=1.000

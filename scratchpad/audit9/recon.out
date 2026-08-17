@@ -1,0 +1,41 @@
+=== 1. update coverage is confounded with lattice class ===
+  arm   f(even)    f(odd)   f_e-f_o   u(even)    u(odd)   u_e-u_o
+ PLB2     0.752     0.207    +0.545    0.7687    0.6572   +0.1115
+  PAR     0.813     0.215    +0.597    0.9897    0.8238   +0.1659
+  SHF     0.708     0.748    -0.040    0.6348    0.5991   +0.0357
+
+=== 2. the pooled contrast is reproduced by the coverage gap alone ===
+  arm   pooled (reported)   predicted f_e*u_e - f_o*u_o   coverage-free u_e - u_o
+ PLB2             +0.4419                       +0.4419         +0.1115 +-0.0104  (0/15 negative)
+  PAR             +0.6270                       +0.6270         +0.1659 +-0.0179  (0/15 negative)
+  SHF             +0.0011                       +0.0011         +0.0357 +-0.0050  (0/15 negative)
+
+=== 3. the control falsifies the pooled estimator ===
+ ctl2 s100: d8 is PINNED to 0, so the table holds no lattice information at all.
+   pooled even-odd over all five siblings = +0.3088
+   restricted to reachable d8 = [0]: the odd group is EMPTY -> estimator UNDEFINED
+   -> the pooled estimator cannot be computed on the control, so it has no null calibration.
+
+=== 4. matched estimator: bases with an UPDATED row in both classes ===
+  PLB2: -0.1088 +- 0.0190  (15/15 negative, mean 183 bases)
+   PAR: -0.0510 +- 0.0266  (13/15 negative, mean 180 bases)
+   SHF: +0.0087 +- 0.0045  (2/15 negative, mean 840 bases)
+
+=== 5. same bases for PLB2 and PAR (intersection), so the ordering is comparable ===
+  common bases per seed: 159
+  PLB2 -0.0684 (15/15 neg)   PAR -0.0136 (8/15 neg)   PLB2-PAR -0.0548 p=0.0009
+
+=== 6. across- vs within-lattice-class split in PLB2, matched, updated rows only ===
+  |across| 1.0217  |within| 0.3218  ratio 3.17  (15/15, p=2.08e-21)
+
+=== 7. own_danger stratification, matched estimator ===
+ PLB2:
+   own_danger=1: +0.3160  (0/15 negative)
+   own_danger=2: -0.2335  (15/15 negative)
+   own_danger=3: -0.1588  (15/15 negative)
+   own_danger=4: -0.2011  (15/15 negative)
+ PAR:
+   own_danger=1: +0.4690  (0/15 negative)
+   own_danger=2: -0.2830  (15/15 negative)
+   own_danger=3: -0.0800  (12/15 negative)
+   own_danger=4: -0.1222  (15/15 negative)

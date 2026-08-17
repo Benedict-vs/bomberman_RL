@@ -68,10 +68,28 @@ Rules for briefing one, all learned expensively:
 Beats `rule_based_agent` (3.254 / 0.286) and the measured symmetric bar (`won` 0.283). Published
 prior work on this same course project reaches ≈5.0 with a **335-state** table.
 
-**E37 is running or about to run** — 60 runs, ~11 h, four arms testing whether E36's accidental
-placebo effect is real and whether its mechanism is the wall lattice. The entry, predictions and
-stop rules are at the top of `experiments/benedict.md`. **It has a pre-committed continuation rule:
-only if H1 and (H2 or H3) hold does anything else run; otherwise rung 4 closes.**
+**E37 is COMPLETE (2026-08-16) and is the first positive feature-map result on rung 4.** 60 runs,
+180 evaluations, full entry with audit 9's corrections at the top of `experiments/benedict.md`.
+
+- **H1 holds.** `PLB2` `(x+y)%4` − `ctl2` on score **+0.28 raw, +0.20 after removing one collapsed
+  control seed** (s105, a genuine training collapse worth ~29 % of the headline). Significant under
+  t, bootstrap, Wilcoxon and sign test; monotone across checkpoints; replicated in the training
+  stream. **Report `PLB2` − `SHF` = +0.2005 [+0.0437, +0.3572] as the primary contrast** — same
+  arity, same parent, same α dilution, immune to the outlier.
+- **Mechanism, measured in the Q-tables:** the lattice bit does ~3× the work of the arbitrary bit
+  (across/within split 1.123 vs 0.361, 15/15), conditional on the fuse (crossings worth more at
+  `own_danger` = 1, less at 2/3/4), and it pays through **bomb siting** (crates/bomb +0.130), not
+  survival. Sixth replication that survival does not convert.
+- **Do NOT obey the continuation rule as written.** It fires on H1 ∧ (H2 ∨ H3) and the supplying
+  leg is H3 — an accept-the-null test whose CI tolerates 96 % of the treatment effect. Size any
+  follow-up from the **realised** paired SD of 0.358 (n ≈ 30-40 on score; `won` is unreachable),
+  and add a 2-way null to test the α-dilution explanation for `PLB2` > `PAR`.
+- **Pairing at run level bought nothing** (corr −0.47…+0.44). Unseeded training opponents destroy
+  it. Every rung-4 power calculation that assumed pairing was wrong.
+
+Tools written for it, all reusable: `e37_analyse.py` (scores pre-registered hypotheses
+mechanically; validated by reproducing E36's published numbers exactly), `e37_status.py`,
+`e37_coverage.py`, `e37_eval.sh`.
 
 **Open defects, all recorded in the ledger:**
 - `tools/evaluate.py:258` undercounts `killed_by_opponent` — `died − suicides` misses deaths where

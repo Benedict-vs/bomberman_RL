@@ -1,0 +1,33 @@
+/Users/benedictvonschubert/Projects/bomberman_RL/scratchpad/audit9/qtables.py:37: RuntimeWarning: Mean of empty slice
+  f"  argmax-differs {np.nanmean(sp):.3f}")
+=== visited rows and argmax disagreement across digit-8 siblings (ep20000) ===
+  ctl2: visited    2750  visited-danger    1093  bases with >=2 visited siblings    0.0  argmax-differs nan
+  PLB2: visited    3994  visited-danger    2309  bases with >=2 visited siblings  875.5  argmax-differs 0.043
+   PAR: visited    2943  visited-danger    1274  bases with >=2 visited siblings  180.4  argmax-differs 0.042
+   SHF: visited    5118  visited-danger    3438  bases with >=2 visited siblings  903.3  argmax-differs 0.046
+
+=== max_a Q: crossing (even d8) minus corridor (odd d8), same base, ep20000 ===
+  PLB2: -0.1096 +- 0.0175   (15/15 negative)
+   PAR: -0.0555 +- 0.0250   (13/15 negative)
+   SHF: -0.0048 +- 0.0161   (10/15 negative)
+
+=== PLB2: |split ACROSS lattice class| vs |split WITHIN it| (0 vs 2, 1 vs 3) ===
+ across 1.0354  within 0.3898  ratio 2.66  (15/15, p=1.86e-17)
+
+=== the same split stratified by own_danger (digit 5) ===
+ PLB2:
+   own_danger=1: +0.3230  (0/15 negative)
+   own_danger=2: -0.2346  (15/15 negative)
+   own_danger=3: -0.1445  (15/15 negative)
+   own_danger=4: -0.2212  (15/15 negative)
+ PAR:
+   own_danger=1: +0.4682  (0/15 negative)
+   own_danger=2: -0.2998  (15/15 negative)
+   own_danger=3: -0.0800  (12/15 negative)
+   own_danger=4: -0.1196  (14/15 negative)
+
+=== BOMB attractiveness in NON-danger visited rows (semantics identical in all arms) ===
+  ctl2: share argmax==BOMB 0.1810   Q(BOMB)-max(other) -4.6753
+  PLB2: share argmax==BOMB 0.1790   Q(BOMB)-max(other) -4.6560
+   PAR: share argmax==BOMB 0.1789   Q(BOMB)-max(other) -4.7151
+   SHF: share argmax==BOMB 0.1790   Q(BOMB)-max(other) -4.6056

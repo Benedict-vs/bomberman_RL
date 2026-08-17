@@ -1,0 +1,6 @@
+<stdin>:29: RuntimeWarning: Mean of empty slice
+danger rows: 51200  non-danger: 12800
+ ctl2: touched rows     2750  danger-touched     1093  bases w/ >=2 touched siblings     0.0  argmax-differs share nan
+ PLB2: touched rows     3994  danger-touched     2309  bases w/ >=2 touched siblings   875.5  argmax-differs share 0.043
+  PAR: touched rows     2943  danger-touched     1274  bases w/ >=2 touched siblings   180.4  argmax-differs share 0.042
+  SHF: touched rows     5118  danger-touched     3438  bases w/ >=2 touched siblings   903.3  argmax-differs share 0.046
