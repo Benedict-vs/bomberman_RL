@@ -92,7 +92,45 @@ def trajectory() -> None:
     print("wrote", OUT / "task4_checkpoint_trajectory.png")
 
 
+def horizon() -> None:
+    """E38: what 300 000 episodes cost, and through which channel."""
+    import csv
+    SEEDS, EPS = (120, 121, 122, 123, 124), (20000, 40000, 80000, 160000, 300000)
+
+    def read(s, e, m):
+        p = (f"results/eval/task4_tournament/benedict_q_e38_s{s}"
+             f"__ep{e}__task4_rb_val550731.csv")
+        r = [x for x in csv.DictReader(open(p)) if x["agent"] == "benedict_task4"]
+        return float(np.mean([float(x[m]) for x in r]))
+
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(9.6, 3.6))
+    for a, metric, label, colour in ((ax, "score", "score", "#c2410c"),
+                                     (ax2, None, "crates per bomb", "#0369a1")):
+        ys, los, his = [], [], []
+        for e in EPS:
+            if metric:
+                v = np.array([read(s, e, metric) for s in SEEDS])
+            else:
+                v = np.array([read(s, e, "crates") / read(s, e, "bombs") for s in SEEDS])
+            sem = v.std(ddof=1) / np.sqrt(len(v))
+            t = stats.t.ppf(0.975, len(v) - 1)
+            ys.append(v.mean()); los.append(v.mean() - t * sem); his.append(v.mean() + t * sem)
+        a.plot(EPS, ys, "-o", color=colour, lw=2, ms=5)
+        a.fill_between(EPS, los, his, color=colour, alpha=0.12, lw=0)
+        a.set_xscale("log")
+        a.set_xticks(EPS); a.set_xticklabels([f"{e // 1000}k" for e in EPS])
+        a.set_xlabel("training episodes", fontsize=9)
+        a.set_ylabel(label, fontsize=9)
+        a.spines[["top", "right"]].set_visible(False)
+    ax.set_title("Longer training is worse", fontsize=11, loc="left", weight="bold")
+    ax2.set_title("...and it is bomb placement", fontsize=11, loc="left", weight="bold")
+    fig.tight_layout()
+    fig.savefig(OUT / "task4_training_horizon.png", dpi=200)
+    print("wrote", OUT / "task4_training_horizon.png")
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     forest(A.load(20000)[0])
     trajectory()
+    horizon()

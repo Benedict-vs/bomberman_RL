@@ -21,6 +21,149 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E38 — 20 000 episodes was inherited from rung 2, and rung 2's own curve is non-monotone
+
+- **Question:** every rung-4 run has used 20 000 episodes. That number was chosen on **rung 2**
+  (E23: "longer is worse here, 40 000 loses ~7 crates") and **never re-validated on rung 4.** E37
+  makes the omission live: its `PLB2` arm is the first that is still learning at the horizon.
+
+  | | @5 000 | @10 000 | @20 000 |
+  |---|---|---|---|
+  | `ctl2` score | 3.625 | 3.636 | 3.615 |
+  | `SHF` score | 3.727 | 3.731 | 3.694 |
+  | **`PLB2` score** | 3.722 | 3.834 | **3.895** |
+
+  The control is **flat from 5 000 on** — which is exactly why nobody questioned the budget: for
+  every arm before E37 the last 15 000 episodes bought nothing. `PLB2`'s training stream rises
+  monotonically into the final band (2.304 → 2.854 → 2.924 → **2.966**) where the control's falls
+  (2.224 → 2.730 → 2.710 → **2.686**).
+
+  **But "train longer" cannot be extrapolated, and rung 2 is why.** The episode response there is
+  non-monotone with a named mechanism: 40 000 lost ~7 crates, **200 000 turned the incumbent from
+  97.31 into 62.85 by re-rolling near-tie rows** (E18), and **300 000 was the best in its arm**
+  (97.59 dev / 97.45 held-out, E21). The ledger's own verdict: *"the fine map dips and recovers by
+  300 000, so 'train longer' is not reliably anything."* E22 corroborates the mechanism from the
+  other side — α → 1.0 tripled the thin-margin fraction and cost the best seed 88 crates.
+
+  So this is not a budget sweep. It is a test of whether **margin erosion** applies to a feature
+  map that splits its danger rows harder than rung 2's did.
+
+- **Change:** episodes only. 300 000 instead of 20 000, checkpoints at 20 000 / 40 000 / 80 000 /
+  160 000 / 300 000. Everything else is the shipped configuration at its defaults.
+
+- **Design.** 5 seeds (`BM_RUN_INDEX` 120-124), `--seed 810731`, **5 concurrent** rather than 10 so
+  each run holds a performance core. **The control is the same run's @20 000 checkpoint**, so every
+  comparison is within-run and paired by seed. No separate control arm exists at this horizon and
+  none is affordable — which is a real limitation, since it means the margin-erosion prediction is
+  tested against rung 2's recorded curve rather than against a contemporaneous `ctl2`.
+  1000 rounds at ε = 0, validation seed 550731, every checkpoint evaluated.
+
+- **Power, stated in advance.** n = 5 against the measured paired SD of `score` differences (0.358)
+  gives an 80 %-power MDE of **0.482**. **This design can only detect a rung-2-scale collapse, not
+  a small gain** — and that is deliberate, because the question is "does the horizon hurt", not
+  "is 300 000 slightly better". Any *positive* result here is a lead requiring confirmation at
+  n ≈ 15, never a claim.
+
+### Prediction (written before the run)
+
+1. **P1, primary — the guard.** `score` @300 000 is **not worse** than @20 000 by more than the
+   MDE: the paired difference has a CI whose lower bound is above **−0.48**. **Refutation:** a
+   drop with a CI excluding 0 → rung 2's re-rolling failure reproduces on rung 4, 20 000 is
+   vindicated as a budget, and the shipped table stays.
+2. **P2, mechanism — the shape, which is what makes this worth a night.** The curve is
+   **monotone or flat**, not U-shaped. Specifically `score` @40 000 ≥ @20 000 − 0.20.
+   **Refutation:** a dip at 40 000-80 000 that recovers by 300 000 reproduces rung 2's shape, and
+   the conclusion is that margin erosion is a property of the *algorithm* (ε floor + α annealing),
+   not of the feature map.
+3. **P3, the margin measurement that discriminates them.** Thin-margin share among updated danger
+   rows — |best − second| < 0.01 — **stays below 1.5× its @20 000 value at every checkpoint.**
+   This is measured on the tables, not inferred from score, and it is the quantity E18/E22 named.
+   **Refutation:** it grows past 1.5× while score holds → the erosion is real but not yet
+   expressed, and 300 000 is a cliff edge rather than a safe horizon.
+4. **P4, guards.** `suicides` ≤ 0.60 · `crates` ≥ 31.0 · all-zero-row share < 0.01 ·
+   `think_over_limit` = 0.
+5. **Ship rule, pre-committed.** The shipped table changes **only if** a checkpoint beats @20 000
+   with a paired CI excluding 0 on `score` at n = 5 *and* survives confirmation on the held-out
+   ship seed 990731 against the current ship. Given P1's MDE that requires an effect ≥ 0.48, which
+   I do not expect. **The expected outcome of this experiment is "20 000 was fine", and its value
+   is that this stops being an assumption.**
+
+**Cost:** 5 runs × 300 000 episodes ≈ 13-16 h at 5 concurrent, one night. E21's lesson is carried:
+**every checkpoint gets evaluated.** Its five 300 000-episode tables sat on disk unevaluated and
+reversed a scored prediction when they were finally measured.
+
+### Result — 25 checkpoints, 1000 rounds at ε = 0, validation seed 550731, n = 5
+
+Sweep ran 2026-08-16 20:38 to 2026-08-17 15:40 (19.0 h; my 8-10 h estimate was wrong because
+episodes lengthen as the horizon grows). 25/25 checkpoints, no tracebacks, all 25 evaluated.
+
+| episodes | score | `won` | crates | coins | suicides | survived | crates/bomb | paired vs @20 000 |
+|---|---|---|---|---|---|---|---|---|
+| **20 000** | **3.976** | **0.389** | 32.32 | 2.762 | 0.478 | 0.457 | 1.182 | — |
+| 40 000 | 3.810 | 0.377 | 32.63 | 2.687 | 0.510 | 0.430 | 1.155 | −0.166 [−0.502, +0.170] 2/5 |
+| 80 000 | 3.848 | 0.374 | 32.79 | 2.627 | 0.550 | 0.401 | 1.165 | −0.128 [−0.473, +0.217] 2/5 |
+| 160 000 | 3.637 | 0.348 | 29.87 | 2.393 | 0.493 | 0.459 | 1.104 | −0.339 [−0.912, +0.234] 1/5 |
+| **300 000** | **3.206** | **0.304** | 26.23 | 2.020 | 0.487 | 0.474 | **0.988** | **−0.770 [−1.355, −0.185] 0/5** |
+
+**P1 REFUTED.** The pre-registered guard was a CI lower bound above −0.48; it is **−1.355**, the
+point estimate is −0.770, and **0 of 5 seeds improved**. Training past 20 000 episodes makes this
+agent *worse*, and by more than the design's own MDE of 0.482. **The pre-committed consequence
+applies: 20 000 is vindicated as a budget on evidence rather than inheritance, and the shipped
+table stays.** The ship rule required a checkpoint beating @20 000 with a CI excluding 0; none does.
+
+**P2 PASSES as written, and the shape refutes rung 2's.** The bar was `score` @40 000 ≥ @20 000 −
+0.20, i.e. ≥ 3.776; it is 3.810. There is **no dip-and-recover** — the curve declines steadily and
+never comes back, where rung 2's fell to 62.85 at 200 000 and returned to its best at 300 000. So
+the two rungs fail differently, and "the fine map dips and recovers" does not generalise.
+
+**P3 FAILS as written, and the mechanism it was built to detect is contradicted.** Pooled thin
+margin ran 1.00 → 1.34 → 1.54 → 1.59 → **1.68×**, breaching the 1.5× threshold at 80 000. But the
+pooled statistic is confounded by cohort composition: the number of updated danger rows grows
+2 314 → 3 465 (+50 %), and newly reached rows are thin by nature (share ≈ 0.22-0.24) because they
+are barely trained. **Fixing the cohort to the rows already updated at 20 000, the thin-margin
+share *falls* 0.0466 → 0.0171 — 0.37×.** Established rows get **sharper**, not thinner. E18's
+re-rolling mechanism does not reproduce here.
+
+**That is my error, made one day after audit 9 caught its sibling.** Audit 9 showed that measuring
+over rows which merely *carry* value rather than rows training *changed* returns +0.45 on a control
+that cannot encode the signal at all. P3's definition repeats the same class of mistake in a new
+place: a pooled statistic over a growing population measures the population, not the quantity.
+
+**P4: one guard fails.** `crates` @300 000 is **26.23 against a 31.0 bar — FAIL**, which is the
+substantive finding rather than a technicality. `suicides` 0.487 ≤ 0.60 passes; `think_over_limit`
+is 0 across all 25 checkpoints (worst single step 7.86 ms against 500); coverage passes with room —
+0 all-zero rows in 28 818 ε = 0 alive steps, and rows carrying value *rise* 8 167 → 9 413, so this
+is not a coverage failure either.
+
+**The channel is bomb siting, and it is the one E37 won on.** Crates per bomb falls
+**1.182 → 0.988 (−0.194)** while bombs dropped barely move. E37's shipped feature bought **+0.130**
+crates per bomb; the horizon gives back **1.5× that**, through the identical quantity. Coins track
+it (2.762 → 2.020) because coins come from opened crates.
+
+**A reading I had to withdraw.** From the training stream I described the agent as becoming
+*passive* — survival rose 31 % and episodes lengthened 14 % between 20 000 and 250 000. **At ε = 0
+that does not hold**: survival is 0.457 → 0.474, flat, and suicides are flat too. The passivity is
+a property of the ε = 0.02 exploring policy, not of the greedy one. The greedy policy is not
+safer; it is simply worse at placing bombs. **A training curve is not a result, and this is the
+sixth time that rule has bitten on this project.**
+
+- **Verdict: SCHLECHTER for longer training. 20 000 episodes is correct on rung 4, now measured.**
+  The shipped table is unchanged.
+- **P1 refuted · P2 passed · P3 failed as written, with its mechanism contradicted · P4 one guard
+  failed (`crates`), three passed.**
+- **What this is worth for the report.** The last inherited hyperparameter on this rung is now
+  measured rather than assumed, and the answer is not the one rung 2 would have predicted: the
+  degradation is monotone rather than U-shaped, it is not margin erosion, and it runs through the
+  same bomb-siting channel that the winning feature ran through in the opposite direction. That
+  makes "how long to train" a statement about *what the extra episodes do to bomb placement*, not
+  a budget line.
+- **Open, and deliberately not chased:** why more training degrades bomb siting while sharpening
+  the rows it has already seen. The obvious candidate is that the target is non-stationary — the
+  policy trains against a distribution it is itself changing — but nothing here tests that, and
+  rung 4 is closed.
+
+---
+
 ## E37 — Is the danger-row lattice class worth points, and is it the lattice or the label?
 
 - **Question:** E36's intended placebo beat its treatment. `(x+y) mod 4` in the danger rows is

@@ -177,6 +177,26 @@ The answer to a kill deficit is a feature, not a price — which is exactly what
   a learning-rate artifact — α = 1/visits^0.7 per cell, so a 4-way split holds α 2^0.7 = 1.62×
   higher than a 2-way one for the whole run — and it is untested. A 2-way information-free control
   would test it.
+- **Longer training is measured and it is worse** (E38, and the only rung-4 hyperparameter that was
+  inherited rather than tested). 5 seeds × 300 000 episodes, every checkpoint evaluated at ε = 0:
+
+  | episodes | 20 000 | 40 000 | 80 000 | 160 000 | 300 000 |
+  |---|---|---|---|---|---|
+  | score | **3.976** | 3.810 | 3.848 | 3.637 | **3.206** |
+  | `won` | **0.389** | 0.377 | 0.374 | 0.348 | **0.304** |
+  | crates/bomb | 1.182 | 1.155 | 1.165 | 1.104 | **0.988** |
+
+  Paired against @20 000, 300 000 costs **−0.770 [−1.355, −0.185], 0/5 seeds improving.** Three
+  things make this more than a budget line. The decline is **monotone**, where rung 2's was a dip
+  that recovered by 300 000 — the two rungs fail differently. It is **not margin erosion**: rows
+  already updated at 20 000 get *sharper* (thin-margin share 0.37×), and the pooled statistic that
+  suggested otherwise was confounded by a 50 % growth in updated rows. And the loss runs through
+  **bomb siting** — crates per bomb −0.194, against the +0.130 the shipped feature bought. The
+  horizon and the feature act on the same quantity in opposite directions.
+
+  Why extra episodes degrade placement while sharpening seen rows is open. The obvious candidate is
+  a non-stationary target — the policy trains against a distribution it is itself changing — but
+  nothing here tests it.
 - The `rule_based_agent` field is a *proxy* for the tournament. Nothing here measures play against
   other students' learned agents.
 

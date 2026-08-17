@@ -83,8 +83,12 @@ WARM_N             100         alpha is exactly 1 on a cell's first update, so a
                                untouched transfer is overwritten immediately.
                                10 000 and 100 000 are both worse -- the table then
                                cannot differentiate the rows a new digit created.
-episodes           20 000      Flat to improving from 20 000 to 40 000 in an
-                               opponent field, so this is a budget, not an optimum.
+episodes           20 000      Measured, not inherited. Training to 300 000 costs
+                               -0.770 score [-1.355, -0.185], 0 of 5 seeds
+                               improving, with the loss running through bomb
+                               placement: crates per bomb 1.182 -> 0.988. The
+                               decline is monotone from 20 000 on, so this is an
+                               optimum of the ones tested rather than a budget.
 =================  ==========  ====================================================
 """
 
@@ -172,7 +176,9 @@ SAVE_EVERY = 100
 # curve can be measured at eps = 0 afterwards instead of read off the training
 # log. Learning is untouched -- these are extra writes, not extra updates, so
 # every checkpoint is exactly the table a run of that length would have left.
-CHECKPOINTS = (5_000, 10_000, 20_000)
+# Overridable so a long run can sample its own horizon: BM_CHECKPOINTS=20000,40000,...
+CHECKPOINTS = tuple(int(c) for c in
+                    os.environ.get("BM_CHECKPOINTS", "5000,10000,20000").split(","))
 
 # The two swept in E16. Both were guesses -- the coin in E01, the crate in E10 --
 # and E15's change of gamma rescaled every reward against the step cost by a
