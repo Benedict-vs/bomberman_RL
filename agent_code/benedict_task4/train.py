@@ -1,124 +1,90 @@
-"""Q-learning updates for `benedict_task3`.
+"""Q-learning updates for `benedict_task4`.
 
 Loaded only with `--train`, so nothing here runs in the tournament. That is why
 `tools/` may be imported (defensively) and why the exploration RNG lives here.
 
-**Nothing in this file produced the shipped `q_table.npy`, and that is the result
-of rung 3.** The shipped table is the *rung-2* table, byte for byte -- rebuild it
-with `agent_code/benedict_task2/train.py` at its defaults. Rung 3 is won by a
-feature change (`BM_HUNT`, see `callbacks.py`) read through that frozen policy.
+The defaults in this file are the shipped configuration. Reproducing the shipped
+table:
 
-Twenty-five training runs across E25-E27 -- four reward configurations, two
-feature maps, five seeds each -- and **not one beat the untrained table**. The
-cause is known and is written up in `experiments/benedict_task3.md` §3: the
-reward table was calibrated on a board the agent had to itself, where it earned
-77.3 against 40.1 of step cost. Sharing the board with three opponents cuts
-earnings ~4x while steps alive fall only 1.85x, so the same table pays 0.7:1, an
-action-independent constant dominates the return, and the fixed point becomes
-action-independent too. E27 confirmed it (raising `BM_CRATE` to 1.0 is worth
-+0.93 score and +11.5 crates, paired, and moves the decision margin from 0.0003
-to 0.05) and still finished 1.2 points behind not training at all.
+    BM_QUIET_LOGS=1 BM_MODEL_SUFFIX=_run BM_RUN_INDEX=106 \\
+    uv run python main.py play --agents benedict_task4 \\
+        rule_based_agent rule_based_agent rule_based_agent \\
+        --scenario classic --train 1 --n-rounds 20000 --no-gui --seed 810731
 
-So this file is kept for the record and for rung 4, not because it is on the path
-to the shipped model. If you train with it, read `experiments/benedict_task3.md`
-first.
+**That command will not reproduce it bit for bit, and cannot.** `main.py` does
+not seed the provided agents, and each reseeds the global RNG from OS entropy in
+its own `setup`, which runs after ours -- so two runs of the same command give
+different tables. The shipped table is one seed of a fifteen-seed sweep, chosen
+on a validation world seed and confirmed on a held-out one; the sweep, not the
+single run, is the unit of evidence. Compare arms across seeds, never on one
+run. `experiments/benedict_task4.md` has the full protocol.
 
-**Reproducibility is weaker here than on rung 2, in both directions.** `main.py`
-does not seed the provided agents and each reseeds the global RNG from OS entropy
-in `setup`, which runs after ours -- so nothing here can precede it, and two runs
-of the same command give different tables. Compare arms across seeds, never on a
-single run. Evaluations are only *partly* reproducible too: `tools/evaluate.py`
-seeds the opponents' `np.random`, but `coin_collector_agent` and
-`rule_based_agent` also shuffle with the *stdlib* `random`, which that does not
-touch -- 22.7 % of rounds repeat exactly, the means repeat to four decimals
-(`MEASUREMENT.md`). Rung-3 pairing is on arenas only.
+Evaluations are only *partly* reproducible for the same reason: `evaluate.py`
+seeds the opponents' `np.random`, but `rule_based_agent` also shuffles with the
+*stdlib* `random`, which that does not touch -- 22.7 % of rounds repeat exactly
+and the means repeat to four decimals (`MEASUREMENT.md`). Pairing is on arenas.
 
-Three things that are easy to get wrong if you do train with this file:
+**The training world seed 810731 is not an evaluation seed.** Never train on
+20260731, 550731 or 990731; the agent would then be measured on arenas it
+trained on.
 
-- **The world seed 810731 is not the evaluation seed.** Never train on 20260731
-  or 550731 -- the agent would then be measured on arenas it trained on.
-- **`BM_HUNT=0` is required to touch anything of rung-2 lineage** (the warm-start
-  parent, an E24/E25 table). Since E26 the feature is on by default and changes
-  what digits 6 and 7 mean; the row count is identical either way, so a mismatch
-  produces a wrong table rather than an error. Coarse-to-fine parent rebuilding
-  lives in `agent_code/benedict_task2/train.py`, where that lineage belongs.
-- **`WARM_SUFFIX` warm-starts from `q_table_rung2ship`** -- same layout, so
-  `warm_start` transfers row for row at `factor = 1`. E27 measured that starting
-  cold is neither better nor worse (1.013 vs 1.393), so the warm start is a
-  convenience, not the cause of anything.
-
-Why these hyperparameters (evidence in `experiments/benedict_task2.md` §4)
---------------------------------------------------------------------------
+Why these hyperparameters
+-------------------------
 =================  ==========  ====================================================
 setting            value       why
 =================  ==========  ====================================================
-alpha              1/N^0.7     Rung 1's largest single effect: constant alpha gave
-                               20.78 +- 6.98 coins, per-cell 49.15 +- 1.23. A
-                               constant alpha meets neither of L26's convergence
-                               conditions, and an unsettled cell here is not a small
-                               error but an absorbing deadlock. Exponent swept in
-                               E22: 1.0 tripled the thin-margin fraction and cost
-                               the best seed 88 crates -- the target is
-                               non-stationary, so sample-averaging is wrong.
-gamma              0.99        E15. At 0.9 the horizon is ~10 steps, shorter than
-                               the distance to most targets; 0.99 cut the crate std
-                               from 24.2 to 2.9 and removed a peak-then-decay that
-                               three earlier entries blamed on their own changes.
-eps                0.2 -> 0.02 E15/E18. A floor of 0.10 halves performance; 0.005 is
-                               indistinguishable from 0.02; 0 stops learning outright
-                               (4 of 5 tables frozen from 40 000 on). The residual
-                               0.64 deaths/episode are the tuition that keeps rare
-                               rows alive.
-COIN_COLLECTED     +5          E16, and the most surprising result on the rung: the
-                               game's own +1 costs 45 crates. The reward is not a
-                               statement about coins being valuable, it is what keeps
-                               the value function separated -- 16.7:1 against the
-                               crate reward gives the table the dynamic range that
-                               stops near-ties being settled by noise.
-CRATE_DESTROYED    +0.3        E16. 1.0 halves the crate count -- not by killing the
-                               agent (98 % of the deficit is in rounds nobody died)
-                               but by degrading placement: it bombs 24 % more often
-                               for 1.09 crates a bomb instead of 2.55.
-KILLED_SELF         0          E26. Was -5 through rungs 1-2, where it removed every
-                               suicide at once. Now 0 because GOT_KILLED already
-                               fires on a suicide (environment.py:251 adds
-                               KILLED_SELF *on top* of :264's GOT_KILLED), so
-                               carrying both double-priced it. E25 shipped -5/-5
-                               believing it symmetric and actually paid -10 for a
-                               suicide, which voided its arm contrast.
-GOT_KILLED         -5          E26. Prices death exactly once, whatever killed the
-                               agent. Provably identical to the rung-2 table on a
-                               board with no opponents, since a suicide fires both
-                               events there too -- so this is a correctness fix,
-                               not a retuning.
-KILLED_OPPONENT     0          E26 arm H sets 25, preserving the game's own 5:1
-                               kill:coin ratio at this table's scale (E16 put the
-                               agent's coin at 5). Coins are saturated on rung 3 --
-                               9 shared four ways is a ~2.25 fair share and the
-                               rung-2 table already banks 2.18 -- and
-                               score = coins + 5*kills, so every further point has
-                               to come from kills.
-STEP_COST          -0.1        Shortest-path pressure; the round is capped at 400
-                               steps and 99 % of rounds hit that cap. A switch
-                               since E27 (BM_STEP_COST): it is action-INDEPENDENT,
-                               so once it dominates the return the fixed point is
-                               action-independent too. Rung 2 earned 77.3 against
-                               40.1 of it; rung 3 earns 18.3 against 26.1 from the
-                               same table, which is the rung-3 collapse.
-WARM_N             100         E23. Not optional: alpha is exactly 1 on a cell's
-                               first update, so an untouched transfer is overwritten
-                               immediately. 10 000 and 100 000 are both worse -- the
-                               table then cannot differentiate the rows the new digit
-                               created.
-episodes           20 000      E23 on rung 2: longer is worse there. NOT true on
-                               rung 3 -- E27 measured every arm flat or improving
-                               from 20 000 to 40 000 (C10 retained 125 %).
-=================  ==========  ====================================================
-
-Every row above is a *rung-2* justification. E27 re-tested three of them in the
-opponent field and the rung-2 answer held for two: alpha (1/N^0.55 is worse,
-0.987 vs 1.393) and the warm start (cold is 1.013, indistinguishable). The one
-that does not transfer is the reward *scale* -- see the module docstring.
+alpha              1/N^0.7     The largest single effect measured on this project:
+                               a constant alpha gave 20.78 +- 6.98 coins against
+                               49.15 +- 1.23 per-cell. Constant alpha satisfies
+                               neither Robbins-Monro condition, and an unsettled
+                               cell here is not a small error but an absorbing
+                               deadlock. Exponent 1.0 tripled the thin-margin
+                               fraction: the target is non-stationary, so
+                               sample-averaging is wrong.
+gamma              0.99        At 0.9 the horizon is ~10 steps, shorter than the
+                               distance to most BFS targets. 0.99 cut the crate
+                               standard deviation from 24.2 to 2.9.
+eps                0.2 -> 0.02 A floor of 0.10 halves performance; 0.005 is
+                               indistinguishable from 0.02; 0 stops learning
+                               outright. The residual deaths are the tuition that
+                               keeps rare rows alive.
+COIN_COLLECTED     +5          The game's own +1 costs 45 crates. The reward is not
+                               a claim about what coins are worth -- it is what
+                               keeps the value function separated, so that near
+                               ties are not settled by noise.
+CRATE_DESTROYED    +1.0        Solo, 1.0 halved the crate count by degrading bomb
+                               placement, and 0.3 was correct there. With three
+                               opponents it is the opposite: nine coins shared four
+                               ways cuts gross earnings ~4x while steps alive fall
+                               only 1.85x, so at 0.3 an action-independent step
+                               cost dominates the return and the fixed point
+                               becomes action-independent too. Worth +0.93 score
+                               and +11.5 crates, paired.
+STEP_COST           0          Same quantity from the other side. Shortest-path
+                               pressure is worth having solo, where the agent earns
+                               77.3 against 40.1 of it; in an opponent field the
+                               same table earns 18.3 against 26.1 and the decision
+                               margin collapses. Zero here, crate at 1.0.
+KILLED_SELF         0          `environment.py:264` adds GOT_KILLED to *every* agent
+GOT_KILLED         -5          killed by a blast and `:251` adds KILLED_SELF **on
+                               top** when the bomb was its own -- so a table
+                               carrying both prices a suicide at their sum, which
+                               is the opposite of the symmetry it looks like.
+                               Putting the whole penalty on GOT_KILLED prices death
+                               exactly once.
+KILLED_OPPONENT     0          Tested at 5 and at 25, the game's own 5:1 kill:coin
+                               ratio at this table's scale. Neither moved kills:
+                               digit 7 is one bit shared between "a bomb here opens
+                               a crate" and "a bomb here catches an opponent", and
+                               crates outnumber kills heavily, so the price cannot
+                               reach the decision. The answer would be a feature,
+                               not a price.
+WARM_N             100         alpha is exactly 1 on a cell's first update, so an
+                               untouched transfer is overwritten immediately.
+                               10 000 and 100 000 are both worse -- the table then
+                               cannot differentiate the rows a new digit created.
+episodes           20 000      Flat to improving from 20 000 to 40 000 in an
+                               opponent field, so this is a budget, not an optimum.
 =================  ==========  ====================================================
 """
 
@@ -131,7 +97,7 @@ import numpy as np
 
 import events as e
 from .callbacks import (state_to_features, ACTIONS, MODEL_FILE, N_STATES,
-                        DELTAS, FEATURE_SIZES, ABLATE)
+                        DELTAS, FEATURE_SIZES)
 
 try:
     from tools.trainlog import TrainLogger
@@ -139,7 +105,7 @@ except ImportError:     # tools/ is not part of the submission
     TrainLogger = None
 
 
-AGENT_NAME = "benedict_task3"
+AGENT_NAME = "benedict_task4"
 
 # E27. An environment switch because it is one of two knobs on the same quantity:
 # the value function's dynamic range is gross earnings against this cost, and the
@@ -148,7 +114,7 @@ AGENT_NAME = "benedict_task3"
 # (0.70) from the identical table, because nine coins shared four ways cuts
 # earnings ~4x while steps alive fall only 1.85x. BM_CRATE=1.0 and
 # BM_STEP_COST=-0.03 reach a healthy ratio from opposite directions.
-STEP_COST = float(os.environ.get("BM_STEP_COST", -0.1))
+STEP_COST = float(os.environ.get("BM_STEP_COST", 0))
 # 0.99, not the 0.9 carried since E01: E15 measured the crate std falling from
 # 24.2 to 2.9 and the peak-then-decay of E12/E13/E14 disappearing. At gamma=0.9
 # the horizon is ~10 steps, shorter than the distance to most BFS targets.
@@ -213,7 +179,7 @@ CHECKPOINTS = (5_000, 10_000, 20_000)
 # factor of ten, so the balance they struck at gamma=0.9 no longer holds.
 REWARDS = {
     e.COIN_COLLECTED: float(os.environ.get("BM_COIN", 5)),
-    e.CRATE_DESTROYED: float(os.environ.get("BM_CRATE", 0.3)),
+    e.CRATE_DESTROYED: float(os.environ.get("BM_CRATE", 1.0)),
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
     # E26 correctness fix. `environment.py:264` adds GOT_KILLED to *every* agent
@@ -261,25 +227,21 @@ EPS_MODE = os.environ.get("BM_EPS", "decay")        # "decay" | "const" (E05)
 # so the offset does not cancel between actions the way the theorem needs.
 SHAPE = float(os.environ.get("BM_SHAPE", 0))
 
-# E25: the shipped rung-2 table, copied to checkpoints/benedict_task3/. Same
-# FEATURE_SIZES, so `factor` is 1 and warm_start is a row-for-row transfer rather
-# than the coarse-to-fine split it was built for -- the divisibility and layout
-# checks both still apply. Empty starts from zero, which throws away everything
-# rung 2 learnt about crates and escapes.
-WARM_SUFFIX = os.environ.get("BM_WARM", "_rung2ship")
+# `checkpoints/benedict_task4/q_table_parent.npy`: the previous shipped table,
+# broadcast across digit 8's four danger-row values. Same FEATURE_SIZES, so
+# `factor` is 1 and this is a row-for-row transfer rather than the coarse-to-fine
+# split `warm_start` was built for -- the divisibility and layout checks still
+# apply. Set BM_WARM="" to start from zero, which throws away everything earlier
+# rungs learnt about crates and escapes.
+WARM_SUFFIX = os.environ.get("BM_WARM", "_parent")
 WARM_N = int(os.environ.get("BM_WARM_N", 100))
-
-# Set with BM_ABLATE=target_dist to also write the coarse parent this run is
-# really producing -- see `write_parent`. Off by default; it is only meaningful
-# for that one ablation arm and costs an extra file per save otherwise.
-SAVE_PARENT = os.environ.get("BM_SAVE_PARENT", "") not in ("", "0")
 
 EPS_DECAY = 0.9995 if EPS_MODE == "decay" else 1.0
 TRAIN_SEED = 20260731
 
 # Change per experiment. The training log is *appended* to, so a stale value here
 # silently merges two runs into one file (cost half an hour to unpick in E05b).
-EXPERIMENT = "e37"
+EXPERIMENT = "task4"
 ARM = os.environ.get("BM_ARM", "")
 RUN_NAME = f"q_{EXPERIMENT}{'_' + ARM if ARM else ''}_s{RUN_INDEX}"
 
@@ -365,8 +327,6 @@ def save_table(self) -> None:
     os.makedirs(os.path.dirname(MODEL_FILE), exist_ok=True)
     np.save(MODEL_FILE, self.q)
     write_layout(MODEL_FILE)
-    if SAVE_PARENT:
-        write_parent(self)
     self.model_file_preexisted = False
 
 
@@ -498,40 +458,6 @@ def read_layout(table_file: str) -> list | None:
             return json.load(fh)["feature_sizes"]
     except (OSError, KeyError, ValueError):
         return None
-
-
-def write_parent(self) -> None:
-    """Also write the *coarse* table an ablated run is really producing.
-
-    `BM_ABLATE=target_dist` pins the trailing digit to 0, and because that digit
-    is least significant, pinning it is a bijective relabeling: the coarse row i
-    lands at row k*i and the other k-1 rows of each group are never touched
-    (E20 finding 2, verified here -- they hold exactly 0.0). So `q[::k]` *is* the
-    table the pre-E20 feature map would have produced.
-
-    Writing it out removes the last reason to check out an old commit: the
-    warm-start parent can be rebuilt at HEAD. Confirmed by training 20 000
-    episodes this way and comparing against the committed
-    `q_table_e16_c5_k03_s0__ep20000.npy` -- identical.
-
-    The sidecar records the *parent's* layout, not this run's, which is what
-    lets `warm_start` accept the result as a legitimate ancestor.
-    """
-
-    if ABLATE != "target_dist":
-        raise ValueError(
-            "BM_SAVE_PARENT only makes sense with BM_ABLATE=target_dist. "
-            f"With BM_ABLATE={ABLATE!r} the trailing digit is live, so the "
-            "stride-k rows are not a coarse table -- they are every fifth row "
-            "of a finer one, which is not the same thing and would warm-start "
-            "into nonsense.")
-
-    stride = FEATURE_SIZES[-1]
-    base, ext = os.path.splitext(MODEL_FILE)
-    out = f"{base}__coarse{ext}"
-    np.save(out, self.q[::stride])
-    with open(out + LAYOUT_EXT, "w") as fh:
-        json.dump({"feature_sizes": list(FEATURE_SIZES[:-1])}, fh)
 
 
 def warm_start(self) -> None:

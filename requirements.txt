@@ -1,0 +1,15 @@
+# Runtime dependencies of the submitted agent (agent_code/benedict_task4/).
+#
+# The agent imports numpy and the framework's own `settings` module, and nothing
+# else. It needs NO library beyond what the provided Dockerfile already installs,
+# so a tournament machine built from that image requires no additions.
+numpy
+
+# Everything below is development-only and is NOT needed to run the agent in the
+# tournament. It is listed for reproducibility of the experiments, not as a
+# submission requirement; the full pinned set is in pyproject.toml / uv.lock.
+#
+#   scipy         confidence intervals and paired tests in tools/analyze.py
+#   matplotlib    figures only -- imported lazily, never by the agent
+#   pygame        the framework's GUI, unused with --no-gui
+#   tqdm          progress bars during training sweeps

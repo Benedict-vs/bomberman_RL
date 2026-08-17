@@ -152,9 +152,14 @@ Conventions we all follow, otherwise the numbers are not comparable:
   `main.py` does not seed the provided opponents, so two runs of the same command give
   different tables. Evaluations are **only partly** reproducible: `evaluate.py` seeds the
   opponents' `np.random` per round, but `coin_collector_agent` and `rule_based_agent` also
-  shuffle with the **stdlib** `random`, which that does not touch — 22.7 % of rounds repeat
-  exactly, the means repeat to four decimals. Rung-3 pairing is on arenas only
-  (`MEASUREMENT.md`).
+  shuffle with the **stdlib** `random`, which that does not touch — only ~21 % of rounds
+  repeat exactly. Pairing is on arenas only (`MEASUREMENT.md`).
+  **The means do NOT repeat to four decimals — that claim was wrong and was believed for
+  nine entries.** Measured on rung 4: the *same table* evaluated twice over 1000 rounds at the
+  same seed differs by **0.121 in mean score** (paired CI [−0.346, +0.104], 20.5 % of rounds
+  identical). So a 1000-round evaluation carries a **±0.12 noise floor on `score` from the
+  opponents alone**, and any single-run difference smaller than that is unreadable. Report
+  multi-seed sweeps; treat a single held-out evaluation as confirmation, never as the effect.
 - Primary metric `score`. Per-task sets via `analyze.py --preset task1…task4`:
   task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
   task 3 `score`/`kills`/**`suicides`**/`survived` ·

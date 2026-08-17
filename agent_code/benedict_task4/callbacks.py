@@ -1,38 +1,38 @@
-"""Tabular Q-learning agent -- task 3 (`classic`, with opponents).
+"""Tabular Q-learning agent for `classic` against three opponents.
 
-Forked from `agent_code/benedict_task2/`, the rung-2 agent, in E25.
-
-**The table is the rung-2 table, unchanged.** Every attempt to train in an
-opponent field has made it worse -- E25 lost 27.3 -> 0.12 crates, E26 scored
-0.83 against the 2.52 it started from -- so rung 3 is won by a *feature* change
-read through a frozen rung-2 policy (E26: 4.188 vs 2.593 on the ship seed, +1.595
-[+1.342, +1.849] paired over 1000 arenas). That is a finding, not a shortcut, and
-why training destroys the policy is the open rung-3 question.
-
-The state is one mixed-radix row index over eight digits. Sizes are
-`FEATURE_SIZES` below; what each digit is worth on rung 2 is in
-`experiments/benedict_task2.md`, and the per-experiment evidence in
-`experiments/benedict.md` -- rung 2 up to E23, rung 3 from E24 on.
+The state is a single mixed-radix row index over eight digits, sizes in
+`FEATURE_SIZES`:
 
     1-4  each neighbour: blocked / lethal this step / in a blast / clear
      5   moves of grace left on my own tile, 0 = safe
-     6   BFS first step to the objective -- the way *out* while in a blast
-         (E11, +24 crates), otherwise the nearest coin, else the nearest
-         crate (E13, +57: targeting a tile that *can hit* a crate was
-         satisfied on 99.7 % of free tiles, so the digit carried no gradient
-         and mirror-image rows pointed at each other), else the nearest
-         opponent (E26, +1.60 score: four agents strip all 122 crates by
-         ~step 140, after which this digit was NO_TARGET on 26 % of safe
-         steps and the table's answer there was an invalid BOMB at -1 each)
-     7   a bomb here would open a crate -- or catch an opponent (E26) --
-         and I have one to drop
-     8   how far digit 6's target is: 1 / 2 / 3-4 / 5+ (E20)
+     6   BFS first step to the objective. While a bomb covers my tile that is
+         the way *out*; otherwise the nearest coin, else the nearest crate,
+         else the nearest opponent.
+     7   a bomb here would open a crate or catch an opponent, and I have one
+     8   two meanings, selected by digit 5:
+           safe rows   how far digit 6's target is: 1 / 2 / 3-4 / 5+
+           danger rows (x + y) % 4 -- see below
 
-4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions. Nominally large, actually sparse:
-2 364 rows carry value in the shipped table and the greedy policy visits ~475
-of them per rung-3 rollout (E26/E27 probes). That sparsity is
-why the table is dense storage and why the warm start in `train.py` matters --
-the rows exist, they just need values.
+4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions, and deliberately sparse: the
+greedy policy visits a few hundred rows per round, so the table is dense
+storage over a state space that is mostly unreachable by construction.
+
+**Digit 8 in the danger rows.** Digit 6 carries the escape direction there, so
+there is no "target distance" to encode and the digit would otherwise sit at a
+constant, making two thirds of the table unreachable. `(x + y) % 4` fills it,
+and its low bit is exactly the wall lattice: stone pillars sit at (even, even),
+so a free tile with `x + y` even has both coordinates odd and is a **crossing**
+-- four structural exits, and a bomb dropped there clears twelve tiles -- while
+`x + y` odd is a **corridor**, two exits and six tiles. Digits 1-4 nearly carry
+this already but not quite, because a blocked neighbour merges wall with crate,
+so a corridor's two permanent walls look exactly like two crates.
+
+The learned table splits hard on it, and conditionally: a crossing is worth
+*more* with one move of grace left, when what matters is having exits, and
+*less* with two or more, when what matters is clearing a blast that covers
+twice as many tiles. Encoding it is worth +0.20 score against a matched
+control. Full derivation and the arms that rule out the alternatives:
+`experiments/benedict_task4.md`.
 
 Everything here runs in the tournament, so this file imports numpy and
 `settings` only, uses paths relative to `__file__`, and never touches `tools/`.
@@ -49,10 +49,10 @@ import settings as s    # BOMB_POWER / BOMB_TIMER
 # exactly "q_table.npy" beside this file. Relative to this file, never absolute.
 #
 # When it IS set, the table lives in checkpoints/<agent>/ instead of here. The
-# submission is a zip of this folder, and 700 MB of per-run tables sitting next
-# to callbacks.py is a submission accident waiting to happen -- keeping them out
-# by construction beats remembering to delete them. The tournament never sets
-# the variable, so the branch below is not even taken there.
+# submission is a zip of this folder, and per-run tables sitting next to
+# callbacks.py is a submission accident waiting to happen -- keeping them out by
+# construction beats remembering to delete them. The tournament never sets the
+# variable, so the branch below is not even taken there.
 _SUFFIX = os.environ.get("BM_MODEL_SUFFIX", "")
 _AGENT_DIR = os.path.dirname(__file__)
 MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path.join(
@@ -60,124 +60,10 @@ MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path
     os.path.basename(_AGENT_DIR), f"q_table{_SUFFIX}.npy",
 )
 
-# E17 ablation switch, same environment-variable pattern as BM_MODEL_SUFFIX.
-# Each arm pins one feature component to a constant, so the table keeps its full
-# row count and only the information content changes -- rows collapse, they do
-# not disappear. Unset -- every normal game, and the tournament -- the full map
-# is active. The switch must be set for training AND for evaluating an ablated
-# table: the shapes match either way, so a mismatch would not crash, it would
-# silently measure a table through features it was never trained on.
-#
-#   escape       -- digit 6 no longer switches to the way out while in a blast
-#   crate_target -- digit 6 goes silent when no coin is visible (the E11 map)
-#   danger       -- digits 1-4 collapse to blocked/clear, digit 5 pinned at 0.
-#                   Digit 5 = 0 also means the escape branch never fires, so
-#                   this arm removes escape AS WELL -- the components nest.
-#   bomb_digit   -- digit 7 pinned at 0
-#   target_dist  -- digit 8 pinned at 0. NOT an ablation in the sense the others
-#                   are: pinning the least significant digit maps row i to 5i,
-#                   a bijection onto every fifth row, so the arm reproduces the
-#                   pre-E20 agent *exactly* rather than measuring what the digit
-#                   costs (E20 finding 2 -- it was designed as a dilution control
-#                   and could never have been one). Still useful, as a bit-exact
-#                   wiring check and as "the old map under a new hyperparameter".
-ABLATE = os.environ.get("BM_ABLATE", "")
-if ABLATE not in ("", "escape", "crate_target", "danger", "bomb_digit", "target_dist"):
-    raise ValueError(
-        f"BM_ABLATE={ABLATE!r} is not an ablation arm. A typo here would "
-        "silently train the full agent under an arm's label -- fail instead."
-    )
-
-# How close two actions must be to count as tied in `act`. 0.0 reproduces every
-# measurement up to E22 exactly. Set as an environment switch rather than an
-# edited constant so the default in the tournament is the value in this file.
-TIE_TOL = float(os.environ.get("BM_TIE_TOL", 0.0))
-
-# E26. **On by default: this is the rung-3 agent.** `BM_HUNT=0` restores the
-# pre-E26 map and is required to reproduce E24/E25 -- evaluating one of those
-# tables with HUNT on would not crash (the row count is identical) but would
-# silently measure it through features it was never trained on, the same hazard
-# the BM_ABLATE comment above describes.
-#
-# It changes the *meaning* of two digits without changing FEATURE_SIZES:
-#   digit 6  falls through to the nearest opponent when no coin and no crate is
-#            reachable. E25's audit measured digit 6 = NO_TARGET on 26.3 % of
-#            safe steps in a `coin_collector` field (0.43 % solo) because four
-#            agents strip all 122 crates by ~step 140 -- after which the agent
-#            has no objective at all for two thirds of the round, and the rung-2
-#            table's answer in that row is an invalid BOMB at -1 a time.
-#   digit 7  counts an opponent in blast range as a reason to bomb, not just a
-#            crate.
-# No digit is added, inserted or re-based, so `q_table_rung2ship` stays a valid
-# warm-start parent at factor 1 and the parent's "walk that way" values are
-# already the right prior for the new rows.
-HUNT = os.environ.get("BM_HUNT", "1") not in ("", "0")
-
-# E29 arm B: DELTAS order alone decided every distance tie, giving a first-step
-# histogram of 45.5 / 30.6 / 13.5 / 10.5 % -- a bias with no counterpart in the
-# game. A uniform permutation per call makes the feature map D4-equivariant *in
-# distribution*, which is the precondition for folding the table by its symmetry
-# group. Default off, so the shipped agent is unchanged until this is measured.
-TIEBREAK_UNIFORM = os.environ.get("BM_TIEBREAK", "0") not in ("", "0")
-
-# E36: digit 8 is idle in the escape branch -- it has no "target distance", so
-# every danger row pinned it to DIST_NONE and 40 960 of 64 000 rows became
-# structurally unreachable. That is 43.9 % of all steps and essentially 100 % of
-# deaths, spent in rows carrying no opponent information at all.
-#
-# Audit 7 measured what that hides: at the last step before a death the nearest
-# opponent is within BFS 2 in 93.3 % of cases against a 15.3 % base rate, and row
-# 55060 -- the row E34 was built on -- takes 809 visits that are 36.5 % fatal
-# when an opponent is near and 0 % fatal across 655 far visits. That row is an
-# alias for two states wanting different actions, not the competing optimum E34
-# assumed.
-#
-# Giving the idle digit the opponent bucket costs NO new rows: FEATURE_SIZES is
-# unchanged and the shipped table stays a factor-1 warm-start parent. Same move
-# as E26, which gave an idle digit a meaning and bought +1.595 score.
-OPPDIST = os.environ.get("BM_OPPDIST", "0") not in ("", "0")
-OPPDIST_PLB = os.environ.get("BM_OPPDIST_PLB", "0") not in ("", "0")
-
-# E37: E36's intended *placebo* beat its treatment -- `(x+y) % 4` was worth
-# +0.980 crates while the opponent bucket was worth nothing. It was never a
-# placebo. Its LOW bit is the lattice class exactly: pillars sit at (even, even),
-# so a free tile has x+y even <=> both coordinates odd <=> a *crossing* (4 exits,
-# own bomb clears 12 tiles); x+y odd <=> a *corridor* (2 exits, 6 tiles).
-# Verified 11 477/11 477 and 6 427/6 427 over 17 904 danger steps. Its HIGH bit
-# is an arbitrary diagonal stripe.
-#
-# Digits 1-4 nearly carry this already -- H(lattice | digits 1-4) = 0.192 bits of
-# 0.942 -- but not quite, because NB_BLOCKED merges wall with crate, so a
-# corridor's two permanent walls look exactly like two crates.
-#
-#   parity   (x+y) % 2  -- the lattice class alone, no positional component
-#   stripe   (x+y) % 4  -- E36's PLB verbatim, for replication
-#   shuffle  a fixed relabelling BALANCED within each lattice class: same arity,
-#            same "fills 40 960 dead rows" perturbation, and by construction no
-#            crossing/corridor information. The control E36 should have had.
-#
-# Takes precedence over BM_OPPDIST/BM_OPPDIST_PLB, which are kept unchanged so
-# E36's launcher still reproduces E36 rather than silently measuring something
-# else -- the failure mode AGENTS.md records for BM_ABLATE.
-D8_MODE = os.environ.get("BM_D8", "")
-if D8_MODE not in ("", "parity", "stripe", "shuffle"):
-    raise ValueError(
-        f"BM_D8={D8_MODE!r} is not a known mode. A typo must fail here rather "
-        "than silently train the full agent under an arm's label."
-    )
-
-# Built once at import, deterministically. Balanced *within* each lattice class,
-# so the label cannot leak the class it is the control for.
-_SHUFFLE: dict[tuple[int, int], int] = {}
-if D8_MODE == "shuffle":
-    _shf_rng = np.random.default_rng(20260731)
-    for _parity in (0, 1):
-        _tiles = [(_cx, _cy)
-                  for _cx in range(1, s.COLS - 1) for _cy in range(1, s.ROWS - 1)
-                  if (_cx + _cy) % 2 == _parity and not (_cx % 2 == 0 and _cy % 2 == 0)]
-        for _rank, _i in enumerate(_shf_rng.permutation(len(_tiles))):
-            _SHUFFLE[_tiles[_i]] = _rank % 4
-
+# How close two actions must be to count as tied in `act`. Exact equality: the
+# rows that can absorb a collapsed policy sit at margins of 1e-4 to 1e-2, never
+# at 0, so a wider band changes behaviour without protecting against anything.
+TIE_TOL = 0.0
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
@@ -203,8 +89,6 @@ FEATURE_SIZES = (4, 4, 4, 4, 5, 5, 2, 5)
 N_STATES = int(np.prod(FEATURE_SIZES))
 
 POLICY_SEED = 20260731
-
-_BFS_RNG = np.random.default_rng(POLICY_SEED)
 
 
 def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
@@ -256,8 +140,6 @@ def neighbour_status(x: int, y: int, field: np.ndarray, danger: np.ndarray,
         nx, ny = x + dx, y + dy
         if field[nx, ny] != 0 or (nx, ny) in occupied:
             status.append(NB_BLOCKED)
-        elif ABLATE == "danger":
-            status.append(NB_CLEAR)     # E17: lethal and in-blast read as clear
         elif danger[nx, ny] == 0:
             status.append(NB_LETHAL)
         elif danger[nx, ny] < SAFE:
@@ -271,15 +153,14 @@ def bomb_hits_crate(x: int, y: int, field: np.ndarray,
                     others: list | None = None) -> bool:
     """Would a bomb dropped here destroy something worth destroying?
 
-    With HUNT on, an opponent standing in the blast counts as well as a crate.
-    `others` defaults to None so every pre-E26 caller keeps the crate-only
-    meaning; the digit itself is still one bit.
+    An opponent standing in the blast counts as well as a crate; the digit
+    itself is still one bit.
     """
 
     blast = blast_coords(x, y, field)
     if any(field[cx, cy] == 1 for cx, cy in blast):
         return True
-    if HUNT and others:
+    if others:
         return any(pos in blast for pos in others)
     return False
 
@@ -303,8 +184,6 @@ def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> tuple[int, int
     width, height = field.shape
 
     order = list(enumerate(DELTAS))
-    if TIEBREAK_UNIFORM:
-        order = [order[i] for i in _BFS_RNG.permutation(4)]
 
     while head < len(queue):
         (cx, cy), first, depth = queue[head]
@@ -362,17 +241,16 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list,
         if step != NO_TARGET:
             return step, dist
 
-    if ABLATE == "crate_target":
-        return NO_TARGET, 0    # E17: the E11 behaviour -- no target without a coin
-
     step, dist = bfs_first_step(x, y, field, is_crate)
-    if step != NO_TARGET or not (HUNT and others):
+    if step != NO_TARGET or not others:
         return step, dist
 
-    # E26: the board is out of crates, so the objective becomes the nearest
-    # opponent. Same rule as the crate branch -- the goal tile is tested but
-    # never expanded, so an occupied tile is a legal destination even though the
-    # agent cannot stand on it.
+    # The board is out of crates, so the objective becomes the nearest opponent.
+    # Four agents strip all 122 crates by ~step 140, and without this branch the
+    # agent has no objective at all for the rest of the round -- the table's
+    # answer in that row is an invalid BOMB, at -1 a time. Same rule as the crate
+    # branch: the goal tile is tested but never expanded, so an occupied tile is
+    # a legal destination even though the agent cannot stand on it.
     other_set = set(others)
     return bfs_first_step(x, y, field, lambda pos: pos in other_set)
 
@@ -447,23 +325,19 @@ def distance_bucket(distance: int) -> int:
     return 4
 
 
-def opponent_bucket(x: int, y: int, field: np.ndarray, others: list) -> int:
-    """0 = none or unreachable, 1 = within 2 tiles, 2 = 3-5, 3 = 6 or more.
+def lattice_class(x: int, y: int) -> int:
+    """Digit 8 in the danger rows: `(x + y) % 4`.
 
-    Deliberately coarse, and deliberately *not* a direction: this says how much
-    trouble is nearby, not what to do about it. Digit 6 already carries the way
-    out; the agent still has to learn that the way out is worth more when
-    somebody is close enough to contest the tile.
-
-    Measured at 0.028 ms mean / 0.220 ms max against a 500 ms budget.
+    Its low bit is the wall lattice exactly -- pillars sit at (even, even), so
+    `x + y` even means both coordinates are odd, which is a crossing (four
+    structural exits, twelve tiles cleared by a bomb) and odd means a corridor
+    (two exits, six tiles). The high bit is a diagonal stripe carrying position
+    but no structure; it is kept because the four-way split measurably
+    outperforms the lattice bit alone, and dropping it would be a change this
+    project has not tested.
     """
-    if not others:
-        return 0
-    other_set = set(others)
-    _, distance = bfs_first_step(x, y, field, lambda pos: pos in other_set)
-    if not distance:
-        return 0
-    return 1 if distance <= 2 else 2 if distance <= 5 else 3
+
+    return (x + y) % 4
 
 
 def state_to_features(game_state: dict) -> int:
@@ -486,47 +360,28 @@ def state_to_features(game_state: dict) -> int:
     # Digit 5, in moves rather than in timer units: 0 = safe, otherwise how many
     # moves are left *including this one*. A bomb seen at t leaves t+1 moves.
     own_danger = 0 if danger[x, y] >= SAFE else int(danger[x, y]) + 1
-    if ABLATE == "danger":
-        own_danger = 0
 
     # Digit 7 folds in `bomb_possible` deliberately. Without it the agent sits
     # in a "crate in range" row with no bomb left, picks BOMB, gets
     # INVALID_ACTION -- and an invalid action leaves the state unchanged, which
-    # is the absorbing-row failure of E09 in a new place.
+    # is an absorbing row the policy cannot leave.
     others = [o[3] for o in game_state['others']]
     bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field, others))
-    if ABLATE == "bomb_digit":
-        bomb_useful = 0
 
     # Digit 6 is "the direction that matters right now". While a bomb covers the
     # agent's tile that is the way out, and nothing else is worth encoding --
     # a coin four tiles away is irrelevant if the agent is dead in three.
-    if own_danger and ABLATE != "escape":
+    if own_danger:
         target = escape_direction(x, y, field, danger, occupied)
-        # E20 pinned this to DIST_NONE because the escape branch has no target
-        # distance. E36 measured that 64 % of the table was unreachable as a
-        # result, and gives the idle digit the one variable that separates the
-        # fatal danger rows from the safe ones.
-        # E37 modes take precedence; the E36 switches below them are unchanged so
-        # that entry's launcher still reproduces that entry.
-        if D8_MODE == "parity":
-            target_dist = (x + y) % 2
-        elif D8_MODE == "stripe":
-            target_dist = (x + y) % 4
-        elif D8_MODE == "shuffle":
-            target_dist = _SHUFFLE.get((x, y), 0)
-        elif OPPDIST:
-            target_dist = opponent_bucket(x, y, field, others)
-        elif OPPDIST_PLB:
-            target_dist = (x + y) % 4      # E36's arm, not a placebo -- see E37
-        else:
-            target_dist = DIST_NONE
+        # Digit 6 already carries the escape direction here, so there is no
+        # target distance for digit 8 to hold. Pinning it to a constant -- which
+        # is what this branch used to do -- left two thirds of the table
+        # unreachable and the rows where essentially every death happens
+        # carrying no structural information at all.
+        target_dist = lattice_class(x, y)
     else:
         target, distance = target_direction(x, y, field, game_state['coins'], others)
         target_dist = distance_bucket(distance)
-
-    if ABLATE == "target_dist":
-        target_dist = DIST_NONE
 
     features = neighbour_status(x, y, field, danger, occupied) + (
         own_danger,
