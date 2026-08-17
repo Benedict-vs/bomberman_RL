@@ -39,11 +39,29 @@ Read these, in this order, and they are short:
    *destroyed* the policy there and a feature won instead.
 3. `scratchpad/survey/REPORT.md` (161 lines) — see task A.
 
-**A sweep is running overnight (E38)** testing whether 20 000 training episodes — a budget
-inherited from an earlier rung and never re-validated — is right, given that the earlier rung's
-episode response was non-monotone (40k worse, 200k much worse, 300k best). Its entry and
-pre-registered predictions are at the top of `experiments/benedict.md`. **Leave it alone**; it and
-its evaluation chain are already scripted. If you need CPU, check `ps` first and keep it light.
+**E38 finished and closed the last open hyperparameter.** 5 seeds × 300 000 episodes, every
+checkpoint evaluated at ε = 0. The training horizon is an inverted U and **20 000 sits at the
+peak**:
+
+| episodes | 5k | 10k | **20k** | 40k | 80k | 160k | 300k |
+|---|---|---|---|---|---|---|---|
+| score | 3.722 | 3.834 | **3.976** | 3.810 | 3.848 | 3.637 | 3.206 |
+
+Training to 300 000 costs **−0.770 [−1.355, −0.185], 0 of 5 seeds improving**; going earlier than
+20 000 is significantly worse (@20k − @5k = +0.172 [+0.111, +0.234], 14/15). **So do not propose
+"train it longer" or "train it less" — both are measured and both are worse.**
+
+Three things from it that matter for strategy:
+
+- **The loss runs through bomb siting**: crates per bomb 1.182 → 0.988 over the horizon, against
+  the +0.130 the shipped feature bought. Bomb *placement quality* is the sensitive quantity on this
+  rung, more than survival or aggression.
+- **It is not margin erosion.** Rows already updated at 20 000 get *sharper* (thin-margin share
+  0.37×). Whatever degrades is not the table losing its decisions.
+- **Within-run checkpoint contrasts have SD 0.155 against 0.358 for between-arm contrasts** — 2.3×
+  more precise, because everything except training length is shared. If a question can be framed as
+  "how long" rather than "which arm", it is far cheaper to answer. Worth remembering when you cost
+  out any design.
 
 **Deadlines:** agent code **21.09.2026**, report **28.09.2026** (~4 000 words per team member).
 The scientific method is the main grading criterion and "Experiments and Results" is the most
