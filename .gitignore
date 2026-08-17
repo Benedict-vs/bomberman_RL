@@ -179,5 +179,19 @@ checkpoints/benedict_task2/*
 checkpoints/benedict_task4/*
 !checkpoints/benedict_task4/q_table_e33_ctl_s104__ep20000.npy
 
+# E37 replaced the above as the shipped table, and needs two files for the same
+# reason. The checkpoint is what agent_code/benedict_task4/q_table.npy is a
+# byte-identical copy of (arm PLB2, seed 106, 20 000 episodes; selected on
+# validation seed 550731 and confirmed on ship seed 990731 at score 3.949 /
+# won 0.406, paired +0.255 [+0.039, +0.475] against the E33 table above).
+# The parent is the warm start train.py loads by default, so without it a
+# training run at the documented defaults starts from a different initial
+# condition than the shipped table did -- which is exactly the confound audit 8
+# found in E36.
+!checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy
+!checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy.layout.json
+!checkpoints/benedict_task4/q_table_parent.npy
+!checkpoints/benedict_task4/q_table_parent.npy.layout.json
+
 # macOS
 .DS_Store
