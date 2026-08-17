@@ -1,4 +1,4 @@
-# Runtime dependencies of the submitted agent (agent_code/benedict_task4/).
+# Runtime dependencies of agent_code/benedict_task4/
 #
 # The agent imports numpy and the framework's own `settings` module, and nothing
 # else. It needs NO library beyond what the provided Dockerfile already installs,
