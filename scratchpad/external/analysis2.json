@@ -1,0 +1,1881 @@
+{
+ "repo": "ngmars__RL_Bomberman_game",
+ "commit": "e6318b430b01cb3759c215b41817129e3ea59356",
+ "date": "2026-08-17",
+ "license": null,
+ "agents": [
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "my_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     681
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "COLS",
+    "ROWS"
+   ]
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "JanMStraub__ML-bomberman-project",
+ "commit": "23f36a00b79b3506ffc6ce4f8985e2119fb234a0",
+ "date": "2025-07-06",
+ "license": null,
+ "agents": [
+  {
+   "name": "my_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     1462822
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "the_gadget",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     1660506
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "COLS",
+    "ROWS"
+   ]
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "libaum__bomberman-rl",
+ "commit": "75e51eaf041450853e51dd25b55d2adeecfa3fa3",
+ "date": "2026-01-02",
+ "license": null,
+ "agents": [
+  {
+   "name": "agent_quapsel",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "model.pt",
+     3085865
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "curses",
+    "sklearn",
+    "xmlrpc"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER"
+   ]
+  },
+  {
+   "name": "deep_quapsel",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "model.h5",
+     240304
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code",
+    "keras",
+    "tensorflow",
+    "xmlrpc"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER"
+   ]
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "jepetolee__bomberman_rl",
+ "commit": "dd4e28def69159ad0c1ad63bd15f9c773586b1fd",
+ "date": "2025-12-15",
+ "license": null,
+ "agents": [
+  {
+   "name": "aggressive_teacher_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER"
+   ]
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ppo_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "config",
+    "importlib",
+    "torch",
+    "types"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "selfplay_opponent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [
+    [
+     "ppo_model.pt",
+     630329
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "team_teacher_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER"
+   ]
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "thisishiu__Reinforcement-learning-Boomberman",
+ "commit": "19b3a4647d57f643f3bd215c1dd1e906ff26f012",
+ "date": "2025-11-04",
+ "license": null,
+ "agents": [
+  {
+   "name": "Terminators",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "data/my-saved-model.pt",
+     195
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "distutils",
+    "pandas",
+    "pydoc",
+    "scipy",
+    "weakref"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "mid_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "pandas"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "new_bie",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "COLS",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "q_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "coin-collector-old.npy",
+     67328
+    ],
+    [
+     "my-saved-model.npy",
+     40448
+    ],
+    [
+     "coin-collector.npy",
+     40448
+    ],
+    [
+     "scenario_3.npy",
+     40448
+    ],
+    [
+     "scenario_2.npy",
+     40448
+    ],
+    [
+     "my-saved-model_1.npy",
+     40448
+    ],
+    [
+     "scenaio_1.npy",
+     40448
+    ]
+   ],
+   "n_weights": 7,
+   "ext_imports": [
+    "sklearn"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": [
+  "COLS: ours=17 theirs=13",
+  "ROWS: ours=17 theirs=13",
+  "BOMB_TIMER: ours=4 theirs=16",
+  "TIMEOUT: ours=0.5 theirs=1.5"
+ ]
+}
+======================================================================
+{
+ "repo": "madham97__Least_Miserables",
+ "commit": "0d5ffaca8ca5241c6c78e736daad4e3a835346a5",
+ "date": "2025-06-01",
+ "license": null,
+ "agents": [
+  {
+   "name": "Least_Ultimate_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model_0.pt",
+     52255
+    ],
+    [
+     "my-saved-model.pt",
+     52239
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "Less_Ultimate_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model_reinf_0.pt",
+     52367
+    ],
+    [
+     "my-saved-model.pt",
+     52239
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "Ultimate_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     52407
+    ],
+    [
+     "my-saved-model2.pt",
+     52183
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "Felix-95__bomberman-NN",
+ "commit": "99465835a53b8f34216e3b0706e8ad203673dd7b",
+ "date": "2024-09-30",
+ "license": null,
+ "agents": [
+  {
+   "name": "beginner_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     308942
+    ],
+    [
+     "proven_models/classic-enemys2x5k.pt",
+     308942
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ffm_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     323890
+    ],
+    [
+     "proven_models/polar-sweep-1-final-model-enemy-no-intervention.pt",
+     323890
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch",
+    "wandb"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ffm_agent_intervention",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     323890
+    ],
+    [
+     "proven_models/final-model-yes-intervention.pt",
+     323890
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch",
+    "wandb"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "AI-ELka__BombermanRLAgents",
+ "commit": "8d857315ecdff93abfa5c052f5e48f57e64e10c5",
+ "date": "2025-03-18",
+ "license": null,
+ "agents": [
+  {
+   "name": "dql",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/dqn-final.pth",
+     82144
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "dql_large",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/dqn.pth",
+     168672
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "ppo",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/ppo-final.pt",
+     6508068
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "ppo_l",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/large_ppo_final.pt",
+     6582925
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "ql",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/q_table.pkl",
+     32279
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "xiaoxiae__BombermanML",
+ "commit": "50b682f50c9bcffb3aa2b0a1f2f96d43121b8b09",
+ "date": "2023-12-20",
+ "license": [
+  "LICENSE"
+ ],
+ "agents": [
+  {
+   "name": "binary_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_agent_v1",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315415
+    ],
+    [
+     "policy-model.pt",
+     4315415
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_agent_v2",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_agent_v3",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_agent_v4",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_agent_v5",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_agent_v6",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_distance_agent_v1",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "binary_distance_agent_v2",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     4315391
+    ],
+    [
+     "policy-model.pt",
+     4315391
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "distance_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "distance_agent_v1",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "target-model.pt",
+     24077443
+    ],
+    [
+     "policy-model.pt",
+     20054526
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "q_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER",
+    "MAX_STEPS"
+   ]
+  },
+  {
+   "name": "q_agent_v1",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "model.pkl",
+     10769
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "q_agent_v2",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "model.pkl",
+     1416180
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  },
+  {
+   "name": "q_agent_v3",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "model.pkl",
+     618174
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "EXPLOSION_TIMER"
+   ]
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "stefanDeveloper__bomberman",
+ "commit": "ad1784fcc23e09d4dedee709624c7c78db20a38a",
+ "date": "2021-03-28",
+ "license": [
+  "LICENSE"
+ ],
+ "agents": [
+  {
+   "name": "amy_santiago",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER"
+   ]
+  },
+  {
+   "name": "blindfisch",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     3299
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "hitchcock",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     3331
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "hitchcock_crates",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     1121925
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "hitchcock_full_game",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     1121898
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "jake_peralta",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "nikolaj_boyle",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     10279
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "rosa_diaz",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     15561
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER"
+   ]
+  },
+  {
+   "name": "scully",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "terry_jeffords",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER"
+   ]
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "daryl336__CSXX46p",
+ "commit": "3408b84ef7db2435456a68ae6d9f4db7a7cf7436",
+ "date": "2025-11-15",
+ "license": [
+  "LICENSE"
+ ],
+ "agents": [
+  {
+   "name": "REINFORCE",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pth",
+     673069
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "evaluation_rewards",
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "dqn_alt",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "saved_dqn_ep016800.pth",
+     477306
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_TIMER"
+   ]
+  },
+  {
+   "name": "dqn_final",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "evaluation_rewards",
+    "metrics",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "dqn_nabo",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "evaluation_rewards",
+    "metrics",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "dqn_torch",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/dqn_checkpoint_50000.pth",
+     220785
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "evaluation_rewards",
+    "metrics",
+    "requests"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm_battle",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "evaluation_rewards",
+    "metrics",
+    "requests"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm_maverick",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/final_parameters_keep.pt",
+     8847
+    ],
+    [
+     "network_parameters/final_parameters.pt",
+     8847
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib",
+    "metrics",
+    "requests",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm_maverick_v2",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/save after 20000 iterations.pt",
+     11429
+    ],
+    [
+     "network_parameters/save after 200 iterations.pt",
+     11409
+    ],
+    [
+     "network_parameters/save after 135 iterations.pt",
+     11409
+    ],
+    [
+     "network_parameters/save after 145 iterations.pt",
+     11409
+    ],
+    [
+     "network_parameters/save after 155 iterations.pt",
+     11409
+    ],
+    [
+     "network_parameters/save after 125 iterations.pt",
+     11409
+    ],
+    [
+     "network_parameters/save after 185 iterations.pt",
+     11409
+    ],
+    [
+     "network_parameters/save after 105 iterations.pt",
+     11409
+    ]
+   ],
+   "n_weights": 41,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib",
+    "requests",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm_maverick_v3",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/final_parameters_keep.pt",
+     8847
+    ],
+    [
+     "network_parameters/final_parameters.pt",
+     8847
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib",
+    "metrics",
+    "requests",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm_maverick_v4",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/final_parameters_keep.pt",
+     8847
+    ],
+    [
+     "network_parameters/final_parameters.pt",
+     8847
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib",
+    "metrics",
+    "requests",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "llm_predict",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "evaluation_rewards",
+    "metrics",
+    "requests"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "maverick",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/save after 21500 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 13000 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 14500 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 18000 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 22000 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 10500 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 17000 iterations.pt",
+     9957
+    ],
+    [
+     "network_parameters/save after 12000 iterations.pt",
+     9957
+    ]
+   ],
+   "n_weights": 49,
+   "ext_imports": [
+    "matplotlib",
+    "metrics",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "maverick_enhanced",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/save after 13000 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 14500 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 10500 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 12000 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 15500 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 11500 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 11000 iterations.pt",
+     10661
+    ],
+    [
+     "network_parameters/save after 15000 iterations.pt",
+     10661
+    ]
+   ],
+   "n_weights": 32,
+   "ext_imports": [
+    "matplotlib",
+    "metrics",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ppo",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "evaluation_rewards",
+    "metrics",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "MAX_AGENTS",
+    "MAX_STEPS",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "ppo_final",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/ppo_agent_best_backup.pth",
+     29171090
+    ],
+    [
+     "models/ppo_agent_best_combat.pth",
+     28950674
+    ],
+    [
+     "models/ppo_agent.pth",
+     28950674
+    ]
+   ],
+   "n_weights": 3,
+   "ext_imports": [
+    "matplotlib",
+    "ppo_final",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ppo_llm",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "metrics",
+    "requests",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ppo_rule_based",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "metrics",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "ppo_th",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "ppo_agent_best.pth",
+     29060882
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "evaluation_rewards",
+    "metrics",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "pure_llm_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "google"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "pure_llm_agent_2",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "PIL",
+    "google"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "q_learning",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "backup.pt",
+     536236
+    ],
+    [
+     "my-saved-model.pt",
+     430033
+    ],
+    [
+     "final.pt",
+     117695
+    ]
+   ],
+   "n_weights": 3,
+   "ext_imports": [
+    "evaluation_rewards"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "CRATE_DENSITY"
+   ]
+  },
+  {
+   "name": "q_learning_rule_based",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "metrics"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "q_llm",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     432597
+    ],
+    [
+     "llm_trained_model.pt",
+     1791
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "evaluation_rewards",
+    "metrics",
+    "requests"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": [
+  "TIMEOUT: ours=0.5 theirs=180"
+ ]
+}
+======================================================================
+{
+ "repo": "itisacloud__GlasHoch_Rangers",
+ "commit": "947c12ab00adb3d9750926e6eb9bf64123d444ee",
+ "date": "2024-05-01",
+ "license": null,
+ "agents": [
+  {
+   "name": "GlasHoch_Rangers",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "models/GlasHoch_long_runer_12th_batch_64_less_explo_lr_e5_25_sync_250_no_imitation_remove_bomb_reward_classic_default_400000.pth",
+     16524125
+    ],
+    [
+     "models/GlasHoch_long_runer_12th_batch_32_less_explo_lr_e5_1_sync_250_no_imitation_remove_bomb_reward_classic_default_550000.pth",
+     16524103
+    ],
+    [
+     "models/GlasHoch_long_runer_12th_batch_32_lr_e5_1_sync_250_no_imitation_remove_bomb_reward_classic_default_750000.pth",
+     16523733
+    ],
+    [
+     "models/GlasHoch_long_runer_13th_batch_64_strart_trap_lr_e5_1_sync_250_with_trap_classic_default_200000.pth",
+     16523449
+    ]
+   ],
+   "n_weights": 4,
+   "ext_imports": [
+    "agent_code",
+    "matplotlib",
+    "torch",
+    "yaml"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "SchmerzGebierge_Aua",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "Memory",
+    "PolicyNetwork",
+    "State",
+    "agent_code",
+    "expert",
+    "matplotlib",
+    "torch",
+    "yaml"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================

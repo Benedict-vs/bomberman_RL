@@ -1,0 +1,914 @@
+{
+ "repo": "Abhinand-p__Reinforcement-Learning-Bomberman",
+ "commit": "0caadd8165c7e589a050234c61a592ceafcb522b",
+ "date": "2024-09-06",
+ "license": null,
+ "agents": [
+  {
+   "name": "classic_1",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "Q_tables/Q_table-Table_20000.npy",
+     92288
+    ],
+    [
+     "Q_tables/Q_table-Table_10000.npy",
+     92288
+    ],
+    [
+     "Q_tables/Q_table-Table_15000.npy",
+     92288
+    ],
+    [
+     "Q_tables/Q_table-Table_5000.npy",
+     92288
+    ],
+    [
+     "Q_tables/Q_table-Table_1.npy",
+     92288
+    ]
+   ],
+   "n_weights": 5,
+   "ext_imports": [
+    "igraph",
+    "matplotlib",
+    "networkx"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "COLS",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "novoice_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     459
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "sklearn"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "FreWill9__bomberman_rl",
+ "commit": "83cd12e010bb34dac248cd4b718a6aeb0a9cc02c",
+ "date": "2024-09-23",
+ "license": null,
+ "agents": [
+  {
+   "name": "agent_fred",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "IPython",
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "agent_fred2",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "IPython",
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "KunkelAlexander__bomberman_rl",
+ "commit": "38eccb6f0fbfa954da3b916f6c1a9cf0b3f91adb",
+ "date": "2025-10-12",
+ "license": [
+  "LICENSE"
+ ],
+ "agents": [
+  {
+   "name": "cnn_allstar",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "q_deep_agent",
+    "q_helpers",
+    "tensorflow"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "cnn_allstar_duel_heavy",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "q_deep_agent",
+    "q_helpers",
+    "tensorflow"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "cnn_allstar_duel_pretrain",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "q_deep_agent",
+    "q_helpers",
+    "tensorflow"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "dqn_allstar_duel",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "q_deep_agent",
+    "q_helpers",
+    "tensorflow"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "tq_allstar",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "q_table.npz",
+     1359654
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "q_helpers",
+    "q_tabular_agent"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "tq_coingrabber",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "q_table.npz",
+     180893
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "q_helpers",
+    "q_tabular_agent"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "tq_cratehero",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "q_table.npz",
+     439472
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "q_helpers",
+    "q_tabular_agent"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "tq_demonstrator",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "gzip",
+    "q_helpers",
+    "uuid"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "tq_optuna",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "q_helpers",
+    "q_tabular_agent"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "tq_representator",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "q_helpers",
+    "q_tabular_agent"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": [
+  "COLS: ours=17 theirs=9",
+  "ROWS: ours=17 theirs=9"
+ ]
+}
+======================================================================
+{
+ "repo": "Li-Jesse-Jiaze__MLE_project_bomberman",
+ "commit": "a7fe5041b02548ce4438e502ca3adb11576bae75",
+ "date": "2025-05-27",
+ "license": null,
+ "agents": [
+  {
+   "name": "baseline",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "matplotlib",
+    "torch",
+    "tqdm"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "deep_learning_killer",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "double_q",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "dqn",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     86689
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "dqn_5tile",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     30770
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "feature_is_everything",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "my-saved-model.pt",
+     30728
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "q_learning",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "sarsa",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "sarsa_lambda",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  }
+ ],
+ "settings_diff": [
+  "MAX_STEPS: ours=400 theirs=200"
+ ]
+}
+======================================================================
+{
+ "repo": "aanhlongg__bomberman_rl",
+ "commit": "60c4d12d8332dfaab49ec522c0c0472ae20e594e",
+ "date": "2026-08-15",
+ "license": null,
+ "agents": [
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "antonH22__cnn-based-dql",
+ "commit": "06f245eb6500249e5b15210b6c9c2dfd50c9a926",
+ "date": "2024-09-30",
+ "license": null,
+ "agents": [
+  {
+   "name": "agent_a",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "IPython",
+    "matplotlib",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "leanderwer__bomberman_rl",
+ "commit": "24ac7d28e2dad4a0e38a7e6733eef4a92c1d3004",
+ "date": "2026-08-13",
+ "license": null,
+ "agents": [
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "q_learning_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "leonbegiristain__RL_Bomberman",
+ "commit": "2b4c7992e407bd487dd97c465d0ba40289fdd420",
+ "date": "2024-09-30",
+ "license": null,
+ "agents": [
+  {
+   "name": "base_agent",
+   "has_callbacks": false,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "matplotlib"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "deep_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "mlp_save.pt",
+     25805
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "hung_ry_agent",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "features.pkl",
+     26357298
+    ],
+    [
+     "Q_table.pkl",
+     11295956
+    ]
+   ],
+   "n_weights": 2,
+   "ext_imports": [
+    "matplotlib",
+    "scipy"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "lukevoss__Bomberman_RL_2024",
+ "commit": "2c9fc2aea3e1b38d4e45580076b2fe4a5b175be3",
+ "date": "2025-03-19",
+ "license": null,
+ "agents": [
+  {
+   "name": "atom",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "data_generator",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "data_generator_atom",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "data_generator_q",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "echo",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "agent_code",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER",
+    "BOMB_TIMER",
+    "COLS",
+    "EXPLOSION_TIMER",
+    "ROWS"
+   ]
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "nickstr15__bomberman",
+ "commit": "fdfcd6ecb58f6a2c54deb87dcefc122dc9d69dc9",
+ "date": "2021-05-27",
+ "license": null,
+ "agents": [
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "maverick",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "network_parameters/final_parameters.pt",
+     8847
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "matplotlib",
+    "scipy",
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "rahul2227__bomberman_rl_RBN",
+ "commit": "e62777d2d6e44fbf4c33b3ae0458f49ca21e6125",
+ "date": "2024-09-23",
+ "license": null,
+ "agents": [
+  {
+   "name": "Q_learner",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "Servus",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [
+    [
+     "model/model_weights.h5",
+     2963848
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "every",
+    "keras",
+    "sparse",
+    "tensorflow"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": [
+    "BOMB_POWER"
+   ]
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================
+{
+ "repo": "smitha13798__bomberman_rl",
+ "commit": "0f86ddef55f854c45199468dc8c3c349e2be48e4",
+ "date": "2024-09-23",
+ "license": null,
+ "agents": [
+  {
+   "name": "QNetwork",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "dqn_age4",
+   "has_callbacks": true,
+   "has_train": true,
+   "weights": [
+    [
+     "latest_model.pth",
+     7848614
+    ]
+   ],
+   "n_weights": 1,
+   "ext_imports": [
+    "torch"
+   ],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  },
+  {
+   "name": "fail_agent",
+   "has_callbacks": true,
+   "has_train": false,
+   "weights": [],
+   "n_weights": 0,
+   "ext_imports": [],
+   "abs_paths": [],
+   "multiprocessing": false,
+   "settings_consts": []
+  }
+ ],
+ "settings_diff": []
+}
+======================================================================

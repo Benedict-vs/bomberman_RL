@@ -1,0 +1,14 @@
+
+**huntceil4k_k4__task4_rb_ship990731  vs  huntceil4k_k-1__task4_rb_ship990731   (agent: user_agent, 4000 paired rounds)**
+
+| Metric | huntceil4k_k-1__task4_rb_ship990731 | huntceil4k_k4__task4_rb_ship990731 | Difference (95 % CI) | Verdict |
+|---|---|---|---|---|
+| Score | 3.958 | 4.074 | +0.116 [+0.002, +0.233] | BETTER |
+| Win rate | 0.382 | 0.419 | +0.037 [+0.017, +0.057] | BETTER |
+| Kills | 0.229 | 0.260 | +0.032 [+0.011, +0.052] | BETTER |
+| Coins | 2.816 | 2.772 | -0.043 [-0.091, +0.005] | no effect shown |
+| Crates | 33.49 | 33.07 | -0.422 [-0.750, -0.081] | WORSE |
+| Suicides | 0.482 | 0.463 | -0.019 [-0.041, +0.002] | no effect shown |
+| Survival rate | 0.460 | 0.475 | +0.016 [-0.006, +0.038] | no effect shown |
+
+<sub>Paired difference (B − A) on identical arenas, 95 % bootstrap CI. A CI containing 0 means the change is not demonstrated at this sample size.</sub>

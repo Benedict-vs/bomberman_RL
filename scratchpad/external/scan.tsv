@@ -1,0 +1,191 @@
+"documentation_url": "https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api#rate-limiting",\tGONE\t\t\t
+"message": "API rate limit exceeded for user ID 218650112. If you reach out to GitHub Support for help, please include the request ID FBDC:2F12BE:C010B83:B94D1CC:6A846F61 and timestamp 2026-08-18 14:42:41 UTC. For more on scraping GitHub and how it may affect your rights, please review our Terms of Service (https://docs.github.com/en/site-policy/github-terms/github-terms-of-service)",\tGONE\t\t\t
+"status": "403"\tGONE\t\t\t
+1BlauNitrox/mle-final-project\t2026-08-18T12:22:11Z	none\t0\t
+3j14/bomberman_rl\t2021-03-29T11:47:23Z	none\t13\tagent_code/coin_agent/Q_table.npy;agent_code/coin_agent/performance.npy;agent_code/coin_agent/rewards.npy;agent_code/strong_agent/crates_coins_best_yet.npy;agent_code/strong_agent/multimulti.pt;
+AI-ELka/BombermanRLAgents\t2025-03-18T16:47:40Z	none\t5\tagent_code/dql/models/dqn-final.pth;agent_code/dql_large/models/dqn.pth;agent_code/ppo/models/ppo-final.pt;agent_code/ppo_l/models/large_ppo_final.pt;agent_code/ql/models/q_table.pkl;
+Aayushtirmalle/Machine_Learning_Project_SuSe24\t2024-08-16T07:49:40Z	none\t4\tagent_code/forest_agent/my-saved-model.pt;agent_code/my_agent/my-saved-model.pt;agent_code/my_agent/my-saved-q-table.pkl;agent_code/q_learning_agent/my-saved-model.pt;
+Abhinand-p/Reinforcement-Learning-Bomberman\t2024-09-06T07:22:06Z	none\t7\tagent_code/classic_1/Q_tables/Q_table-Table_1.npy;agent_code/classic_1/Q_tables/Q_table-Table_10000.npy;agent_code/classic_1/Q_tables/Q_table-Table_15000.npy;agent_code/classic_1/Q_tables/Q_table-Table_20000.npy;agent_code/classic_1/Q_tables/Q_table-Table_5000.npy;
+Akatuoro/bomberman_rl\t2019-02-04T17:13:56Z	none\t0\t
+AntonEberhardt/bomberman_rl\t2022-03-21T17:35:18Z	none\t0\t
+Anze-/bomberman_rl\t2023-07-17T11:50:46Z	none\t2\tagent_code/genetic_agent/winner.pkl;agent_code/genetic_agent/winner_net.pkl;
+Benedict-vs/bomberman_RL\t2026-08-18T03:28:17Z	none\t391\tagent_code/ben_coin_collector/baseline-invalid-actions-model_1.pt;agent_code/ben_coin_collector/ben_q_coin15_unshaped_v7__task1.pt;agent_code/ben_coin_collector/ben_q_coin5_v3__task1.pt;agent_code/ben_coin_collector/ben_q_invalid1_v2__task1.pt;agent_code/ben_coin_collector/ben_q_potential_scale01_v5__task1.pt;
+ChristopherRotter/bomberman_rl\t2022-04-20T08:52:36Z	none\t0\t
+ElJocho/fmlive\t2021-03-29T11:46:52Z	none\t404\tagent_code/danger_noodle/gntm.keras;agent_code/danger_noodle/pool/model_0.keras;agent_code/danger_noodle/pool/model_1.keras;agent_code/danger_noodle/pool/model_10.keras;agent_code/danger_noodle/pool/model_11.keras;
+FFFROZEN090/bomberman_rl\t2024-09-30T08:53:39Z	none\t1\tagent_code/Yu_policy_agent/best_model/III-III_SFF_seq_1_layer_2_alpha_0_hidden_32_55000.pt;
+FatManWalking/bomberman_rl\t2022-04-01T09:40:49Z	none\t3\tagent_code/vinnie_the_nextdoor_agent/model.pt;agent_code/vinnie_the_nextdoor_agent/q_table.pt;agent_code/vinnie_the_regressed_agent/model.pt;
+Felix-95/bomberman-NN\t2025-06-04T11:46:52Z	none\t6\tagent_code/beginner_agent/my-saved-model.pt;agent_code/beginner_agent/proven_models/classic-enemys2x5k.pt;agent_code/ffm_agent/my-saved-model.pt;agent_code/ffm_agent/proven_models/polar-sweep-1-final-model-enemy-no-intervention.pt;agent_code/ffm_agent_intervention/my-saved-model.pt;
+Finley-Maple/Bomberman-Final\t2023-10-02T14:17:43Z	none\t0\t
+Fjallripa/bomberman\t2022-04-04T15:53:43Z	none\t193\tagent_code/BombCoin-Miner/models/model_h6_coin-hunter2.npy;agent_code/BombCoin-Miner/models/sa_counter_h6_coin-miner2.npy;agent_code/Old Agents/agent_h1/model_h1_debugged_test_longer.pt;agent_code/Old Agents/agent_h1/model_h1_naive.pt;agent_code/Old Agents/agent_h1/model_h1_new-epsilon.pt;
+FreWill9/bomberman_rl\t2024-09-30T13:05:48Z	none\t0\t
+Friends-of-Machine-Learning/bomberman_rl\t2022-04-04T10:07:39Z	none\t18\tagent_code/foml_agent/my-saved-model.pt;agent_code/foml_agent_enhanced/clear_field.pt;agent_code/foml_agent_enhanced/direct/my-saved-model.pt;agent_code/foml_agent_enhanced/q_table parameters/my-saved-model.pt;agent_code/foml_agent_enhanced/solo_boi_working/clear_field.pt;
+Gorden-GitHub/bomberman_rl\t2023-11-06T13:25:14Z	none\t2\tagent_code/ppo_agent/my-saved-model.pt;agent_code/rdqn_agent/my-saved-model.pt;
+GwydionJon/bomberman_rl\t2022-03-30T13:04:36Z	none\t0\t
+J-Gann/arcade-reinforcement-learning\t2022-10-12T14:21:38Z	none\t3\tagent_code/null_agent/action_values.joblib;agent_code/null_agent/model.joblib;agent_code/null_agent_rigde/action_values.joblib;
+JanMStraub/ML-bomberman-project\t2026-03-20T09:22:48Z	none\t2\tagent_code/my_agent/my-saved-model.pt;agent_code/the_gadget/my-saved-model.pt;
+Janik7777/bomberman_rl\t2023-10-02T08:07:28Z	none\t3\tagent_code/Voltorb_Trainer/my-feature-rewards.pt;agent_code/Voltorb_Trainer/my-seen-features.pt;agent_code/dqn_agent/my-saved-model.pt;
+JasonPy/fml-project\t2021-03-29T08:47:07Z	none\t0\t
+JonasHell/bomberman_rl\t2021-03-30T09:59:30Z	none\t35\tagent_code/deepq_agent/17x17FitDQNN.pt;agent_code/deepq_agent/17x17mitCratesDQNN.pt;agent_code/deepq_agent/DQNN.pt;agent_code/our_agent/7x7_layer3_batch1_lr001_sgd.pt;agent_code/our_agent/7x7_layer3_batch1_lr001_sgd_rand10.pt;
+KanushkaGupta/bombermann_KVV\t2024-09-23T14:07:17Z	none\t2\tagent_code/dqn_agent/dqn_model.pth;agent_code/q_agent/q_table.pkl;
+KarasuElderrain/MLE-final-project\t2024-09-10T07:51:25Z	none\t1\tagent_code/model_free_agent/my-saved-model.pt;
+KevinAStein/ML-final\t2019-03-25T12:34:08Z	none\t8\tagent_code/AC_geheimagent/AC_geheimagent.pth;agent_code/Geheimagent/Geheimagent_1.pth;agent_code/Geheimagent/Geheimagent_2.pth;agent_code/Geheimagent/Geheimagent_3.pth;agent_code/Geheimagent/Geheimagent_4.pth;
+KunkelAlexander/bomberman_rl\t2025-10-12T16:13:40Z	MIT\t3\tagent_code/tq_allstar/q_table.npz;agent_code/tq_coingrabber/q_table.npz;agent_code/tq_cratehero/q_table.npz;
+KushalGaywala/bomberman_rl\t2024-09-30T13:25:12Z	none\t0\t
+Lennox-Elaphurus/bomberman_rl\t2023-09-25T12:17:40Z	none\t0\t
+Li-Jesse-Jiaze/MLE_project_bomberman\t2025-05-27T11:46:57Z	none\t3\tagent_code/dqn/my-saved-model.pt;agent_code/dqn_5tile/my-saved-model.pt;agent_code/feature_is_everything/my-saved-model.pt;
+MansurDaschaew/bomberman_rl\t2022-03-28T12:00:25Z	none\t1\tagent_code/MCA_Uli/my-saved-model.pt;
+MarlonDittes/MLEProject\t2024-09-29T23:44:44Z	none\t14\tagent_code/DQN_agent/metrics.pkl;agent_code/DQN_agent/my-saved-model.pt;agent_code/QL_chase/metrics.pkl;agent_code/QL_chase/q_table.pt;agent_code/QL_coin/metrics.pkl;
+MarvinKohnen/deep-reinforcement-learning\t2025-01-23T20:54:22Z	none\t0\t
+MaximilianParis/Bomberman-AI\t2026-05-12T12:46:58Z	none\t0\t
+Michael-ale000/RL_Bomberman\t2023-10-02T09:10:26Z	none\t0\t
+MichiSchwind/our_agent\t2024-09-02T12:08:15Z	none\t0\t
+MrWhatZitToYaa/MLE\t2023-10-01T14:07:20Z	none\t69\tagent_code/bodenloser_kleinkrimineller/monitor_training/exploration_probability.pkl;agent_code/bodenloser_kleinkrimineller/monitor_training/hyperparameters.pkl;agent_code/bodenloser_kleinkrimineller/monitor_training/performanceEvaluation.pkl;agent_code/bodenloser_kleinkrimineller/monitor_training/qTableSize.pkl;agent_code/bodenloser_kleinkrimineller/monitor_training/total_rewards.pkl;
+MunirAbobaker/fml_project\t2022-04-04T09:23:44Z	none\t0\t
+Myst-pix/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+NathEd1012/Machine_learning_Ess\t2024-09-30T06:13:56Z	none\t0\t
+OoJJBoO/bomberman_rl\t2023-09-26T06:26:05Z	none\t0\t
+Philipp-g/bomberman_rl\t2021-03-19T11:49:39Z	none\t0\t
+PrimeF/bomberman_rl\t2021-03-29T13:50:21Z	none\t1\tagent_code/auto_bomber/production/rew4_IANN_eps0.25_temp0.9_disc0.9_lr0.0003/weights.pt;
+PrioteasaAndrei/bomberman-reinforcement-learning\t2024-09-30T11:07:06Z	none\t0\t
+PrzemyslawWozniakowski/bomberman_rl\t2021-05-13T13:54:43Z	none\t0\t
+Ravanoid3/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+RussellALA/bomberman\t2019-03-25T10:50:37Z	none\t1\tagent_code/gb_agent/final_agent_frozen.sav;
+Schlevidon/mle-ss23_final-project\t2023-10-02T13:16:10Z	none\t7\tagent_code/CNN/model/my-model.pt;agent_code/DQNN/model/my-model.pt;agent_code/hanging_hangman/model/my-model.pt;agent_code/n_step_sarsa_agent/model/my-model.pt;agent_code/neural_network_agent/model/my-model.pt;
+SeZven/bomberman_rl\t2022-03-11T10:28:10Z	none\t0\t
+StefanWahl/Reinforcement-Learning-for-Bomberman\t2021-03-27T20:29:00Z	none\t6\tagent_code/agent_agent_1/my-saved-model.pt;agent_code/agent_agent_2/my-saved-model.pt;agent_code/agent_agent_3/my-saved-model.pt;agent_code/coin_agent/my-saved-model.pt;agent_code/coin_agent_2/my-saved-model.pt;
+Sthuthi98/bomberman_rl\t2023-09-25T12:59:33Z	none\t0\t
+TimoteoLee98/FML\t2021-03-24T15:30:35Z	none\t0\t
+Viveal/bomberman_rl\t2021-03-08T07:30:25Z	none\t0\t
+YannEbling/bomberman_rl\t2024-09-30T10:54:37Z	none\t7\tagent_code/WalkerQAgent/my-saved-model.pt;agent_code/my_q_agent/bkp/17x17_coin_heaven_150k/my-saved-model.pt;agent_code/my_q_agent/bkp/17x17_coin_heaven_150k/my-saved-model1.pt;agent_code/my_q_agent/bkp/17x17_coin_heaven_20k/my-saved-model.pt;agent_code/my_q_agent/bkp/17x17_coin_heaven_20k/my-saved-model1.pt;
+ZhangYi1228/Machine-learning-final-project\t2022-04-02T23:14:39Z	none\t0\t
+Ztec1337/bombermario\t2022-04-04T10:08:20Z	none\t40\tagent_code/Bilder/episodelength_dqn_task1.pt;agent_code/Bilder/episodelength_qtable_task1.pt;agent_code/Bilder/rewards_dqn_task1.pt;agent_code/Bilder/rewards_qtable_task1.pt;agent_code/ac9x9_1/episodelength.pt;
+aanhlongg/bomberman_rl\t2026-08-15T21:41:03Z	none\t0\t
+add-IV/bomberman_rl\t2024-09-30T01:13:33Z	none\t10\tagent_code/QT_trainee/q_table.pkl;agent_code/coin_rl/model.pth;agent_code/crate_rl/model.pth;agent_code/deep_rl/model.pth;agent_code/little_guy/small_guy.pt;
+anacarsi/ss24_ReinforcementLearning_BomberMan\t2024-09-30T14:03:12Z	none\t0\t
+andquintero/bomberman_rl\t2021-03-17T16:30:07Z	none\t0\t
+antonH22/cnn-based-dql\t2024-09-30T13:20:47Z	none\t0\t
+aruna-ram/bomberman_rl\t2019-02-25T09:39:31Z	none\t0\t
+az315/AHA\t2024-09-27T12:33:55Z	none\t0\t
+bGuenes/bomberman_MLE_homework\t2023-11-15T20:35:37Z	none\t31\tagent_code/agent_berkay/my-saved-model.pt;agent_code/agent_coin/my-saved-model.pt;agent_code/agent_coin_II/my-saved-model.pt;agent_code/agent_the_destroyer_of_universes/my-saved-model.pt;agent_code/agent_the_destroyer_of_universes/my-saved-model_1.pt;
+bomberchamp/bomberchamp\t2019-03-26T06:11:56Z	none\t0\t
+cciao/bomberman_rl\t2022-04-04T09:36:15Z	none\t0\t
+cemdaloglu/bomberman_rl\t2022-02-23T12:15:40Z	none\t0\t
+cmxin24/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+cs224/bomberman_rl\t2019-05-26T10:09:00Z	none\t0\t
+daryl336/CSXX46p\t2025-11-15T08:20:42Z	MIT\t140\tagent_code/REINFORCE/my-saved-model.pth;agent_code/dqn_alt/saved_dqn_ep016800.pth;agent_code/dqn_torch/models/dqn_checkpoint_50000.pth;agent_code/llm_maverick/network_parameters/final_parameters.pt;agent_code/llm_maverick/network_parameters/final_parameters_keep.pt;
+datcn1212/bomberman_mle\t2026-08-17T21:07:14Z	none\t0\t
+daubweb/bomberbot\t2022-03-28T13:37:05Z	none\t1\tagent_code/sarsa_agent/q_table_integers.npy;
+dennis-ge/fml-bomberman\t2022-04-04T11:11:40Z	none\t2\tagent_code/fml_double/models/final_model.pt;agent_code/my_agent/models/my_agent.pt;
+dibstan/bomberman_rl\t2021-03-29T11:05:53Z	none\t298\tagent_code/BattleDuck/explosion_map.pt;agent_code/BattleDuck/fluctuations.pt;agent_code/BattleDuck/learning_rate.pt;agent_code/BattleDuck/my-saved-model.pt;agent_code/tote_enten/TD_ente_neighbor/PCA.pt;
+drichter-official/fml-final-project\t2025-02-07T15:13:35Z	none\t33\tagent_code/ac9x9_1/episodelength.pt;agent_code/ac9x9_1/rewards.pt;agent_code/ac9x9_1_superior/episodelength.pt;agent_code/ac9x9_1_superior/rewards.pt;agent_code/ac9x9_2/episodelength.pt;
+eliaserland/bomberman_rl\t2021-04-08T15:32:06Z	none\t0\t
+entunidotdeb/MLE_SS24\t2024-09-29T16:39:56Z	none\t2\tagent_code/bs_q_agent/my-saved-model.pt;agent_code/bs_q_agent/my-saved-model_3.pt;
+ericgoldclub/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+fri3nd0/BombermanProject\t2023-10-02T12:10:34Z	none\t64\tagent_code/MasterBlaster/models/model_weights.pth;agent_code/hand_crafted_agent/models/losses_fine.npy;agent_code/hand_crafted_agent/models/losses_pre.npy;agent_code/hand_crafted_agent/models/model_weights_fine.pth;agent_code/hand_crafted_agent/models/model_weights_pre.pth;
+georggrab/bomberman_rl\t2022-04-03T12:20:11Z	none\t0\t
+gsindlinger/BomberBrains\t2023-10-02T07:29:20Z	none\t6\tagent_code/qtable_agent/data/BOLTZ/q_table.npy;agent_code/qtable_agent/data/BOLTZ/q_table_counts.npy;agent_code/qtable_agent/data/EPS/q_table.npy;agent_code/qtable_agent/data/EPS/q_table_counts.npy;agent_code/qtable_agent/data/UCB/q_table.npy;
+henrixapp/bomberman-rl-keras\t2019-03-25T16:50:48Z	none\t1\tagent_code/coini_agent/weights.h5;
+hericks/FML\t2021-03-29T17:24:20Z	none\t0\t
+hericks/bomberman_rl\t2021-03-12T15:07:55Z	none\t0\t
+huihui520leilei/RL_bomberman\t2022-04-03T18:24:35Z	none\t14\tagent_code/my_agent1Sarsa/my-saved-model.pt;agent_code/my_agent1Sarsa/q_table.pickle;agent_code/my_agent2DQN/cost_his.pt;agent_code/my_agent2DQN/my-saved-model.pt;agent_code/my_agent2Q/my-saved-model.pt;
+idf-io/ML-Essentials_Uni-Heidelberg\t2023-10-02T13:59:30Z	MIT\t0\t
+irisakohler/bomberman_rl\t2021-03-29T07:27:01Z	none\t5\tagent_code/custom_qtable_agent/custom_model.pt;agent_code/custom_qtable_agent/older_training_models/trained_without_density/custom_model_trained_without_crates.pt;agent_code/custom_sarsa_agent/my-saved-model_sarsa.pt;agent_code/custom_sarsa_pca_agent/my-saved-model_rule.pt;agent_code/custom_td_agent/my-saved-model_rule.pt;
+itisacloud/GlasHoch_Rangers\t2024-05-01T00:01:42Z	none\t4\tagent_code/GlasHoch_Rangers/models/GlasHoch_long_runer_12th_batch_32_less_explo_lr_e5_1_sync_250_no_imitation_remove_bomb_reward_classic_default_550000.pth;agent_code/GlasHoch_Rangers/models/GlasHoch_long_runer_12th_batch_32_lr_e5_1_sync_250_no_imitation_remove_bomb_reward_classic_default_750000.pth;agent_code/GlasHoch_Rangers/models/GlasHoch_long_runer_12th_batch_64_less_explo_lr_e5_25_sync_250_no_imitation_remove_bomb_reward_classic_default_400000.pth;agent_code/GlasHoch_Rangers/models/GlasHoch_long_runer_13th_batch_64_strart_trap_lr_e5_1_sync_250_with_trap_classic_default_200000.pth;
+itisacloud/bomberman_rl\t2023-09-25T08:30:28Z	none\t5\tagent_code/GlasHoch_Rangers/models/GlasHoch_Rangers_startEasy_die_zweite_default_400000.pth;agent_code/GlasHoch_Rangers/models/GlasHoch_first_run_start_easy_parallel_default_700000.pth;agent_code/GlasHoch_Rangers/models/GlasHoch_long_runer_8th_batch_32_lr_e5_1_sync_500_imitation_classic_default_700000.pth;agent_code/GlasHoch_Rangers/models/GlasHoch_long_runer_9th_batch_32_lr_e5_1_sync_500_no_imitation_classic_default_1050000.pth;agent_code/GlasHoch_Rangers/models/agent_0_backup.pth;
+ivo-1/bomberman_rl\t2022-04-04T10:15:00Z	none\t40\tagent_code/coli_agent/q_tables/q_table-2022-03-22T02:12:34.npy;agent_code/coli_agent/q_tables/q_table-2022-03-22T03:27:20.npy;agent_code/coli_agent/q_tables/q_table-2022-03-22T13:21:10.npy;agent_code/coli_agent/q_tables/q_table-2022-03-22T13:36:50.npy;agent_code/coli_agent/q_tables/q_table-2022-03-22T14:10:03.npy;
+jepetolee/bomberman_rl\t2025-12-14T17:14:23Z	none\t1\tagent_code/selfplay_opponent/ppo_model.pt;
+jepetolee/reinforcement_learning_with_reasoning_models\t2025-11-02T14:12:52Z	none\t1\tagent_code/ppo_agent/ppo_model.pt;
+jkreft/ifml_project\t2019-03-26T23:23:48Z	none\t12\tagent_code/lukas_agent/data/actions_GB.npy;agent_code/lukas_agent/data/rewards_GB.npy;agent_code/lukas_agent/data/scores_GB.npy;agent_code/lukas_agent/data/total_rewards_GB.npy;agent_code/lukas_agent/q_values_GB(old).npy;
+jonasw247/bomberman_rl\t2019-02-19T21:18:22Z	none\t0\t
+juso40/bomberman_rl\t2022-03-07T13:16:59Z	none\t0\t
+karthikaf/Bomberman-RL\t2023-09-25T13:47:56Z	none\t6\tagent_code/hitman/checkpoints/checkpoint-1000.pt;agent_code/hitman/checkpoints/checkpoint-2000.pt;agent_code/hitman/checkpoints/checkpoint-3000.pt;agent_code/hitman/checkpoints/checkpoint-4000.pt;agent_code/hitman/checkpoints/checkpoint-5000.pt;
+leanderwer/bomberman_rl\t2026-08-13T12:06:55Z	none\t0\t
+lenbeck/MLE-S2024-Exam-Project\t2024-09-24T07:19:09Z	none\t0\t
+leonbegiristain/RL_Bomberman\t2024-09-30T09:28:55Z	none\t3\tagent_code/deep_agent/mlp_save.pt;agent_code/hung_ry_agent/Q_table.pkl;agent_code/hung_ry_agent/features.pkl;
+libaum/bomberman-rl\t2026-01-02T19:17:32Z	none\t2\tagent_code/agent_quapsel/model.pt;agent_code/deep_quapsel/model.h5;
+lingyoumax/RL-BOMBMAN\t2024-10-08T20:13:16Z	none\t48\tagent_code/ML-monkey/model_parameters/1000iterations.pt;agent_code/ML-monkey/model_parameters/100iterations.pt;agent_code/ML-monkey/model_parameters/125iterations.pt;agent_code/ML-monkey/model_parameters/150iterations.pt;agent_code/ML-monkey/model_parameters/175iterations.pt;
+lukaswenzl/bomberman_rl\t2019-03-25T22:57:24Z	none\t0\t
+luwo9/bomberman_rl\t2024-09-30T13:37:57Z	none\t0\t
+madham97/Least_Miserables\t2025-06-01T14:15:16Z	none\t7\tagent_code/Least_Ultimate_agent/my-saved-model.pt;agent_code/Least_Ultimate_agent/my-saved-model_0.pt;agent_code/Less_Ultimate_agent/my-saved-model.pt;agent_code/Less_Ultimate_agent/my-saved-model_reinf_0.pt;agent_code/Ultimate_agent/my-saved-model.pt;
+martinwkol/bomberman_rl_df_mk\t2023-10-02T00:35:40Z	none\t1\tagent_code/linear_agent/model0.pt;
+marvinschmitt/DeepLearning-Bomberman\t2021-04-03T20:58:55Z	none\t0\t
+maxawake/Bomberman-Reinforcement-Learning\t2023-08-28T21:14:11Z	GPL-3.0\t0\t
+maxiherzog/bomberman_rl\t2021-03-29T22:14:47Z	none\t199\tagent_code/chicken/model/model.pt;agent_code/task1_agent/Q-dists.pt;agent_code/task1_agent/model.pt;agent_code/task1_agent/rewards.pt;agent_code/task2_agent/autotrain_1/model_A0.001-G0.9/analysis_data.pt;
+mdawas/bomberman_rl\t2019-02-25T09:39:31Z	none\t0\t
+miri-stack/bomberman\t2023-10-01T18:29:20Z	none\t3\tagent_code/BombiMcBombFace/models/q_network_weights.h5;agent_code/DQAlternative/models/q_network_weights.h5;agent_code/qagent/q_table.pickle;
+momodaidh/bomberman_rl\t2021-03-17T16:33:23Z	none\t0\t
+narame7/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+neelkanthrawat/Bomberman-RL-Koethe\t2023-10-02T09:10:26Z	none\t0\t
+neelkanthrawat/ML-essentials-2024-BomberMan\t2024-09-29T15:14:40Z	none\t3\t
+ngmars/RL_Bomberman_game\t2026-08-16T22:37:51Z	none\t1\tagent_code/my_agent/my-saved-model.pt;
+nguyenthanhhy0108/CS106-RL-in-Bomberman\t2024-06-24T15:43:15Z	none\t9\tagent_code/dqn_agent/metrics/Q0.npy;agent_code/dqn_agent/metrics/loss0.npy;agent_code/dqn_agent/metrics/score0.npy;agent_code/dqn_agent/metrics/steps0.npy;agent_code/dqn_agent/metrics/time0.npy;
+nickstr15/bomberman\t2021-05-27T14:35:02Z	none\t1\tagent_code/maverick/network_parameters/final_parameters.pt;
+nida612/bomberman\t2024-06-02T14:00:40Z	none\t0\t
+nilsfriess/bomberman\t2022-04-03T19:28:13Z	none\t1\tagent_code/clean_forest_agent/models/model.pt;
+nilsfriess/bomberman_rl\t2022-02-23T12:15:40Z	none\t0\t
+nilskre/bomberman_rl\t2021-03-28T20:23:10Z	none\t0\t
+palkinsingh/Bomberman\t2024-09-30T17:45:13Z	none\t0\t
+piscih/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+pkollenz/bomberman_rl\t2021-02-17T12:57:37Z	none\t0\t
+psl-schaefer/bomberman\t2022-04-13T13:48:52Z	none\t11\tagent_code/nn_agent_v2/model.pt;agent_code/nn_agent_v2/my-saved-model.pt;agent_code/old_agents/TD_GD_agent/my-saved-model.pt;agent_code/old_agents/linear_sgd_agent/my-saved-model.pt;agent_code/old_agents/n_step_agent_v1/my-saved-model.pt;
+rahul2227/bomberman_game\t2023-09-22T15:18:47Z	none\t0\t
+rahul2227/bomberman_rl_RBN\t2024-09-23T14:02:54Z	none\t1\tagent_code/Servus/model/model_weights.h5;
+rlCodev/-rl_bomberman_agent\t2023-10-02T13:01:49Z	none\t6\tagent_code/noodle_gen_1/custom_mlp_model.pth;agent_code/noodle_gen_2/custom_mlp_policy_model.pth;agent_code/noodle_gen_2/custom_mlp_target_model.pth;agent_code/noodle_gen_2/training_coins_collected.pkl;agent_code/noodle_gen_2/training_episodes.pkl;
+rspeer/dominionstats\t2011-11-27T20:46:53Z	none\t0\t
+rspseshasai/Reinforcement-Learning-Agent-for-Bomberman-Game\t2025-02-22T15:53:30Z	none\t3\tagent_code/Raiden/saved_parameters/model.pt;agent_code/agent007/required_parameters/saved-model.pt;agent_code/ninja/my_model.pt;
+sashakowa/bomberman_rl\t2022-04-04T12:40:23Z	none\t13\tagent_code/exp_buffer_nstep_qlearning_agent/my-saved-model.pt;agent_code/feature_engineering_agent/Old models/my-saved-model(good).pt;agent_code/feature_engineering_agent/Old models/my-saved-model(good2).pt;agent_code/feature_engineering_agent/Old models/my-saved-model(good3).pt;agent_code/feature_engineering_agent/Old models/my-saved-model(good4).pt;
+shreyanshu28/machine-learning-exercise\t2023-10-02T11:09:49Z	none\t0\t
+simaesm/bomberman_rl\t2023-09-07T12:34:36Z	none\t0\t
+smitha13798/bomberman_rl\t2024-09-23T11:53:20Z	none\t1\tagent_code/dqn_age4/latest_model.pth;
+soerenfetsch/Aenormendeas-Bomber-Man\t2024-09-30T13:01:48Z	none\t174\tagent_code/aenormendeas_agent/minimal_aenormendeas.pkl;agent_code/aenormendeas_agent/old_models/coin_collector_qtable.pkl;agent_code/aenormendeas_agent/old_models/coins_and_bombs_qtable.pkl;agent_code/aenormendeas_agent/old_models/coins_and_bombs_qtable_fail.pkl;agent_code/aenormendeas_agent/old_models/coins_crates_bombs_players.pkl;
+starteNCS/drl-bomberman\t2025-01-22T07:57:35Z	none\t0\t
+stefanDeveloper/bomberman\t2021-03-28T17:02:58Z	MIT\t6\tagent_code/blindfisch/my-saved-model.pt;agent_code/hitchcock/my-saved-model.pt;agent_code/hitchcock_crates/my-saved-model.pt;agent_code/hitchcock_full_game/my-saved-model.pt;agent_code/nikolaj_boyle/my-saved-model.pt;
+storz1/bomberman\t2024-09-24T22:29:44Z	none\t36\tagent_code/actor_critic_agent/PPO_preTrained/PPO_1.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_10.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_11.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_12.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_13.pth;
+superhellth/mle-2023\t2023-10-01T23:14:52Z	none\t4\tagent_code/akins_agent/Training/qtable.pkl;agent_code/deep_q_agent/training_data/deep_q.pt;agent_code/raphaels_agent/my-saved-model.pt;agent_code/subfield_agent/my-saved-model.pt;
+theGindar/bomberman_rl\t2021-02-17T12:57:37Z	none\t0\t
+thekaharis/bomberman_rl\t2021-03-29T13:32:57Z	none\t186\tagent_code/my_agent/models/1.pt;agent_code/my_agent/models/2.pt;agent_code/my_agent/models/3.pt;agent_code/my_agent/models/4.pt;agent_code/my_agent/models/5.pt;
+thisishiu/Reinforcement-learning-Boomberman\t2025-11-04T04:29:39Z	none\t8\tagent_code/Terminators/data/my-saved-model.pt;agent_code/q_agent/coin-collector-old.npy;agent_code/q_agent/coin-collector.npy;agent_code/q_agent/my-saved-model.npy;agent_code/q_agent/my-saved-model_1.npy;
+ufuk-cakir/bomberman\t2023-10-02T13:08:43Z	none\t7\tagent_code/PPO/model.pt;agent_code/Qagent/policy_net copy.pt;agent_code/Qagent/policy_net.pt;agent_code/Qagent/target_net.pt;agent_code/Qagent_New_Features/policy_net copy.pt;
+ukoethe/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+v1rotate-11/bomberman_rl_agent\t2024-10-02T11:19:49Z	none\t0\t
+xiaoxiae/BombermanML\t2023-12-20T13:07:52Z	GPL-3.0\t21\tagent_code/binary_agent_v1/policy-model.pt;agent_code/binary_agent_v1/target-model.pt;agent_code/binary_agent_v2/policy-model.pt;agent_code/binary_agent_v2/target-model.pt;agent_code/binary_agent_v3/policy-model.pt;
+xn-peng/bomberman_rl\t2023-09-26T02:17:46Z	none\t0\t
+yingchanchu/bomberman_rl\t2023-10-02T09:10:26Z	none\t0\t
+yiwen-lu/bomberman_rl\t2019-02-25T09:39:31Z	none\t0\t
+ykirchhoff/bomberman_rl\t2023-10-01T21:41:57Z	none\t10\tagent_code/basic_agent/models/model_final.pth;agent_code/basic_agent/models/target_model_final.pth;agent_code/basic_agent_large/models/model_final.pth;agent_code/basic_agent_large/models/target_model_final.pth;agent_code/best_agent/models/model_final.pth;
+ywzcode/bomberman_rl\t2019-02-19T13:46:49Z	none\t0\t
+{\tGONE\t\t\t
+}\tGONE\t\t\t
+;
+thisishiu/Reinforcement-learning-Boomberman	2025-11-04T04:29:39Z	none	8	agent_code/Terminators/data/my-saved-model.pt;agent_code/q_agent/coin-collector-old.npy;agent_code/q_agent/coin-collector.npy;agent_code/q_agent/my-saved-model.npy;agent_code/q_agent/my-saved-model_1.npy;agent_code/q_agent/scenaio_1.npy;
+ufuk-cakir/bomberman	2023-10-02T13:08:43Z	none	7	agent_code/PPO/model.pt;agent_code/Qagent/policy_net copy.pt;agent_code/Qagent/policy_net.pt;agent_code/Qagent/target_net.pt;agent_code/Qagent_New_Features/policy_net copy.pt;agent_code/Qagent_New_Features/policy_net.pt;
+ukoethe/bomberman_rl	2023-10-02T09:10:26Z	none	0	
+v1rotate-11/bomberman_rl_agent	2024-10-02T11:19:49Z	none	0	
+xiaoxiae/BombermanML	2023-12-20T13:07:52Z	GPL-3.0	21	agent_code/binary_agent_v1/policy-model.pt;agent_code/binary_agent_v1/target-model.pt;agent_code/binary_agent_v2/policy-model.pt;agent_code/binary_agent_v2/target-model.pt;agent_code/binary_agent_v3/policy-model.pt;agent_code/binary_agent_v3/target-model.pt;
+xn-peng/bomberman_rl	2023-09-26T02:17:46Z	none	0	
+yingchanchu/bomberman_rl	2023-10-02T09:10:26Z	none	0	
+yiwen-lu/bomberman_rl	2019-02-25T09:39:31Z	none	0	
+ykirchhoff/bomberman_rl	2023-10-01T21:41:57Z	none	10	agent_code/basic_agent/models/model_final.pth;agent_code/basic_agent/models/target_model_final.pth;agent_code/basic_agent_large/models/model_final.pth;agent_code/basic_agent_large/models/target_model_final.pth;agent_code/best_agent/models/model_final.pth;agent_code/best_agent/models/target_model_final.pth;
+ywzcode/bomberman_rl	2019-02-19T13:46:49Z	none	0	
+{	GONE
+}	GONE
+itha13798/bomberman_rl	2024-09-23T11:53:20Z	none	1	agent_code/dqn_age4/latest_model.pth
+soerenfetsch/Aenormendeas-Bomber-Man	2024-09-30T13:01:48Z	none	174	agent_code/aenormendeas_agent/minimal_aenormendeas.pkl;agent_code/aenormendeas_agent/old_models/coin_collector_qtable.pkl;agent_code/aenormendeas_agent/old_models/coins_and_bombs_qtable.pkl;agent_code/aenormendeas_agent/old_models/coins_and_bombs_qtable_fail.pkl;agent_code/aenormendeas_agent/old_models/coins_crates_bombs_players.pkl
+starteNCS/drl-bomberman	2025-01-22T07:57:35Z	none	0	
+stefanDeveloper/bomberman	2021-03-28T17:02:58Z	MIT	6	agent_code/blindfisch/my-saved-model.pt;agent_code/hitchcock/my-saved-model.pt;agent_code/hitchcock_crates/my-saved-model.pt;agent_code/hitchcock_full_game/my-saved-model.pt;agent_code/nikolaj_boyle/my-saved-model.pt
+storz1/bomberman	2024-09-24T22:29:44Z	none	36	agent_code/actor_critic_agent/PPO_preTrained/PPO_1.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_10.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_11.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_12.pth;agent_code/actor_critic_agent/PPO_preTrained/PPO_13.pth
+superhellth/mle-2023	2023-10-01T23:14:52Z	none	4	agent_code/akins_agent/Training/qtable.pkl;agent_code/deep_q_agent/training_data/deep_q.pt;agent_code/raphaels_agent/my-saved-model.pt;agent_code/subfield_agent/my-saved-model.pt
+theGindar/bomberman_rl	2021-02-17T12:57:37Z	none	0	
+thekaharis/bomberman_rl	2021-03-29T13:32:57Z	none	186	agent_code/my_agent/models/1.pt;agent_code/my_agent/models/2.pt;agent_code/my_agent/models/3.pt;agent_code/my_agent/models/4.pt;agent_code/my_agent/models/5.pt
+thisishiu/Reinforcement-learning-Boomberman	2025-11-04T04:29:39Z	none	8	agent_code/Terminators/data/my-saved-model.pt;agent_code/q_agent/coin-collector-old.npy;agent_code/q_agent/coin-collector.npy;agent_code/q_agent/my-saved-model.npy;agent_code/q_agent/my-saved-model_1.npy
+ufuk-cakir/bomberman	2023-10-02T13:08:43Z	none	7	agent_code/PPO/model.pt;agent_code/Qagent/policy_net copy.pt;agent_code/Qagent/policy_net.pt;agent_code/Qagent/target_net.pt;agent_code/Qagent_New_Features/policy_net copy.pt
+ukoethe/bomberman_rl	2023-10-02T09:10:26Z	none	0	
+v1rotate-11/bomberman_rl_agent	2024-10-02T11:19:49Z	none	0	
+xiaoxiae/BombermanML	2023-12-20T13:07:52Z	GPL-3.0	21	agent_code/binary_agent_v1/policy-model.pt;agent_code/binary_agent_v1/target-model.pt;agent_code/binary_agent_v2/policy-model.pt;agent_code/binary_agent_v2/target-model.pt;agent_code/binary_agent_v3/policy-model.pt
+xn-peng/bomberman_rl	2023-09-26T02:17:46Z	none	0	
+yingchanchu/bomberman_rl	2023-10-02T09:10:26Z	none	0	
+yiwen-lu/bomberman_rl	2019-02-25T09:39:31Z	none	0	
+ykirchhoff/bomberman_rl	2023-10-01T21:41:57Z	none	10	agent_code/basic_agent/models/model_final.pth;agent_code/basic_agent/models/target_model_final.pth;agent_code/basic_agent_large/models/model_final.pth;agent_code/basic_agent_large/models/target_model_final.pth;agent_code/best_agent/models/model_final.pth
+ywzcode/bomberman_rl	2019-02-19T13:46:49Z	none	0	
+{	GONE		0	
+}	GONE		0	

@@ -21,6 +21,448 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E40 — the hunt ceiling remeasured with a trap test that matches the game's move rule
+
+- **Question:** E39 returned an oracle ceiling of +0.116 on score and concluded the hunting
+  direction was closed. **Audit 10 broke the instrument.** `hunt_ceiling.trap_sites` asks whether
+  the target can escape **from the tile it currently occupies**, but `environment.py:421-432` polls
+  every agent on the same pre-action snapshot and only then executes the actions in a random
+  permutation — so by the instant our BOMB exists, the target has already taken a move the trap test
+  never modelled. Followed to the fuse, those "verified inescapable" bombs earn us the kill
+  **8.1 % [3.3, 16.1]** of the time (`scratchpad/audit10/l_trap_followup.out`), and
+  0.406 bombs/round × 8.1 % × 5 ≈ +0.16 accounts for the whole measured effect.
+
+  **So +0.116 is a floor on hunting, not the ceiling E39 called it.** The direction is not closed;
+  it is unmeasured. This entry measures it with a trap test whose world model matches the
+  environment's.
+
+- **Change:** one function. `scratchpad/benedict/hunt_ceiling_v2.py` is `hunt_ceiling.py` with
+  `trap_sites` requiring the target to be escape-less **from every cell it could occupy once the
+  step resolves** — its current tile plus every free neighbour — instead of from its current tile
+  alone. `--trap-model stale` reproduces the E39 behaviour exactly from the same binary, so the
+  stale/sim contrast is not confounded by anything else. Other agents are *not* removed from the
+  target's options: granting it more freedom makes the test stricter, which is the safe direction
+  for an upper bound. The new bomb's own tile is excluded as a destination — walking onto the bomb
+  is not an escape.
+
+  Nothing under `agent_code/` is touched; the line-up still drives the provided `user_agent`.
+
+- **Design.** Four arms, **n = 8000** paired arenas each, held-out ship seed 990731, 3 ×
+  `rule_based_agent`, run concurrently:
+
+  | arm | what it is for |
+  |---|---|
+  | `k = -1` | control — the shipped agent, re-run under v2 so every arm comes from one binary |
+  | `k = 4, stale` | reproduces E39's headline arm; the bridge between the two entries |
+  | **`k = 4, sim`** | **the corrected oracle — the primary arm** |
+  | `k = 8, sim` | a stricter trap test finds rarer sites; does it want a longer reach? |
+
+  n was doubled from E39's 4000 precisely because that entry died at the significance boundary.
+  The harness now records the git commit in its `.meta.json`, which E39 flagged as missing.
+
+- **Power, stated in advance.** From E39's realised paired SDs, at n = 8000 the standard errors are
+  **score 0.042, margin_mean 0.051, margin_best 0.065**, so the 80 %-power MDEs are
+  **score 0.119, margin_mean 0.142, margin_best 0.181**. E39's +0.116 sits *just* below the score
+  MDE — this design can separate it from zero only if it grows.
+
+  **And the CI is not read off `analyze.py` alone.** Audit 10 showed `analyze.py:220`'s hard-coded
+  `default_rng(12345)` makes a borderline bound look deterministic when it is a coin flip; every
+  verdict below is scored on the **sign-flip permutation p** as well, and a claim counts only if
+  both agree.
+
+### Prediction (written before the run)
+
+**Both score and margin are pre-registered, because the criterion is genuinely unresolved.** The
+tournament-format question is out with the course and unanswered; `final_project.pdf` §3 says the
+winner is decided "by total score", which is a *ranking of four totals*, and audit 10 showed the
+same data gives +0.116 on our own score and +0.270 on the margin. Registering both now is the only
+way to avoid E39's problem, where the interesting metric was chosen after the fact and had to be
+recorded as post-hoc. **No metric here gets swapped after the numbers land.**
+
+1. **P1, primary — score.** `k = 4 sim` beats the control by **≥ +0.25**, the same bar E39
+   pre-registered and failed. **Refutation:** below +0.25, and the pre-committed consequence is that
+   hunting stays closed *on score* — this time on an instrument that is actually an upper bound,
+   which is the conclusion E39 was not entitled to.
+2. **P2 — the reason this entry exists: is the corrected oracle worth more than the broken one?**
+   `k = 4 sim` − `k = 4 stale` on score. **My prediction is that it is NOT significantly different
+   (CI contains 0),** because the fix trades a ~2× lower firing rate for a higher conversion rate
+   and I expect those to roughly cancel. **Refutation, and it would be the interesting outcome:**
+   sim beats stale with a CI excluding 0 → the audit's "floor, not ceiling" reading is confirmed
+   quantitatively and the ceiling is genuinely higher than anything measured so far.
+3. **P3, mechanism — conversion per bomb.** The whole premise is that sim's bombs are *better*
+   bombs. Sim's override bombs must convert to a credited kill at a **materially higher rate** than
+   stale's 8.1 %, and I pre-register **≥ 20 %** as "materially". Measured the same way audit 10 did,
+   by following each override bomb to its fuse. **Refutation:** sim converts no better → the trap
+   test is not what was wrong, and both oracles are measuring something other than trapping.
+4. **P4, pre-registered secondary — margin.** `margin_best` = our score − the best opponent's score,
+   per round. Bar **≥ +0.25**, matching `NEXT_STEPS.md` §3.4's ceiling-test threshold. Reported
+   whatever P1 does, and *not* substituted for P1.
+5. **P5 — reach.** `k = 8 sim` ≥ `k = 4 sim` on score. E39's k = 8 was worse under the stale test,
+   but rarer real traps plausibly justify walking further. **This is exploratory** and no decision
+   hangs on it; E39's "k = 8 bounds the chase-harder direction" was itself an over-read at t = 1.09.
+6. **Guards.** `suicides` must not rise above the control's ~0.48; `crates` must not fall more than
+   the −0.42 E39 measured at k = 4; `think_max` irrelevant (offline harness) but the control arm
+   must reproduce the shipped agent's score to within the ±0.12 noise floor.
+
+**Ship rule, pre-committed.** Nothing ships from this entry — it is a ceiling, not an agent. What it
+decides is *whether a hunting digit gets designed at all*: **design one only if P1 or P4 clears its
++0.25 bar with both a CI excluding 0 and a sign-flip p < 0.05.** If neither clears, hunting is
+closed on a correct instrument and `NEXT_STEPS.md` §3.4's remaining candidate — the opponent-bomb
+suicide arm, which audit 10 re-attributed to 91 % opponent *bombs* rather than 9 % opponent bodies —
+becomes the next ceiling test.
+
+### Result — 4 arms x 8000 paired arenas, eps = 0, held-out seed 990731
+
+Sweep ran 2026-08-18, four arms concurrently, ~70 min. Raw tables in
+`scratchpad/benedict/e40/RESULTS.md`, scoring code `scratchpad/benedict/e40_analyze.py`.
+**Control validation:** score 4.009 / kills 0.236 / suicides 0.477 / crates 33.51 against the
+shipped agent's published 3.949 / 0.226 / 0.488 / 33.55 — inside the +/-0.12 noise floor, guard passes.
+
+Every row carries a bootstrap CI **and** a sign-flip p, and counts only if both agree:
+
+| comparison | score | margin_mean | margin_best | kills | crates |
+|---|---|---|---|---|---|
+| **k4 sim − control** | +0.053 [−0.028, +0.132] p=.22 | +0.097 [−0.003, +0.193] p=.065 | **+0.163 [+0.032, +0.290] p=.014** | **+0.019 p=.015** | −0.060 p=.62 |
+| **k4 sim − k4 stale** | −0.022 [−0.104, +0.063] p=.60 | −0.027 p=.62 | −0.022 p=.75 | −0.004 p=.64 | +0.236 p=.050 |
+| k4 stale − control | +0.075 [−0.009, +0.157] p=.074 | **+0.123 p=.017** | **+0.185 [+0.055, +0.314] p=.005** | **+0.022 p=.002** | **−0.296 p=.014** |
+| k8 sim − k4 sim | −0.076 p=.082 | −0.095 p=.070 | −0.122 p=.063 | −0.003 p=.71 | **−0.907 p<.0001** |
+
+**P1 REFUTED, and not marginally.** The bar was +0.25 on score; the corrected oracle delivers
+**+0.053 [−0.028, +0.132]**, not distinguishable from zero at an n whose MDE is 0.119. The
+pre-committed consequence applies: **no hunting digit gets designed.**
+
+**P2 PASSES as predicted, and it is the most interesting line in the entry.** I predicted the
+corrected oracle would *not* significantly beat the broken one, because the fix trades a ~2× lower
+firing rate for a higher conversion rate. Measured: **−0.022 [−0.104, +0.063]** on score, and
+nothing on any other metric. The firing rate fell 1.57 % → 1.14 % of steps and the bombs fell
+3364 → 1826, exactly as designed — **and the outcome did not move.**
+
+So: audit 10 was right that the instrument was mis-specified, and **fixing it changed no
+conclusion.** The stale test was wrong in a way that happened not to matter, because trading
+accuracy against opportunity was almost exactly break-even. That is worth stating in the report as
+a methodological result in its own right: *an instrument can be provably wrong and still return the
+right answer, and you only learn which by fixing it.*
+
+**P3 FAILED** (measured before the sweep, `scratchpad/benedict/e40_conversion.py`, 1000 rounds
+each). I pre-registered ≥ 20 % credited-kill conversion for the corrected oracle:
+
+| | override bombs/round | target dies | **we get the credit** | credited kills/round |
+|---|---|---|---|---|
+| stale | 0.429 | 22.1 % | **8.4 % [6.1, 11.4]** | 0.036 |
+| sim | 0.200 | 31.0 % | **12.0 % [8.2, 17.2]** | **0.024** |
+
+Two things. **Audit 10's F2 is independently reproduced** — their 8.1 % [3.3, 16.1] against my
+8.4 % [6.1, 11.4], from a separate harness; that was the one claim of theirs I could not verify at
+the time. And the corrected oracle still converts at only 12 %, so **there is a third
+mis-specification underneath the one this entry fixed.** Even when the target is provably
+escape-less at the instant the bomb lands, it survives 69 % of the time — because `trap_sites`
+evaluates a **static** board while other agents' blasts destroy crates and open escape routes across
+the four-step fuse. Move-order was one error; treating the board as frozen over the fuse is a larger
+one, and it is not fixed here.
+
+**P4 FAILED as written, and the pre-registration is what makes that readable.** The bar was
+`margin_best` ≥ +0.25; measured **+0.163 [+0.032, +0.290]**. The effect is *real* — CI excludes 0,
+p = 0.014, and unlike E39's score number it is stable across bootstrap seeds — but it does not clear
+the bar. **Audit 10's post-hoc +0.270 does not replicate: on 8000 clean arenas the same stale arm
+gives +0.185.** The ~0.09 shrinkage is the winner's curse the audit itself estimated at ~0.05, plus
+noise. **Had margin not been pre-registered here, +0.270 would have looked like it cleared +0.25
+and a digit would have been designed on it.** That is exactly the failure mode §5.1 of
+`benedict_task4.md` catalogues four times, caught prospectively for once.
+
+**P5 — no.** k = 8 is worse than k = 4 on every headline (score −0.076, margin_best −0.122, none
+significant) and **decisively worse on crates: −0.907 [−1.150, −0.663], t = −7.28.** E39 called the
+k = 8 crate cost a bound on "chase harder" and audit 10 correctly flagged that as an over-read at
+t = 1.09; at n = 8000 the crate cost is real and large even though the score cost is not. **Hunting
+does take bombs away from the economy — that part of E39 survives, now properly powered.**
+
+**Guards pass.** Suicides −0.011 (never rises in any arm), crates −0.060 at k = 4 sim, control
+validated above.
+
+### Verdict — hunting is closed, this time on an instrument entitled to close it
+
+**Ship rule fires NO-GO.** It required P1 or P4 to clear +0.25 with both a CI excluding 0 and a
+sign-flip p < 0.05. P1 gives +0.053 (p = 0.22); P4 gives +0.163 (p = 0.014) — significant but under
+the bar. No hunting digit is designed.
+
+The difference from E39 is what this entry is for. E39 concluded the same thing from a broken
+instrument and a number (+0.116 [+0.002, +0.233]) that audit 10 showed was a bootstrap-seed
+artefact. **That number does not replicate:** the same stale arm at n = 8000 gives
+**+0.075 [−0.009, +0.157], p = 0.074**. The conclusion held; the evidence for it did not, and it has
+now been replaced.
+
+**What is left standing, and it is not nothing.** Positioning to trap opponents is worth a real
++0.163 on the between-agent margin and +0.019 kills, reproducibly, from an oracle. It is simply
+smaller than +0.25 — the threshold below which `NEXT_STEPS.md` §3.4 says a ceiling is not worth
+pursuing, and far below the MDE of the 15-seed sweep that would validate a learned version. **The
+honest report sentence is "measured, real, and too small to build", not "there are no kills to
+take".**
+
+**What could still overturn it:** the fuse-window mis-specification in P3. A trap test that
+projected the board forward four steps — other agents' bombs included — would find rarer but truer
+traps. The evidence that this would not help is indirect but consistent: k = 8, which searches
+harder in the same static way, is worse; and the correction that *did* get made moved nothing.
+
+### Limitations
+
+- **This is still an oracle over a fixed table, against `rule_based_agent` only.** Audit 10's F4
+  showed our kill count is set mostly by the *field's* suicide rate — `rule_based` consumes 82 % of
+  its own mortality before we can reach it. **Hunting could be worth materially more against a field
+  that dies less to itself**, and `scratchpad/benedict/e40_field_design.md` P3 pre-registers the
+  rerun against external agents at the same +0.25 bar.
+- **`margin` vs `score` is still unresolved** pending the course's answer on the tournament format.
+  Both were pre-registered here so the entry is scored either way, and **both fail their bar**, so
+  the answer does not change this verdict — only how the number is reported.
+- The conversion trace credits us if our kill count rose during the fuse window, which would
+  false-positive on a simultaneous kill of a *different* opponent. That biases the 12 % **upward**,
+  making the P3 failure stronger.
+
+---
+
+## E39 — the hunt ceiling: an oracle that plays the strategy perfectly is worth +0.116 score
+
+- **Question:** does it pay to work toward the nearest opponent *while* crates still stand, rather
+  than only after the board is stripped? My hypothesis, written down before any probe ran:
+
+  > "The agent almost always stays alive until all crates and coins are gone and there is at least
+  > one other agent on the board. At that point it is harder to get a kill than when there are still
+  > crates — it is so much easier to just outrun the bomb and hide. With crates it is easier to lock
+  > the opponent in a corner. So: while destroying crates and collecting coins, work one's way
+  > toward the nearest opponent, rather than only collecting until no direct path to an opponent is
+  > left."
+
+  **No rung-4 experiment has ever tested this**, and the reason is representational, not
+  accidental. `callbacks.py:244-255` — `target_direction` falls through to the nearest opponent
+  **only when no coin and no crate is reachable**. By construction digit 6 can never point at an
+  opponent while the board still has crates, so *the agent cannot express the strategy at all*.
+  E35 priced kills the state could not aim at (`KILLED_OPPONENT` at 5 and at 25 moved kills
+  −0.002); E36 put opponent BFS distance in the *danger* rows only, and was refuted.
+
+  Three probes established the premise before this ran (`scratchpad/strategy/`,
+  `TASK_B_argument.md` §6). `hunt_window.py`: we are alive when the last crate falls in **69.1 %**
+  of rounds (median step 210), and a trappable configuration is **1.6× more common** mid-crate-phase
+  than on the stripped board (27.2 % at 30–59 crates vs 16.7 % at 0) — **the mechanism is real.**
+  But the nearest trap site is 9.7 steps away with crates against 5.2 without, and
+  `trap_persistence.py` measures trap information dead beyond ~3 steps: of traps re-checked on
+  arrival, 22.6 % survive a *single* step, 4.0 % survive a 5–8 step walk, and the tail is flat at
+  the memoryless base rate from five steps out to fifteen. `rule_based_agent` flees actively and a
+  trap's half-life is roughly one move.
+
+  So the configuration advantage of the crate phase is cancelled by the distance needed to use it —
+  on paper. **A ceiling agent settles it without a sweep**, and this rung cannot afford to spend a
+  15-seed sweep on a question a one-afternoon oracle can answer.
+
+- **Change:** none to the agent. **No file under `agent_code/` was written.** The line-up drives the
+  provided `agent_code/user_agent/` (its `act` returns `game_state['user_input']`) from
+  `scratchpad/strategy/hunt_ceiling.py`, which supplies that input. The policy is the shipped
+  Q-table's greedy action, **overridden only** when a *self-survivable trap site* for a reachable
+  opponent lies within *k* steps: walk the BFS first step toward it, `BOMB` on arrival. A trap site
+  is a free tile whose bomb would leave that opponent with no survivable escape; it is re-verified
+  every step with the same time-aware BFS that `callbacks.escape_direction` runs on ourselves.
+  `k = -1` disables the override entirely.
+
+  This plays the hypothesis **perfectly**, with an oracle no tabular feature could ever supply: it
+  knows every step which tile traps which opponent, with a full BFS over that opponent's escape
+  options. That is the point — it bounds the prize before anyone designs a digit.
+
+- **Design.** Arms *k* ∈ {−1, 0, 2, 4, 8} at n = 1000, then the two that matter rerun at
+  **n = 4000**. Held-out ship seed **990731**, scenario `classic`, 3 × `rule_based_agent`. The
+  protocol mirrors `tools/evaluate.py` exactly — per-round `world.rng` reseed *and* the
+  `np.random.seed` that reaches the provided opponents — so the CSVs are paired arena-for-arena and
+  feed `analyze.py --compare` directly. The table is `agent_code/benedict_task4/q_table.npy`,
+  md5 `54d63bc79179fdf80d3b9bfb80f21461`, **byte-identical to the shipped
+  `checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy`** — verified, not assumed.
+  Commit `5b0b0c4` (dirty). Data: `scratchpad/strategy/ceil/`.
+
+- **Power, stated in advance.** There is **no training variance here** — one fixed table, so the
+  only noise is evaluation noise. That is the ±0.12 floor on `score` at n = 1000 from the
+  opponents' unseeded stdlib RNG (E37 §5.9); at n = 4000 it is ~±0.06, and pairing is on arenas.
+  **This is the most precise instrument on the project**, which is exactly why the question was
+  routed here instead of to a sweep whose n = 15 MDE is 0.254.
+
+### Prediction
+
+**Provenance, stated plainly: these bars were written in `scratchpad/strategy/TASK_B_argument.md`
+§6.5 before the arms in §7 were run, and this ledger entry was written afterwards.** The
+predictions below are quoted from §6.5, not reconstructed; the entry is late, the pre-registration
+is not. Scored as written.
+
+1. **P1, primary — the go/no-go.** *"A ceiling worth chasing should be ≥ +0.5; anything under
+   ~+0.25 is not readable and, being a ceiling, not worth pursuing anyway."* So: **GO** if the best
+   arm beats the control by ≥ +0.50 score with a CI excluding 0; **NO-GO** if it is under +0.25.
+   Between the two is an undecided band and would need a wider design.
+2. **P2, decisiveness.** *"If the oracle hunter does not beat 3.949, no digit encoding this will."*
+   The oracle is an upper bound: a tabular digit can offer at most "a trap is within *k* steps" plus
+   a direction, and the table would still have to *learn* to follow it.
+3. **P3, the horizon.** §6.3 measured trap information dead beyond ~3 steps, so the optimum should
+   sit at small *k*, and **k = 8 should be no better than k = 4** — with the diversion cost landing
+   on `crates`, which is where §3 said hunting is paid for.
+4. **P4, the free version.** *k* = 0 — bomb only when already standing on a verified trap site — is
+   exactly the zero-row digit-7 redefinition proposed in §4.2. If the whole effect sits in *k* = 0,
+   the feature costs nothing and ships.
+5. **Guards.** `suicides` must not rise (hunting is exactly when an agent forgets to run from its
+   own bomb) and the control arm must reproduce the shipped agent's published numbers.
+
+### Result — 4000 paired arenas, ε = 0, held-out seed 990731
+
+**Control validation first.** *k* = −1 over 4000 rounds gives score **3.958**, `won` 0.382, kills
+0.229, suicides 0.482, crates 33.49, against the shipped agent's published 3.949 / 0.406 / 0.226 /
+0.488 / 33.55. The harness reproduces the agent. (`won` 0.382 vs 0.406 is the largest gap and sits
+inside the ±0.12-score noise band via the +0.088/point conversion.)
+
+First pass, n = 1000, five arms. "override" is diverted walk steps as a share of policy steps, plus
+the count of bombs the override fired:
+
+| k | score | coins | kills | `won` | suicides | crates | override |
+|---|---|---|---|---|---|---|---|
+| −1 (control) | 3.886 | 2.781 | 0.221 | 0.403 | 0.465 | 33.40 | — |
+| 0 | 4.015 | 2.820 | 0.239 | 0.381 | 0.468 | 33.37 | 0.00 % / 370 bombs |
+| 2 | 4.023 | 2.748 | 0.255 | 0.394 | 0.450 | 33.59 | 0.36 % / 348 |
+| **4** | **4.086** | 2.841 | 0.249 | 0.410 | 0.448 | 33.29 | 1.39 % / 414 |
+| 8 | 3.952 | 2.727 | 0.245 | 0.403 | 0.459 | **32.51** | 4.07 % / 469 |
+
+No arm separates on score at n = 1000; *k* = 8 is significantly worse on **crates**
+(−0.890 [−1.576, −0.199]). Kills rise in all four. **k = 4 and k = 0 were rerun at n = 4000.**
+
+**k = 4 against the control, n = 4000:**
+
+| metric | control | k = 4 | paired difference | verdict |
+|---|---|---|---|---|
+| **score** | 3.958 | 4.074 | **+0.116 [+0.002, +0.233]** | BESSER |
+| `won` | 0.382 | 0.419 | **+0.037 [+0.017, +0.057]** | BESSER |
+| kills | 0.229 | 0.260 | **+0.032 [+0.011, +0.052]** | BESSER |
+| coins | 2.816 | 2.772 | −0.043 [−0.091, +0.005] | nicht gezeigt |
+| **crates** | 33.49 | 33.07 | **−0.422 [−0.750, −0.081]** | SCHLECHTER |
+| suicides | 0.482 | 0.463 | −0.019 [−0.041, +0.002] | nicht gezeigt |
+| survived | 0.460 | 0.475 | +0.016 [−0.006, +0.038] | nicht gezeigt |
+
+**k = 0 against the control, n = 4000:** score +0.039 [−0.078, +0.155], `won` +0.011 [−0.009,
++0.032], kills +0.006 [−0.014, +0.026], crates +0.046 [−0.285, +0.367]. **Nothing.**
+
+**P1 — NO-GO, as written, and audit 10 makes it stronger rather than weaker.** The bar for GO was
++0.50 and for NO-GO +0.25. The best arm delivers **+0.116**, below the lower bar, so the
+pre-committed consequence applies: **do not design a hunting digit on this evidence.**
+
+And the +0.116 is weaker than the table above makes it look. **`analyze.py:220` seeds its bootstrap
+with a hard-coded `default_rng(12345)`**, which makes the printed interval reproducible but not
+*stable* — the lower bound has its own Monte-Carlo error and here the truth sits inside it:
+
+| | score, k = 4 − control, n = 4000 |
+|---|---|
+| mean, standard error | +0.1158, 0.0599 |
+| `analyze.py` interval (seed 12345) | [+0.002, +0.233] → excludes 0 |
+| lower bound over 200 other bootstrap seeds | straddles 0; the interval excludes 0 in a **minority** of seeds |
+| t | **+1.93** |
+| sign-flip permutation p | **0.053** |
+
+So on the primary metric, by this project's own rule, the ceiling is **nicht gezeigt**. `kills`
+(+0.032, t = +3.03) and `won` (+0.037) do survive. Verified independently of `analyze.py` in
+`scratchpad/benedict/e39_audit_verify.py`.
+
+**And the selection contamination flagged above is real but small.** k = 4 was the pilot's best of
+five arms at n = 1000, and rounds 0–999 of the confirmation reuse those arenas. On the 3000 **fresh**
+arenas alone: score **+0.102 [−0.041, +0.241], t = 1.47**. The winner's curse costs ~0.014; the
+metric was already not significant without it.
+
+**P2 — the premise is FALSE, and this is the finding that matters most.** P2 assumed the oracle is
+an *upper* bound. It is not. `hunt_ceiling.trap_sites` asks whether the target can escape **from the
+tile it currently occupies** — but `environment.py:421-432` hands every agent the same pre-action
+snapshot and only then executes the actions in a random permutation, so by the instant our BOMB
+exists the target has already taken a move the trap test never modelled. **The "verified inescapable
+trap" is verified against a position the opponent is leaving.** Audit 10 followed every override
+bomb to its fuse (k = 4, 200 rounds): the target dies **18.6 % [11.0, 28.4]** of the time and *we*
+are credited **8.1 % [3.3, 16.1]**. The arithmetic closes — 0.406 override bombs/round × 8.1 % × 5
+points ≈ +0.16, against +0.116 after the crate cost. **The entire measured ceiling is the conversion
+rate of a one-step-stale heuristic.** So +0.116 is a **lower** bound on "work toward the nearest
+opponent", not the upper bound §6.5 promised, and the sentence "it knows every step which tile traps
+which opponent" is false. I verified the framework mechanism; the 8.1 % is audit 10's rollout and I
+have not independently reproduced it.
+
+**P3 — the crate leg PASSES, the ordering leg is not demonstrated.** The predicted diversion cost
+lands exactly where §3 said it would: k = 8 loses **−0.890 [−1.576, −0.199] crates** against
+control, CI excluding 0. **Hunting does take bombs away from the economy**, as C measured in the
+survey (the aggressive variant "stopped collecting coins"). But "k = 8 is no better than k = 4" is
+a point estimate only — k8 − k4 on score is −0.134 at t = −1.09. **The claim in
+`TASK_B_argument.md` §7.3 that "the k = 8 arm bounds the 'chase harder' direction empirically" is an
+over-read of noise and should not be repeated.**
+
+**P4 FAILS — the free version buys nothing.** k = 0 moves score +0.039 [−0.078, +0.155] on 4000
+paired arenas. The zero-row digit-7 redefinition is dead, and the whole of the (small) effect lives
+in the *diversion*, not the bombing rule: k = 4 fires 1.39 % of steps as diverted walks and 44 extra
+bombs per 1000 rounds over k = 0.
+
+**Guards pass.** Suicides do not rise in any arm (−0.019 at k = 4). Control validation above, and
+audit 10 confirmed it on two behavioural fingerprints the marginals would not have caught
+(`invalid` 4.771 → 4.734, `moves` 213.54 → 213.44, paired score −0.017 [−0.256, +0.220]).
+
+### Verdict — **nicht gezeigt**, and the pre-registered NO-GO stands
+
+On the metric this entry pre-registered, the hunt ceiling is **not demonstrated** (t = 1.93,
+p = 0.053), and the pre-committed consequence — do not design a hunting digit — applies unchanged.
+
+**But the reason recorded in `TASK_B_argument.md` §7.3 is wrong and must not go into the report as
+written.** §7.3 says the direction is closed because a *perfect* oracle is worth only a tenth of a
+point. What was actually measured is a *broken* oracle with an 8 % hit rate. The honest statement is:
+
+> **The hunting direction is not closed. It is unmeasured.** The instrument built to bound it was
+> mis-specified against the game's simultaneous-move rule, and the number it returned is a floor,
+> not a ceiling.
+
+**Method note, and it is the transferable part.** The fixed-table oracle *is* the right instrument —
+it removed training variance and answered in an afternoon what fifteen seeds could not read. What
+this entry adds is that **an oracle is only an upper bound if its world model matches the
+environment's**, and ours did not. Write the oracle before the digit, then check the oracle against
+`environment.py` before believing it.
+
+### What audit 10 found that this entry does not resolve
+
+Nine audits have now run on this project and eight overturned something; this is the eighth. Full
+report and evidence in `scratchpad/audit10/`. Verified independently by me in
+`scratchpad/benedict/e39_audit_verify.py`: F1, F3, F6 and F4 reproduce exactly; F2's 8.1 % does not
+(it needs their instrumented rollout), though its mechanism is confirmed in `environment.py`.
+
+- **The ceiling was scored on our own score; on a *between-agent* margin it is 2.3× larger and
+  robust.** `score_ours − score_best_opponent`, same 4000 paired arenas: **+0.270 [+0.088, +0.444],
+  t = 2.95**, sign-flip p = 0.0034, and the interval excludes 0 on **100 %** of 200 bootstrap seeds
+  — unlike the own-score number. On fresh arenas only, +0.253 [+0.046, +0.465]. The mechanism is a
+  clean credit transfer, not extra killing: our kills **+0.032 (t = +3.03)**, opponents' kills
+  **−0.049 (t = −3.21)**, total opponent deaths **+0.006 (t = +0.48)**. The oracle takes deaths that
+  were going to happen anyway and puts our name on them — worth +5 to us and −5 to a rival.
+  **This is post-hoc and is deliberately NOT used to rescore P1**; a statistic that failed does not
+  get redefined after the fact. It is recorded here because it defines the next question, not
+  because it changes this one. Two caveats of my own: the metric was chosen after seeing the result,
+  and the "rivals" here are `rule_based_agent`s, who are not in the tournament — denial is only
+  worth points against agents whose score is actually being ranked against ours.
+- **Whether margin or own score is the right criterion depends on the unanswered Discord question.**
+  If the tournament sums our score across games, own score is right and this entry is finished. If
+  it ranks agents by total score, margin is right and the hunt question reopens above
+  `NEXT_STEPS.md` §3.4's own +0.25 bar. **That message is no longer a formality — it is worth
+  +0.15 of measured effect on a live decision.**
+- **`analyze.py`'s fixed bootstrap seed makes every borderline verdict on this project look
+  deterministic when it is a coin flip.** Any shipped verdict whose CI bound sits within ~±0.01 of
+  zero needs re-reading with a t or a permutation p. That includes checking E37's +0.255.
+- **The 290-effective-states argument does not license a bigger table.** The shipped table has
+  **8 186 rows with non-zero Q** — 28× the "effective" 290 — because the cost is paid during
+  ε-greedy training, not at ε = 0 on the converged policy. At 20 000 episodes that is ~383
+  updates/row, and E38 forbids buying more. **`NEXT_STEPS.md` §3.1's size-4 target-type digit loses
+  its cost justification; the free re-partition option is untouched.** Verified: 8 186 exactly.
+
+### Limitations of this entry
+
+- **The oracle never uses our own bomb to herd or close an exit**, and never chases an opponent that
+  is not already trappable — and per P2 it does not even correctly identify the ones that are.
+- **The arms drifted from the plan.** §6.5 described k = 0 as "an exact reproduction of the shipped
+  agent"; it is not — it fires 370 bombs the shipped agent does not. The real control, k = −1, was
+  added at execution time.
+- **Pairing buys almost nothing here.** `se_paired` 0.0599 vs `se_unpaired` 0.0640 — a 6 % narrower
+  interval, because the arms desynchronise the opponents' stdlib RNG from the first divergent step
+  and only the arena is shared. The CI is valid; `evaluate.py`'s docstring oversells the design.
+- `hunt_ceiling.py` writes its own `.meta.json` and, unlike `tools/evaluate.py`, **does not record
+  the git commit**. The commit above is inferred from the same hour's `evaluate.py` artefacts
+  (`scratchpad/strategy/fields/*.meta.json`: `5b0b0c4-dirty`). Any future scratchpad harness should
+  snapshot the commit itself.
+
+---
+
 ## E38 — 20 000 episodes was inherited from rung 2, and rung 2's own curve is non-monotone
 
 - **Question:** every rung-4 run has used 20 000 episodes. That number was chosen on **rung 2**

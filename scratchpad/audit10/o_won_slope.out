@@ -1,0 +1,9 @@
+won == (our score >= best opponent)?  100.0% of rounds
+  survival_value slope applied to the control margins, d=+0.116: dP(won) = +0.0000
+  survival_value slope applied to the control margins, d=+0.5: dP(won) = +0.0000
+  survival_value slope applied to the control margins, d=+1.0: dP(won) = +0.1020
+
+actually measured for the k=4 oracle: dscore +0.1158, dwon +0.0373
+predicted from '0.088 per score point':                 dwon +0.0102  -> understates by 3.7x
+the missing term: the best opponent's score fell by +0.1543, so the margin moved +0.2700
+won per point of MARGIN, from the same slope function: +0.0000 per point -> predicted dwon +0.0000
