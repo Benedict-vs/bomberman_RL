@@ -83,11 +83,19 @@ was confident about.**
 
 ## Open items the last session deliberately left
 
-- **`scratchpad/strategy/` is untracked** — nothing from that session is committed yet.
-- **Two project-convention corrections are written up but not applied** (`NEXT_STEPS.md` §0):
-  `AGENTS.md` and `tools/evaluate.py:264-267` both say `won` matters more than score, but
-  `final_project.pdf` §3 says the tournament is decided by **total score**; and
-  `benedict_task4.md` §6's `won ≈ 0.113 × score` is a ratio of means where the marginal is 0.088.
+- **The `won`-vs-score correction is APPLIED** (2026-08-17), so do not redo it. Verified against
+  `final_project.pdf` §3 verbatim — *"multiple episodes of the game will be played to determine a
+  winner by total score"* — and the words *rank* / *per-round* / *wins the round* appear nowhere in
+  the spec. `AGENTS.md`, `tools/evaluate.py` and `benedict_task4.md` §6 now say score is primary and
+  `won` is a secondary; the conversion is the measured marginal **+0.088 [+0.076, +0.101]** per
+  point, not the ratio-of-means 0.113 that was there before.
+  **Still open:** the PDF never spells out the tournament format beyond "a tournament between all
+  trained agents", so the sentence is about a *game*. One message on `#final-project-questions`
+  closes it. Ask before the report locks.
+- **`NEXT_STEPS.md` §0.2 is unactioned and cheap:** the course explicitly sanctions downloading
+  other teams' agents on `#final-project-beat-my-agent`. Every one of the 412 committed rung-4
+  evaluations is against `rule_based_agent`, and §1 of that file argues a real opponent field
+  outranks any feature change.
 - **The hunt ceiling has no ledger entry.** It is a complete, pre-registerable negative and belongs
   in `experiments/benedict.md` as its own entry.
 - **None of that session's work has been audited.**

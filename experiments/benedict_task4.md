@@ -95,6 +95,10 @@ gain closes entirely on that route: +0.224 coins + 5 × 0.011 kills = +0.279 of 
 | E36 | opponent BFS distance in the danger rows | refuted |
 | **E37** | **the wall lattice in the danger rows** | **+0.024, score +0.280** |
 
+*That column is `won` because that is what those entries pre-registered. Per §6 it should have
+been `score`, and the correction does not rescue any of them — E30-E36 move score no further than
+they move `won`.*
+
 **Six independent replications that survival does not convert into points.** E36's arm cut suicides
 0.616 → 0.422 and raised survival 0.333 → 0.525 with `won` *unchanged*. E33 and E34 installed the
 escape behaviour and lost the benefit. The one intervention that paid did so by placing bombs
@@ -168,9 +172,19 @@ The answer to a kill deficit is a feature, not a price — which is exactly what
 
 ## 6 · Limitations, stated rather than hidden
 
-- **`won` was never demonstrated.** The shipped agent's +0.034 on the held-out seed has a CI
-  including zero, and at any n this project can afford it always would: the MDE on `won` is ~0.021
-  at n = 15 against a conversion rate of `won ≈ 0.113 × score`. Score is what carries the claim.
+- **`won` was never demonstrated — and, corrected 2026-08-17, was never the target.**
+  `final_project.pdf` §3 says the tournament winner is determined *"by total score"* over many
+  episodes, and task 4's own description says "fight for the highest score". `won`/`rank` are
+  constructs of `tools/evaluate.py`; the words *rank* and *per-round* appear nowhere in the spec.
+  `AGENTS.md` asserted the opposite for the whole rung and steered four entries into
+  pre-registering `won` at a sample size where its MDE made it unreadable. **So this is a
+  limitation of the measurement convention, not of the agent.**
+
+  It matters less than it looks either way, because `won` is a linear readout of score:
+  **+0.088 [+0.076, +0.101] per point**, flat from +1 to +5, recounted over 2 000 rounds
+  (`scratchpad/strategy/survival_value.py`). The figure quoted here previously — `won ≈ 0.113 ×
+  score` — was a *ratio of means*, not a marginal, and inflated every `won`-side estimate by ~25 %.
+  Every MDE argument in §5 survives the correction; they get slightly harder, not easier.
 - **`end_of_round` treats truncation at `MAX_STEPS` as termination** (no bootstrap) on ~33 % of
   rounds, worth ≈8.8 Q units. Known since rung 3, never fixed in isolation.
 - **Why the four-way split beats the lattice bit alone is not settled.** The leading explanation is

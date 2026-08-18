@@ -163,12 +163,20 @@ Conventions we all follow, otherwise the numbers are not comparable:
 - Primary metric `score`. Per-task sets via `analyze.py --preset task1…task4`:
   task 1 `coins`/`steps`/`invalid` · task 2 `score`/**`suicides`**/`crates`/`bombs`/`survived` ·
   task 3 `score`/`kills`/**`suicides`**/`survived` ·
-  task 4 `score`/**`won`**/`kills`/`suicides`/`killed_by`/`think_ms`.
+  task 4 **`score`**/`won`/`kills`/`suicides`/`killed_by`/`think_ms`.
 - `suicides` changes role from task 3 on: progress signal on task 2 (must fall), regression guard
   afterwards (learning aggression is exactly when an agent forgets to run from its own bomb).
   On task 4 split the deaths: `suicides` (own bomb → escape logic) vs `killed_by` (opponent's
   bomb → positioning). Different bugs, different fixes.
-- `won`/`rank` = standing within the round; on task 4 that matters more than mean score.
+- **The tournament is decided by total score, not by win rate.** `final_project.pdf` §3:
+  *"multiple episodes of the game will be played **to determine a winner by total score**."*
+  Task 4's own description says "fight for the highest score", and the words *rank*,
+  *per-round* and *wins the round* appear nowhere in the spec. `won`/`rank` are constructs of
+  `tools/evaluate.py`, not of the game: report them as **secondaries**, never as the primary.
+  This file said the opposite for the whole of rung 4 and it steered four entries into
+  pre-registering `won` at a sample size where its MDE made it unreadable. `won` is a linear
+  readout of score anyway — **+0.088 [+0.076, +0.101] per point**, flat from +1 to +5
+  (`scratchpad/strategy/survival_value.py`, 2 000 rounds).
 - Always watch `think_max_ms` (0.5 s tournament limit).
 
 ## Hints that matter for the grade

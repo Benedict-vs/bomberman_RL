@@ -260,10 +260,12 @@ def evaluate(
 
                 round_records.append(record)
 
-            # Relative standing within the round. On task 4 this matters more
-            # than the mean score: the tournament is decided against the other
-            # agents, so an agent on 5.0 that leads 60 % of rounds beats one on
-            # 5.5 that is reliably second.
+            # Relative standing within the round -- a convenience of this
+            # tool, NOT a concept the task defines. `final_project.pdf` §3 says
+            # the winner is determined "by total score" over many episodes, so
+            # an agent on 5.5 that is reliably second beats one on 5.0 that
+            # leads 60 % of rounds. This comment asserted the inverse as fact
+            # for the whole of rung 4. Report `won`/`rank` as secondaries.
             best = max(r["score"] for r in round_records)
             for record in round_records:
                 # rank 1 = best; ties share the better rank
