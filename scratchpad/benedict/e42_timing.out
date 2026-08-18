@@ -1,0 +1,13 @@
+E42 training throughput, measured 2026-08-18 (200 episodes each, warm start, eps annealing).
+Episodes are short here because eps is still ~0.2 at episode 200; the 20k extrapolation is
+therefore a LOWER bound -- E38 found episodes lengthen as training proceeds (its 8-10 h
+estimate became 19 h). Budget ~2 h per treatment run, not 0.7.
+
+  3x rule_based (current)      10s/200ep  mean steps 37.0  mean score 0.68  -> 20k ep = 0.3 h
+  3x xiaoxiae_binary_v6        25s/200ep  mean steps 35.4  mean score 0.53  -> 20k ep = 0.7 h
+  mixed: 2 ext + 1 rb          22s/200ep  mean steps 34.8  mean score 0.47  -> 20k ep = 0.6 h
+  mixed: 1 ext + 2 rb          15s/200ep  mean steps 32.5  mean score 0.42  -> 20k ep = 0.4 h
+
+Conclusion: a strong external field costs ~2.5x rule_based per episode. A 8-seed treatment arm
+at 5 concurrent is ~4 h. The control arm costs nothing -- checkpoints/benedict_task4/
+q_table_e37_PLB2_s1NN__ep20000.npy are already 15+ seeds of the current recipe.
