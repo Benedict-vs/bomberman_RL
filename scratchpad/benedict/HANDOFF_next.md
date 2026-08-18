@@ -92,13 +92,38 @@ was confident about.**
   **Still open:** the PDF never spells out the tournament format beyond "a tournament between all
   trained agents", so the sentence is about a *game*. One message on `#final-project-questions`
   closes it. Ask before the report locks.
-- **`NEXT_STEPS.md` §0.2 is unactioned and cheap:** the course explicitly sanctions downloading
-  other teams' agents on `#final-project-beat-my-agent`. Every one of the 412 committed rung-4
-  evaluations is against `rule_based_agent`, and §1 of that file argues a real opponent field
-  outranks any feature change.
+- **Nothing from `NEXT_STEPS.md` has been actioned.** Its §1 — run a real opponent field — is the
+  top-ranked item; see the section below.
 - **The hunt ceiling has no ledger entry.** It is a complete, pre-registerable negative and belongs
   in `experiments/benedict.md` as its own entry.
 - **None of that session's work has been audited.**
+
+## The top-ranked next move, so you don't have to dig for it
+
+**Run the agent against opponents that are not `rule_based_agent`.** All **412** committed rung-4
+evaluation CSVs are against 3 × `rule_based_agent` — `ls results/eval/task4_tournament/*.csv |
+grep -v _rb_` is empty. Every strategic conclusion this project holds is conditional on one
+opponent's behaviour.
+
+**The course explicitly sanctions this.** `final_project.pdf`, verbatim (I checked the PDF myself):
+
+> "Discussions about the final project with other teams are very much encouraged. You can share
+> your trained agents (*without training code*) on **#final-project-beat-my-agent** and **download
+> other teams' agents to test your approach.** Just keep in mind that in the tournament you will
+> compete for prizes, so you may want to keep your best ideas to yourself :)"
+
+So there is a course channel carrying this cohort's agents on this framework version — strictly
+better than the SS2024 GitHub repos in `scratchpad/survey/REPORT.md`. Sharing ours is optional and
+the PDF hints at not doing it.
+
+Why it outranks every feature change, from `scratchpad/strategy/fields/` (same table, no
+retraining, 300 rounds each): kills run **1.550 → 0.733 → 0.470 → 0.226** against `peaceful` /
+`coin_collector` / mixed / `rule_based`, and suicides **0.087 → 0.160 → 0.403 → 0.488**. The agent
+is not bad at killing — it is bad at killing `rule_based_agent`, and 82 % of its own-bomb deaths
+are opponent-induced. **Our tournament kill count will be set by the field's evasion quality, and
+we cannot know it until we test against real agents.** `NEXT_STEPS.md` §1 has the full design,
+the line-ups, the cautions (licences, API drift, keep their code out of the submission zip), and a
+prediction worth writing down before running it.
 
 Deadlines: agent code **21.09.2026**, report **28.09.2026** (~4 000 words per member). The
 scientific method is the main grading criterion. **Two models must be described** — Benedict's line
