@@ -1,0 +1,19 @@
+{
+  "hunt_bombs": 469,
+  "hunt_steps": 11457,
+  "k": 8,
+  "label": "huntceil_k8__task4_rb_ship990731",
+  "line_up": [
+    "user_agent",
+    "rule_based_agent",
+    "rule_based_agent",
+    "rule_based_agent"
+  ],
+  "n_rounds": 1000,
+  "note": "ceiling probe, not a trained agent; user_agent driven by scratchpad/strategy/hunt_ceiling.py",
+  "policy_steps": 281288,
+  "scenario": "classic",
+  "seed": 990731,
+  "table": "agent_code/benedict_task4/q_table.npy",
+  "wall_clock_s": 528.6
+}
