@@ -125,6 +125,14 @@ Conventions we all follow, otherwise the numbers are not comparable:
   Naming: `results/eval/<person>_<model>_<version>__<task>.csv`.
 - **A change counts as an improvement only if the paired 95 % CI excludes 0.** Otherwise it is
   "not demonstrated". Negative results stay in the report.
+- **...and only if `analyze.py` does not mark the row `(fragile)`.** `bootstrap_ci` fixes its seed
+  so the same data always prints the same interval — reproducible, but *not* stable: the percentile
+  bound carries its own Monte-Carlo error, so when the truth sits inside it the verdict is a coin
+  flip that looks deterministic. E39's headline "+0.116 [+0.002, +0.233]" excluded 0 on a minority
+  of seeds and **did not replicate** (+0.075 [−0.009, +0.157] at n = 8000, E40); E40's own scoring
+  hit six such rows. `--compare` now prints a `t` and a **sign-flip permutation p** beside every
+  interval and marks a row `(fragile)` when the two disagree or the CI flips under another
+  bootstrap seed. **A fragile row is "not demonstrated" regardless of what its CI says.**
 - **Audit before concluding, and brief the auditor to refute.** Eight independent audits have run
   on this project (`scratchpad/audit*/`); **seven overturned a claim the author was confident
   about** — including the shipped agent being the wrong table for four experiments, a

@@ -224,6 +224,47 @@ def bootstrap_ci(values: np.ndarray, n_boot: int = 10_000, alpha: float = 0.05,
     return mean, float(low), float(high)
 
 
+def signflip_p(differences: np.ndarray, n_perm: int = 20_000,
+               seed: int = 0) -> float:
+    """Two-sided sign-flip permutation p for a zero mean paired difference.
+
+    The exact null for paired data: under H0 each round's difference is equally
+    likely to have carried the opposite sign, so flipping signs at random
+    generates the null distribution of the mean. Unlike `bootstrap_ci` this does
+    not depend on a percentile of a resampled distribution, so it does not have
+    the boundary instability that motivated `verdict_is_fragile`.
+    """
+    d = np.asarray(differences, dtype=float)
+    if len(d) < 2:
+        return 1.0
+    rng = np.random.default_rng(seed)
+    observed = abs(float(d.mean()))
+    null = (rng.choice([-1.0, 1.0], size=(n_perm, len(d))) * d).mean(axis=1)
+    return float((np.abs(null) >= observed).mean())
+
+
+def verdict_is_fragile(differences: np.ndarray, n_boot: int,
+                       n_seeds: int = 4) -> bool:
+    """Does the CI's significance verdict survive a different bootstrap seed?
+
+    `bootstrap_ci` fixes its seed so the same data always prints the same
+    interval. That is reproducible but not *stable*: the percentile bound
+    carries its own Monte-Carlo error, and when the truth sits within it the
+    verdict is a coin flip that looks deterministic. Audit 10 found E39's
+    headline "+0.116 [+0.002, +0.233]" excluded zero on a minority of seeds,
+    and E40 hit six such rows on fresh data. Re-draw under other seeds and
+    report disagreement rather than hiding it.
+    """
+    d = np.asarray(differences, dtype=float)
+    if len(d) < 2:
+        return False
+    verdicts = set()
+    for seed in range(12345, 12345 + n_seeds + 1):
+        _, low, high = bootstrap_ci(d, n_boot, rng=np.random.default_rng(seed))
+        verdicts.add((low > 0) or (high < 0))
+    return len(verdicts) > 1
+
+
 def paired_series(rows_a: list[dict], rows_b: list[dict], column: str
                   ) -> tuple[np.ndarray, np.ndarray]:
     """Values from both runs restricted to the seeds they share."""
@@ -335,11 +376,21 @@ def paired_effect(rows_a: list[dict], rows_b: list[dict], metric: str,
     improved = (mean_diff > 0) == higher_better
     verdict = "no effect shown" if not significant else ("BETTER" if improved else "WORSE")
 
+    # The CI still decides the verdict -- that is the rule in AGENTS.md and
+    # changing it here would silently reclassify every number already reported.
+    # These two only *flag* a verdict that rests on the boundary.
+    standard_error = float(differences.std(ddof=1) / np.sqrt(len(differences))) \
+        if len(differences) > 1 else float("nan")
+    t_stat = float(mean_diff / standard_error) if standard_error else float("nan")
+    p_flip = signflip_p(differences)
+    fragile = (significant != (p_flip < 0.05)) or verdict_is_fragile(differences, n_boot)
+
     return {
         "metric": metric, "label": label, "fmt": fmt,
         "a": float(values_a.mean()), "b": float(values_b.mean()),
         "diff": mean_diff, "low": low, "high": high,
         "verdict": verdict,
+        "t": t_stat, "p_flip": p_flip, "fragile": fragile,
         "p": wilcoxon_p(differences),
         "win": float(np.mean(values_b > values_a)),
         "n": len(differences),
@@ -368,7 +419,12 @@ def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
                      f"column is the mean of the per-round difference "
                      f"($B-A$) with its 95\\,\\% bootstrap confidence "
                      f"interval; an interval containing zero means the effect "
-                     f"is not demonstrated at this sample size."),
+                     f"is not demonstrated at this sample size."
+                     + ("  Rows marked $\\dagger$ sit on the significance "
+                        "boundary: the interval and a sign-flip permutation "
+                        "test disagree, or the interval's verdict changes under "
+                        "a different bootstrap seed."
+                        if any(l["fragile"] for l in lines) else "")),
             label=f"tab:compare-{name_a.replace('_','-')}-{name_b.replace('_','-')}",
             column_spec="lrrrl",
             header=["Metric", f"A: {tex_code(name_a)}", f"B: {tex_code(name_b)}",
@@ -378,22 +434,28 @@ def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
                    f"${line['fmt'].format(line['b'])}$",
                    tex_ci(line["fmt"], line["diff"], line["low"], line["high"],
                           signed=True),
-                   tex_escape(line["verdict"])]
+                   tex_escape(line["verdict"]) + ("$^\\dagger$" if line["fragile"] else "")]
                   for line in lines],
         )
     elif markdown:
         print(f"\n**{title}**\n")
-        print("| Metric | " + f"{name_a} | {name_b} | Difference (95 % CI) | Verdict |")
-        print("|---|---|---|---|---|")
+        print("| Metric | " + f"{name_a} | {name_b} | Difference (95 % CI) | "
+              "t | sign-flip p | Verdict |")
+        print("|---|---|---|---|---|---|---|")
         for line in lines:
             fmt = line["fmt"]
+            mark = " **(fragile)**" if line["fragile"] else ""
             print(f"| {line['label']} | {fmt.format(line['a'])} | "
                   f"{fmt.format(line['b'])} | "
                   f"{line['diff']:+.3f} [{line['low']:+.3f}, {line['high']:+.3f}] | "
-                  f"{line['verdict']} |")
+                  f"{line['t']:+.2f} | {line['p_flip']:.4f} | "
+                  f"{line['verdict']}{mark} |")
         print("\n<sub>Paired difference (B − A) on identical arenas, "
               "95 % bootstrap CI. A CI containing 0 means the change is not "
-              "demonstrated at this sample size.</sub>")
+              "demonstrated at this sample size. <b>(fragile)</b> means the CI "
+              "and the sign-flip p disagree, or the CI's verdict changes under a "
+              "different bootstrap seed -- the effect sits on the significance "
+              "boundary and the verdict should not be quoted without a larger n.</sub>")
     else:
         print(f"\n{title}")
         print("=" * len(title))
@@ -406,9 +468,13 @@ def compare(path_a: Path, path_b: Path, agent: str | None, metrics: list[str],
             print(f"  {line['label']:<16}{fmt.format(line['a']):>9}"
                   f"{fmt.format(line['b']):>9}{line['diff']:>+10.3f}{ci:>22}   "
                   f"{line['verdict']}")
-            extra = f"    B better in {line['win']:.0%} of rounds"
+            extra = (f"    B better in {line['win']:.0%} of rounds, "
+                     f"t={line['t']:+.2f}, sign-flip p={line['p_flip']:.4g}")
             if line["p"] is not None:
                 extra += f", Wilcoxon p={line['p']:.4g}"
+            if line["fragile"]:
+                extra += "\n    ^ FRAGILE: on the significance boundary -- the CI and the "
+                extra += "sign-flip p disagree, or the CI flips under another bootstrap seed"
             print(extra)
         print()
 
