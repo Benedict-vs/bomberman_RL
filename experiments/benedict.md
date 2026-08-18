@@ -21,6 +21,123 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E41 — the first opponent that is not `rule_based_agent`
+
+- **Question:** **all 412 committed rung-4 evaluation CSVs are against 3 x `rule_based_agent`**
+  (`ls results/eval/task4_tournament/*.csv | grep -v _rb_` returns nothing). Every strategic
+  conclusion this project holds is conditional on one hand-written opponent's behaviour:
+
+  | conclusion | the `rule_based` behaviour it rests on |
+  |---|---|
+  | the economy closes at step ~200 | it clears crates fast — opponents take **89.3 of 122** |
+  | traps decay to 4 % over a 5-step walk (E39/E40) | it **flees actively**; a trap's half-life is ~1 move |
+  | the kill pool is not free | it suicides **1.487 of its 1.820 deaths/round** (audit 10 F4) |
+  | `won` = 0.088 x score | the margin distribution against *the best of three* `rule_based` |
+
+  Audit 10's F4 sharpened this into the reason it matters: our kill count is set mostly by **the
+  field's own suicide rate**, not by our aim. `rule_based` consumes 82 % of its own mortality before
+  we can reach it. Against a field that dies less to itself, the takeable pool — and therefore
+  everything E39/E40 measured about hunting — could be materially different.
+
+  `final_project.pdf` p. 2 explicitly sanctions the fix: *"You can share your trained agents
+  (without training code) ... and **download other teams' agents to test your approach.**"*
+
+- **Change:** none to the agent. The shipped table plays unmodified against **four third-party
+  agents pulled from GitHub** (24 repos surveyed, `scratchpad/external/FINDINGS.md`), chosen as the
+  ones that load against our framework with no fix:
+
+  | slot name | origin | kind |
+  |---|---|---|
+  | `ext_xiaoxiae_bindist_v2` | `xiaoxiae/BombermanML` @ `50b682f`, GPL-3.0 | DQN |
+  | `ext_xiaoxiae_binary_v6` | `xiaoxiae/BombermanML` @ `50b682f`, GPL-3.0 | DQN |
+  | `ext_aielka_ql_atom` | `AI-ELka/BombermanRLAgents` @ `8d85731` | tabular, 329 states |
+  | `ext_lijesse_featureeverything` | `Li-Jesse-Jiaze/MLE_project_bomberman` @ `a7fe504` | 3rd place SS2024 |
+
+  **`ext_aielka_ql_atom` is source E of the survey** — lukevoss's "Atom", the agent whose claimed
+  **5.04** against 3 x `rule_based` is the 1.09-point gap `TASK_A_survey_vs_ours.md` §2 could never
+  price. lukevoss's own repo ships the code without the weights; this is a byte-identical copy of it
+  *with* `q_table.pkl`. Running it in our harness gives that calibration constant directly.
+
+- **Design.** 1000 rounds each at the held-out ship seed **990731**, `--out-dir
+  results/eval/task4_tournament`. Three line-ups per external agent, and the second and third are
+  the ones previous field work has always omitted:
+
+  | line-up | what only this one answers |
+  |---|---|
+  | **A**: ours + 3 x external | our head-to-head standing against that team |
+  | **B**: 4 x external | **the symmetric bar** — prices the field itself, as `benedict_task4.md` §1 does with 4 x `rule_based` (`won` 0.282). Without it a weak opponent and an easy arena are indistinguishable |
+  | **C**: external + 3 x `rule_based` | **the calibration constant** — puts *their* agent in *our* slot against *our* reference field, the only apples-to-apples comparison with our 3.949 |
+
+- **Power, stated in advance — and for once it is not the binding constraint.** At n = 1000 the
+  standard error on `score` is ~0.085 (scaled from E40's realised 0.042 at n = 8000), so the
+  80 %-power MDE is **~0.24**; on the margin it is **~0.40**. That is coarse by this project's
+  standards. **It does not matter here, because this is the first rung-4 experiment whose expected
+  effect is measured in points rather than hundredths of one:** the smoke tests put three externals
+  1.6–2.0 points above our 3.949. Any result small enough to be unreadable at n = 1000 is a result
+  that says the field is a wash, which is itself the answer to P1.
+
+  The external agents carry their own unseeded RNG on top of the opponents', so the +/-0.12 noise
+  floor is a **lower** bound here. No single-run difference under ~0.2 will be claimed.
+
+### Prediction (written before the run)
+
+**Primary is the paired within-round margin, not our absolute score.** Our absolute score swings
+3.95 -> 14.49 purely on who else is on the board (`scratchpad/strategy/fields/`), and the crate pool
+is exactly zero-sum, so *any* field that clears crates worse than `rule_based` hands us points for
+free. "Our score went up" would be near-unfalsifiable. `margin_mean` = our score minus the mean
+opponent score in the same round is what a total-score ranking actually sums.
+
+1. **P1, primary — and I expect to lose.** `margin_mean` in line-up A, per external agent.
+   **My prediction is that it is negative with a CI excluding 0 against at least two of the four.**
+   The smoke tests (n = 15, far below the noise floor, so a shortlist not a result) put
+   `binary_distance_agent_v2` at 6.00, `binary_agent_v6` at 5.60 and `ql`/Atom at 5.60 against the
+   same 3 x `rule_based` field where we score 3.949. **Refutation:** we win or draw against three or
+   four of them, and the agent is more robust than this entry assumes.
+2. **P2, the calibration constant — the number the survey could never get.** In line-up C, each
+   external's `score` in *our* slot against 3 x `rule_based`, compared to our **3.949**.
+   **Prediction: at least two exceed it, and `ext_aielka_ql_atom` lands within +/-0.5 of the
+   claimed 5.04.** **Refutation:** Atom scores near 3.9 -> the survey's 5.04 was selection, a
+   different framework version, or a different measurement convention, and the 1.09-point gap this
+   project has treated as real never existed. *That outcome would be worth more than winning.*
+3. **P3, the overfitting guard — the most consequential possible negative.** Our **crates/bomb**
+   against the external fields stays within **+/-0.15** of the **1.16** measured against
+   `rule_based`. This is the quantity E37 bought (+0.130) and the one E38 showed the training
+   horizon destroys. **Refutation:** it falls outside that band -> the bomb-siting policy E37
+   installed is tuned to one opponent's movement, the shipped agent is overfitted in the way nothing
+   in the ledger has ever tested, and the remaining weeks go to robustness rather than features.
+4. **P4, the hunt reopener — pre-committed now so it cannot be chosen later.** Audit 10 F4:
+   `rule_based` self-consumes 1.487 of 1.820 deaths/round, leaving a takeable pool of 0.333.
+   **Prediction: the externals suicide less, so the takeable pool is larger.** If any field's
+   takeable pool exceeds **0.5/round**, rerun `hunt_ceiling_v2.py --k 4 --trap-model sim` against
+   that field. **Hunting reopens only if that oracle clears +0.25** — E40's bar, unchanged, and it
+   is the one condition under which E40's NO-GO does not bind.
+5. **Guards, and one is an exclusion rather than a flag.** `think_over_limit` must be **< 1 % of
+   steps for every agent in the line-up**. An agent over the 0.5 s limit gets `WAIT` with the
+   overrun billed to its next step, so it plays *crippled* and our margin against it is inflated.
+   **Any agent breaching 1 % is reported as a compatibility result only and no strength claim is
+   drawn from it.** Also: `suicides` is not comparable across fields (audit 10 F5 — 16 % of deaths
+   against `rule_based` are double-credited when own and enemy blasts overlap, 0 % against
+   `peaceful`), so it is reported per field and never differenced across them.
+
+**Ship rule, pre-committed.** Nothing ships from this entry either; it is a measurement of external
+validity. What it decides: **P3 failing sends the next sweep to a mixed-field retrain rather than to
+any feature on the `NEXT_STEPS.md` list. P3 holding and P4 not firing leaves `target_type` (§3.1,
+free variant only — the size-4 version lost its cost justification to audit 10 F6) as the next
+feature.** P1 is reported whatever it says: **an external agent beating us is information, not
+failure, and finding it out five weeks before the deadline is the entire point of running this.**
+
+**Licence and hygiene.** 20 of the 24 repos carry no LICENSE, so all rights reserved: the clones
+stay untracked (`.gitignore`: `scratchpad/external/*/`), nothing of theirs enters
+`agent_code/benedict_task4/`, and nothing of theirs reaches the submission zip. Their code is cited
+by URL and commit hash, never vendored. Using an agent as an *opponent* is measurement, not copying
+— it is exactly what `rule_based_agent` is for.
+
+### Result
+
+*(pending — install and smoke test in progress 2026-08-18)*
+
+---
+
 ## E40 — the hunt ceiling remeasured with a trap test that matches the game's move rule
 
 - **Question:** E39 returned an oracle ceiling of +0.116 on score and concluded the hunting
@@ -201,6 +318,78 @@ take".**
 projected the board forward four steps — other agents' bombs included — would find rarer but truer
 traps. The evidence that this would not help is indirect but consistent: k = 8, which searches
 harder in the same static way, is worse; and the correction that *did* get made moved nothing.
+
+### CORRECTION, added 2026-08-18 after audit 11 — the premise of this entry was wrong
+
+**Audit 11 overturned the reason E40 exists.** Full report `scratchpad/audit11/REPORT.md`; I verified
+the load-bearing claims myself before writing this.
+
+**`escapable()` already modelled the simultaneous move.** It is a time-aware BFS whose depth-0 node
+is the target's current tile and whose **depth-1 nodes are exactly the tiles it can move to during
+the step our bomb lands**. Audit 10's F2 — "the trap is verified against a position the opponent is
+leaving" — is a misreading of `hunt_ceiling.py:80-106`. A correctly-timed test returns the
+**identical site set** to E39's original: audit 11 measured 0 disagreements over 20 022 steps.
+
+**So `k4sim` is not "the corrected oracle". It is E39's test minus 31 % of its sites**, and the
+deletions come from two bugs I introduced in `target_cells`:
+
+1. `escapable(neighbour, ...)` restarts the depth counter at 0, so the target gets a free move
+   *plus* a full fresh escape budget — a phantom extra move it does not have.
+2. `escapable` only checks its entry tile against `>= SAFE`, never against `danger <= depth`, so
+   **stepping into a live explosion and back out counts as an escape.**
+
+Both make the test over-strict, so `sim` ⊂ `stale` strictly. My own sweep metadata says the same
+thing and I did not read it that way at the time: override bombs 3364 → 1826, a 46 % cut.
+
+**Consequences, in order:**
+
+- **The verdict does not change.** The correct instrument is the **`k4stale`** arm, and on it
+  hunting still fails: score **+0.075 [−0.009, +0.157]** (ns), `margin_best` **+0.185** against a
+  +0.25 bar. The ship rule still fires NO-GO. What changes is which arm carries it.
+- **P2's interpretation was backwards.** I wrote that "an instrument can be provably wrong and still
+  return the right answer". The truth is the instrument was *right* and my fix was a no-op plus two
+  bugs. `sim ≈ stale` not because accuracy and opportunity traded off at break-even, but because
+  `sim` is `stale` with 31 % of its sites deleted and those sites were not converting anyway. **The
+  sentence must not go into the report as written.**
+- **The pre-registered bars were arithmetically unreachable.** `score = coins + 5·kills` exactly
+  (audit 11: max residual 0.000000 over 32 000 rows). At the 0.200 override bombs/round I had
+  *already measured* before the sweep, +0.25 score needs ≥ 25 % conversion — **above P3's own 20 %
+  bar, which buys only +0.200.** Passing P3 guaranteed failing P1. And I carried +0.25 over from
+  E39 "unchanged" as if that were a virtue: there it needed 11.7 % conversion, because there were
+  0.429 bombs/round. **Halving the shots while holding the standard is not the same experiment.**
+  This is the fifth entry on this rung to pre-register a target its own design could not reach.
+- **The attribution is wrong, and this one matters for E41.** I read the margin gain as "positioning
+  to trap opponents". Verified on the `k4stale` arm at n = 8000:
+
+  | | paired difference | t |
+  |---|---|---|
+  | our kills | +0.0222 | +3.01 |
+  | **opponents' suicides** | **+0.0456** | **+4.17** |
+  | opponents' deaths | +0.0360 | +4.23 |
+  | opponents' score | −0.1437 | −2.48 |
+
+  **The best-powered effect is opponents killing *themselves* more — twice our kill gain.** The
+  oracle's value is substantially that walking at `rule_based_agent` makes it panic into its own
+  blast, not that we trap it. Audit 11 adds that **79 % of oracle bombs involve no walking at all**,
+  and E39's `k = 0` arm — which separates opportunism from positioning and which E40 dropped —
+  puts the walking half at +0.077 (ns).
+- **This is a `rule_based_agent` behaviour, not a game mechanic**, so it is precisely what E41 was
+  built to test. **Amendment, recorded before the rerun it governs:** E41's P4 says to rerun
+  `hunt_ceiling_v2.py --k 4 --trap-model sim`. Per this correction the correct instrument is
+  **`--trap-model stale`**, and the +0.25 bar must be restated as a **conversion** bar against that
+  field's own bombs/round rather than copied across designs. Nothing about E41's P1–P3 changes.
+- **Two significant results this entry left unreported:** `coins` −0.040 (t = −2.25) and `won`
+  +0.018 (t = +2.47) on k4 sim − control.
+- **The ledger's own order guarantee does not hold for E39 or E40.** The file's rules say "Ich
+  committe die Vorhersage, bevor ich messe — dann belegt die Git-Historie die Reihenfolge." Both
+  entries first appear in commit `5819f0f`, *after* their sweeps. The predictions genuinely were
+  written first, but **the git history cannot prove it**, which is the whole point of the rule.
+  Fixed going forward by committing the pre-registration before launching.
+
+**What survives untouched:** the NO-GO itself; P3's conversion measurement (8.4 % stale / 12.0 %
+sim, and audit 10's F2 conversion rate reproduces even though its *explanation* does not); the
+static-board-over-the-fuse problem, which remains the real reason a trap test mispredicts and is
+still unfixed; and E39's headline +0.116 failing to replicate.
 
 ### Limitations
 
