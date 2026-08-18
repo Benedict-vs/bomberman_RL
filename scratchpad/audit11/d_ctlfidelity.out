@@ -1,0 +1,27 @@
+shipped csv columns: ['round', 'seed', 'slot', 'agent', 'code', 'survived', 'round_steps', 'score', 'coins', 'kills', 'suicides', 'crates', 'bombs', 'moves', 'invalid', 'steps', 'time', 'think_mean_ms', 'think_max_ms', 'think_over_limit', 'died', 'killed_by_opponent', 'rank', 'won']
+ctl csv columns    : ['round', 'seed', 'slot', 'agent', 'code', 'survived', 'round_steps', 'score', 'coins', 'kills', 'suicides', 'crates', 'bombs', 'moves', 'invalid', 'steps', 'time', 'died', 'killed_by_opponent', 'rank', 'won']
+
+paired rounds: 1000  (ship n=1000, ctl n=8000)
+  score      ship    3.718   e40ctl    4.124   paired +0.4060 [+0.1638, +0.6482] t=+3.29 *
+  kills      ship    0.217   e40ctl    0.254   paired +0.0370 [-0.0035, +0.0775] t=+1.79
+  suicides   ship    0.721   e40ctl    0.482   paired -0.2390 [-0.2796, -0.1984] t=-11.55 *
+  crates     ship   32.155   e40ctl   33.625   paired +1.4700 [+0.7682, +2.1718] t=+4.11 *
+  coins      ship    2.633   e40ctl    2.854   paired +0.2210 [+0.1173, +0.3247] t=+4.18 *
+  steps      ship  246.306   e40ctl  277.948   paired +31.6420 [+20.8885, +42.3955] t=+5.77 *
+  invalid    ship    5.670   e40ctl    4.772   paired -0.8980 [-1.4020, -0.3940] t=-3.49 *
+  moves      ship  193.348   e40ctl  215.627   paired +22.2790 [+13.8555, +30.7025] t=+5.18 *
+  bombs      ship   28.146   e40ctl   29.321   paired +1.1750 [-0.0237, +2.3737] t=+1.92
+
+  rounds with identical own score: 174/1000 = 17.4%
+  margin_mean  ship +0.641  e40ctl +1.145  paired +0.5040 [+0.2092, +0.7988] t=+3.35
+  margin_best  ship -1.784  e40ctl -1.249  paired +0.5350 [+0.1594, +0.9106] t=+2.79
+
+  E40 ctl score by 1000-round block:
+    rounds     0-  999: 4.124  (se 0.095)
+    rounds  1000- 1999: 4.080  (se 0.094)
+    rounds  2000- 2999: 3.910  (se 0.088)
+    rounds  3000- 3999: 4.054  (se 0.092)
+    rounds  4000- 4999: 3.804  (se 0.088)
+    rounds  5000- 5999: 3.976  (se 0.090)
+    rounds  6000- 6999: 4.140  (se 0.094)
+    rounds  7000- 7999: 3.981  (se 0.092)

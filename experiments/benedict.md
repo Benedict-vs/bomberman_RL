@@ -21,6 +21,96 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E42 — training against a field that hunts back
+
+- **Question:** E41 established that the shipped table loses to three of four third-party agents,
+  and that the mechanism is **survival, not bomb siting**: crates/bomb *rises* (1.18 → 1.80) while
+  bombs fall (28.3 → 19.6) because survival collapses (0.440 → **0.223**) and deaths to opponents'
+  bombs rise 2.5×. **The table has never trained against an opponent that hunts it.** Every one of
+  its 20 000 episodes was played against three `rule_based_agent`s, whose 1.487 suicides/round mean
+  they mostly kill themselves. That is not a feature-map problem and no digit on the
+  `NEXT_STEPS.md` list addresses it — it is a *training distribution* problem, and it has never
+  been tested.
+
+- **Change:** the training opponents, and nothing else. Same feature map, same reward table, same
+  hyperparameters, same 20 000-episode budget (E38 established that as the optimum and that longer
+  is worse), same warm-start parent. Only `--agents` differs.
+
+  | arm | training field |
+  |---|---|
+  | **control** | 3 × `rule_based_agent` — the current recipe. **Free: the E37 `PLB2` sweep tables at ep20000 already are this arm**, same configuration, which became the default |
+  | **treatment** | `ext_xiaoxiae_binary_v6` + `ext_aielka_ql_atom` + `rule_based_agent` — deliberately heterogeneous: a strong DQN, a tabular agent, and the incumbent |
+
+  Measured cost, not estimated (`scratchpad/benedict/e42_timing.out`): 200 episodes take 10 s against
+  3 × `rule_based` and 22–25 s against a strong external field, so a 20 000-episode run goes from
+  ~0.3 h to ~0.7 h. Episodes lengthen as training proceeds (E38 learned this the expensive way, its
+  8–10 h estimate becoming 19 h), so budget ~2 h per run.
+
+- **Design.** **8 seeds per arm.** Treatment seeds are trained (`BM_RUN_INDEX` 200–207); control
+  seeds are the existing `q_table_e37_PLB2_s100..s107__ep20000.npy`. Evaluation at ε = 0 through
+  `evaluate.py`, **300 rounds, validation seed 550731**, on three fields:
+
+  | field | role |
+  |---|---|
+  | **3 × `ext_xiaoxiae_bindist_v2`** | **HELD OUT — the primary.** Never seen in training |
+  | the mixed training field | in-distribution, to size the generalisation gap |
+  | 3 × `rule_based_agent` | **regression guard** — did we destroy what already works |
+
+  Run-level pairing between arms is *not* assumed: `benedict_task4.md` §5.3 measured
+  corr(arm, control) at matched seed between −0.47 and +0.44, because `main.py` does not seed the
+  provided opponents. Pairing is on **evaluation arenas only**.
+
+- **Power, stated in advance.** Between-seed score SD is 0.249, so n = 8 gives an 80 %-power MDE of
+  **0.35** on score. **That is coarse, and it is deliberate**: the deficit this entry attacks is
+  **−1.008** on margin against `binary_v6` and −0.797 against `bindist_v2`, three times the MDE.
+  This design can see a third of the gap closing and cannot see a tenth of it. An effect too small
+  for n = 8 is an effect too small to matter at this point in the project.
+
+  Every comparison is scored on the bootstrap CI **and** the sign-flip p, and a row `analyze.py`
+  marks `(fragile)` counts as not demonstrated regardless (`AGENTS.md`, added after E39/E40).
+
+### Prediction (written and committed before training starts)
+
+1. **P1, primary — generalisation.** On the **held-out** `bindist_v2` field, the treatment arm's
+   `margin_mean` beats the control arm's by **≥ +0.35** (the design's own MDE), CI excluding 0 and
+   sign-flip p < 0.05. **My prediction: it clears.** The control sits at −0.797 there; I expect the
+   treatment to roughly halve that, not to close it. **Refutation:** no gain, or a gain only
+   in-distribution → the deficit is not a training-distribution artefact and the next move is the
+   feature map after all.
+2. **P2, the regression guard — and it is the one I am least sure of.** On 3 × `rule_based`, the
+   treatment arm loses **no more than 0.35 score** against the control. The shipped table scores
+   3.949 there and that is the only number this project has ever optimised. **Refutation:** a larger
+   loss means the mixed field trades the incumbent away, and any ship decision becomes a bet on
+   which field the tournament actually resembles — which we do not know.
+3. **P3, mechanism.** The gain, if any, shows up in **survival and `killed_by`**, not in
+   crates/bomb. Specifically: `survived` rises on the held-out field, and crates/bomb moves by less
+   than 0.15. **Refutation:** the gain arrives through crates/bomb → E41's diagnosis was wrong and
+   the story is about the economy, not about dying.
+4. **P4, the generalisation gap — pre-registered so it cannot be discovered later.** The
+   in-distribution gain (mixed field) exceeds the held-out gain (`bindist_v2`). If in-distribution
+   improves and held-out does not, the arm has learned three specific opponents rather than "how to
+   survive aggression", which is the same overfitting failure one level up.
+5. **Guards.** `think_max_ms` < 500 for every agent; `suicides` reported per field and never
+   differenced across fields (audit 10 F5).
+
+**Ship rule, pre-committed.** The shipped table changes **only if** a treatment seed beats the
+current ship on the held-out field with a CI excluding 0 at 300 rounds, **and** survives P2's
+regression guard, **and** is then confirmed at **1000 rounds on the held-out ship seed 990731**
+against all four E41 fields including `feature_is_everything`. Selection is on validation seed
+550731 only; the ship seed is never used to choose.
+
+**Limitation, stated before the run rather than after.** The held-out agent `bindist_v2` shares an
+author and a code lineage with the training opponent `binary_v6`. A genuinely independent held-out
+agent would be `feature_is_everything`, but it runs at ~14 ms/step — 4.6 h per 1000-round
+evaluation — which makes it unaffordable inside a sweep. **It is therefore used only in the final
+1000-round confirmation**, where it is the strongest available test of generalisation.
+
+### Result
+
+*(pending — training launched 2026-08-18)*
+
+---
+
 ## E41 — the first opponent that is not `rule_based_agent`
 
 - **Question:** **all 412 committed rung-4 evaluation CSVs are against 3 x `rule_based_agent`**
@@ -132,9 +222,135 @@ stay untracked (`.gitignore`: `scratchpad/external/*/`), nothing of theirs enter
 by URL and commit hash, never vendored. Using an agent as an *opponent* is measurement, not copying
 — it is exactly what `rule_based_agent` is for.
 
-### Result
+### Result — 11 of 12 runs, n = 1000, held-out ship seed 990731
 
-*(pending — install and smoke test in progress 2026-08-18)*
+Ran 2026-08-18, four lanes, ~5 h. Scoring `scratchpad/benedict/e41_analyze.py`, tables
+`scratchpad/benedict/e41/RESULTS.md`, install record `scratchpad/external/install/INSTALL.md`.
+**One run was dropped:** the symmetric bar for `ext_lijesse_featureeverything` (4 x a 14 ms/step
+agent, ~3.8 h remaining) was killed for cost after the other three agreed to within 0.34. Recorded
+here rather than omitted; it is the only planned measurement missing.
+
+**P1 CONFIRMED — we lose to three of the four.** Paired within-round margin, all p < 0.0001:
+
+| field | our score | their mean | **margin_mean** | margin_best |
+|---|---|---|---|---|
+| 3 x `binary_v6` | 2.611 | 3.619 | **−1.008 [−1.197, −0.813]** | −4.263 |
+| 3 x `bindist_v2` | 2.986 | 3.783 | **−0.797 [−1.012, −0.570]** | −4.308 |
+| 3 x `feature_is_everything` | 2.226 | 2.770 | **−0.544 [−0.684, −0.399]** | −2.284 |
+| 3 x `ql`/Atom | 4.283 | 3.371 | **+0.912 [+0.661, +1.165]** | −1.872 |
+
+I pre-registered "negative with a CI excluding 0 against at least two of the four." It is negative
+against **three**. This is the largest effect ever measured on this rung and it points the wrong way.
+
+**P2 CONFIRMED on both legs — and the survey's 5.04 was real.** Their agent in *our* slot against
+*our* reference field, where our shipped table scores **3.949**:
+
+| agent | score | vs ours | coins | kills | suicides | crates |
+|---|---|---|---|---|---|---|
+| `binary_v6` | **5.572** | +1.623 | 3.372 | 0.440 | 0.377 | 25.09 |
+| `bindist_v2` | **5.336** | +1.387 | 3.216 | 0.424 | 0.276 | 25.10 |
+| `feature_is_everything` | **5.143** | +1.194 | 3.728 | 0.283 | 0.108 | 39.72 |
+| `ql`/Atom | **4.690** | +0.741 | 2.770 | 0.384 | 0.127 | 30.40 |
+
+**All four beat us**, and Atom lands at 4.690 against its claimed 5.04 — inside the +/-0.5 bar.
+**So the 1.09-point gap `TASK_A_survey_vs_ours.md` §2 could never price is genuine**, it is not a
+framework or measurement artefact, and three other agents are further ahead than Atom was.
+
+**P3 REFUTED as written — and the guard was the wrong instrument.** crates/bomb was 1.797 / 1.960 /
+1.429 / 1.249 against a 1.16 +/- 0.15 band: out of band in three of four. But it moved **up**, the
+opposite direction to the overfitting hypothesis it was built to detect, and the cause is
+composition: crate availability depends on how fast the *opponents* clear crates. They take 25.1 /
+25.1 / 30.4 / 39.7 in the calibration runs, and our crates/bomb falls as theirs rises. A guard that
+assumes crates/bomb is opponent-independent cannot test opponent-specific overfitting.
+**This is the sixth pre-registration on this rung whose bar did not match its design** (E33-E36 on
+`won`, E40's arithmetically unreachable +0.25, now this). Scored as written; the inference does not
+follow, and the honest reading is that **E37's bomb siting is not overfitted to `rule_based`** — it
+is the one thing that holds up.
+
+**P4 — the suicide leg CONFIRMED, the pool leg fires once.** Every external suicides less than
+`rule_based`'s 1.487/round: 1.463 / 1.220 / 1.049 / 0.239. But a smaller suicide rate does not imply
+a larger takeable pool, because the strong agents also *die less overall*:
+
+| field | opp deaths | opp suicides | **takeable** | our kills | our share |
+|---|---|---|---|---|---|
+| 3 x `rule_based` | 1.822 | 1.514 | 0.308 | 0.214 | 69.5 % |
+| 3 x `binary_v6` | 1.819 | 1.463 | 0.356 | 0.091 | 25.6 % |
+| 3 x `bindist_v2` | 1.675 | 1.220 | 0.455 | 0.173 | 38.0 % |
+| **3 x `ql`/Atom** | 1.717 | 1.049 | **0.668** | 0.301 | 45.1 % |
+| 3 x `feature_is_everything` | **0.400** | 0.239 | 0.161 | 0.092 | 57.1 % |
+
+**The reopen bar fires on the Atom field only** (0.668 > 0.5), so the pre-committed rerun of the
+oracle against that field is triggered — with `--trap-model stale` per the amendment recorded in
+E40 before this ran. Note `feature_is_everything`: its agents die **0.400** times a round against
+`rule_based`'s 1.822. Against a field like that there is essentially no kill pool at all, and every
+kill-side conclusion this project holds evaporates.
+
+**Guards pass.** `think_over_limit` is **0.00 % of steps for every agent in every line-up**, even
+under four-lane CPU contention — a pass a fortiori, since contention inflates think time (max
+170 ms for xiaoxiae under load vs 36.9 ms clean; ours 10.2 ms). Atom's invalid actions are reported
+as a **median of 3** rather than a mean: its 20-bit encoding aliases "no recommendation anywhere"
+onto an untied `LEFT`, and since an invalid action does not change the state it wedges against a
+wall — longest observed run 227 consecutive invalid steps (`INSTALL.md`). Its `steps` and `survived`
+are inflated for a reason unrelated to skill.
+
+**The symmetric bar says the fields are not richer — the agents are better.** Four copies of one
+external, no us: mean score **3.377 / 3.428 / 3.089**, against four `rule_based` agents' 3.254.
+Best-of-four runs **7.744 / 7.678 / 6.550** against `rule_based`'s 5.32. Same pool, concentrated
+into stronger hands.
+
+### Verdict — the agent is competitive with `rule_based_agent` and not with this cohort
+
+Three of four beat us head-to-head; four of four beat us in our own slot. **Our score falls from
+3.949 to 2.2-3.0 against a strong field**, and the mechanism is not the one eight rung-4 entries
+have been chasing:
+
+| field | score | coins | kills | suicides | killed_by | crates/bomb | bombs | **survived** |
+|---|---|---|---|---|---|---|---|---|
+| 3 x `rule_based` | 3.828 | 2.758 | 0.214 | 0.505 | 0.055 | 1.18 | 28.3 | **0.440** |
+| 3 x `binary_v6` | 2.611 | 2.156 | 0.091 | 0.552 | **0.138** | 1.80 | 21.9 | **0.310** |
+| 3 x `bindist_v2` | 2.986 | 2.121 | 0.173 | 0.578 | **0.149** | 1.96 | 19.6 | **0.273** |
+| 3 x `feature_is_everything` | 2.226 | 1.766 | 0.092 | 0.704 | 0.073 | 1.25 | 22.5 | **0.223** |
+
+**Bomb siting is fine — crates per bomb goes up.** What collapses is that we *get fewer bombs off*
+(28.3 -> 19.6-22.5) because **we are dead**: survival 0.440 -> 0.223-0.310, own-bomb suicides up,
+and deaths to opponents' bombs up **2.5-2.7x** (0.055 -> 0.138/0.149, and `evaluate.py:258`
+undercounts that by ~2x per audit 10 F5, so read it as ~0.3).
+
+**This reverses the rung's central finding, and the reversal is conditional, not a contradiction.**
+`NEXT_STEPS.md` §4 says "buy survival" is closed by six replications, and
+`TASK_B_argument.md` §1 gives the mechanism: the economy closes by step ~200 and every survival
+intervention bought *phase-2* survival, which is worth nothing. **That holds against
+`rule_based_agent`, where we survive to step 200 anyway.** Against these agents we survive to the
+end of the round in **22-31 %** of rounds and we are dying *inside* the economy. **Survival was
+never worthless; it was non-binding against the only opponent we ever measured.** Six replications
+of a null measured one field.
+
+### What this changes
+
+1. **The do-not-do list was collected against one opponent and at least one entry on it is now
+   wrong.** Every item in `NEXT_STEPS.md` §4 was justified by an effect of +/-0.1 measured against
+   `rule_based`. We are **1.0 points** behind a student DQN — eight times the largest effect this
+   project has ever spent a sweep on.
+2. **The next work is survival-under-pressure, not the feature map.** Specifically deaths to
+   opponents' bombs, which audit 10 F5 already re-attributed to **91 % opponent bombs, 9 % opponent
+   bodies**, and which is the one thing the survey says the entire published corpus leaves
+   unaddressed. It is now measured as 2.5-2.7x worse against real agents than against `rule_based`.
+3. **Training against `rule_based_agent` alone is itself the confound.** The shipped table has never
+   seen an opponent that hunts it. A mixed-field retrain is the obvious arm and has never been run.
+4. **`won` and `rank` are now meaningless for us** in these fields (margin_best −1.9 to −4.3): we
+   are not competing for the round, we are competing for second place.
+
+### Limitations
+
+- **The mixed line-up was not run.** Every field here is three copies of *one* agent, which is
+  harsher than a tournament round containing one of each. **These margins are a lower bound on our
+  standing**, and the mixed field is the measurement that should come next.
+- **Four agents, all SS2024.** The only two SS2026 forks found are bare framework with no trained
+  agent, so **this is not our cohort** — it is the previous one, sampled by whoever published to
+  GitHub, which selects for people who were pleased with their result.
+- The symmetric bar for `feature_is_everything` is missing (killed for cost).
+- `suicides` is not comparable across fields (audit 10 F5: 16 % of deaths against `rule_based` are
+  double-credited when own and enemy blasts overlap). Reported per field, never differenced.
 
 ---
 

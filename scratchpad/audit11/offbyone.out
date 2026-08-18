@@ -1,0 +1,13 @@
+  25/150  14s
+  50/150  29s
+  75/150  45s
+  100/150  60s
+  125/150  74s
+  150/150  90s
+
+rounds=150  policy=k4 sim  steps=44578  search-eligible steps=10202
+model        fires   %steps  BOMB now  bombs/round   vs sim
+stale          783    1.76%        69        0.460     1.86x
+sim            521    1.17%        37        0.247     1.00x
+simfix         530    1.19%        40        0.267     1.08x
+simfix2        783    1.76%        69        0.460     1.86x

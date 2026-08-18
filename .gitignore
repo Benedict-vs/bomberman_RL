@@ -153,11 +153,21 @@ scratchpad/deaths/*.pkl
 # and commit hash of each in FINDINGS.md, plus the eval CSVs those runs produce.
 scratchpad/external/*/
 !scratchpad/external/FINDINGS.md
+!scratchpad/external/install/
 
 # Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The real model is
 # q_table.npy and stays versioned; these are scratch and must never end up in
 # the submitted agent folder.
 agent_code/*/q_table_*.npy
+
+# Third-party agents installed under agent_code/ so the framework's loader can find
+# them (agents.py:204 imports agent_code.<name>.callbacks). Never committed, for the
+# same two reasons as scratchpad/external/: 20 of the 24 source repos carry no LICENSE,
+# and the submission zip is built from agent_code/<ours>/ -- a third-party folder
+# sitting beside it is exactly the accident checkpoints/ was moved out of that
+# directory to avoid. Reproduce with the repo URL + commit hash recorded in
+# scratchpad/external/FINDINGS.md and scratchpad/external/install/INSTALL.md.
+agent_code/ext_*/
 
 # Where those per-run tables now live. The submission is a zip of
 # agent_code/<agent>/, so 700 MB of checkpoints sitting beside callbacks.py was

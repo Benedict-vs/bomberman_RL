@@ -1,0 +1,39 @@
+{
+  "agents": [
+    "benedict_task4",
+    "ext_xiaoxiae_bindist_v2",
+    "ext_xiaoxiae_bindist_v2",
+    "ext_xiaoxiae_bindist_v2"
+  ],
+  "base_seed": 990731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1"
+  },
+  "git_commit": "5819f0f-dirty",
+  "label": "benedict_task4_shipped_e37__task4_ext_xiaoxiae_bindist_v2_ship990731",
+  "n_rounds": 1000,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    990731,
+    991730
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-08-18T17:10:23+00:00",
+  "wall_clock_s": 1025.9
+}

@@ -1,0 +1,55 @@
+/Users/benedictvonschubert/Projects/bomberman_RL/scratchpad/external/install/verify_models.py:70: UserWarning: std(): degrees of freedom is <= 0. Correction should be strictly less than the reduction factor (input numel divided by output numel). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/ReduceOps.cpp:1861.)
+  print(f"    {k:34s} {tuple(v.shape)}  mean={v.float().mean():+.5f} std={v.float().std():.5f}")
+======================================================================
+ext_xiaoxiae_bindist_v2
+  torch DQN, 6 tensors, 1078278 params
+    layers.0.weight              (1024, 21)  mean=-0.04156 std=0.44107
+    layers.0.bias                (1024,)  mean=+0.19356 std=0.21744
+    layers.1.weight              (1024, 1024)  mean=+0.03097 std=0.34355
+    layers.1.bias                (1024,)  mean=+0.01444 std=0.12627
+    layers.2.weight              (6, 1024)  mean=-0.07359 std=0.71215
+    layers.2.bias                (6,)  mean=+0.26284 std=0.03120
+  mean |trained - fresh_init| per tensor: 0.weight=0.3158, 0.bias=0.2578, 1.weight=0.2160, 1.bias=0.0863, 2.weight=0.4512, 2.bias=0.2736
+  file sha1 target-model.pt: bb9f8953c1051ada
+======================================================================
+ext_xiaoxiae_binary_v6
+  torch DQN, 6 tensors, 1078278 params
+    layers.0.weight              (1024, 21)  mean=+0.01094 std=0.31812
+    layers.0.bias                (1024,)  mean=+0.16789 std=0.14852
+    layers.1.weight              (1024, 1024)  mean=+0.04464 std=0.24785
+    layers.1.bias                (1024,)  mean=+0.06061 std=0.08667
+    layers.2.weight              (6, 1024)  mean=-0.02620 std=0.50140
+    layers.2.bias                (6,)  mean=+0.16878 std=0.11698
+  mean |trained - fresh_init| per tensor: 0.weight=0.2481, 0.bias=0.2122, 1.weight=0.1622, 1.bias=0.0832, 2.weight=0.2885, 2.bias=0.1711
+  file sha1 target-model.pt: 87cb349c029563ea
+======================================================================
+ext_aielka_ql_atom
+  q_table type=dict entries=329
+  key len=20 example=(0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+  value len=6 example=[-4.09581432913847, 0.04479147830948951, -4.974931016804091, -4.854246768146745, -1.4665150868944918, -6.957443414889067]
+  1974 Q-values, 1836 nonzero (93.0%), min=-11.3696 max=+1.2245 mean=-0.3810
+  rows that are entirely zero (never updated): 0/329
+======================================================================
+ext_lijesse_featureeverything
+  DQN from agent_code.ext_lijesse_featureeverything.model, 20 tensors, 5407 params
+    feature_layer.0.weight             (64, 34)  mean=+0.11360 std=0.38777
+    feature_layer.0.bias               (64,)  mean=+0.21927 std=0.10260
+    feature_layer.1.weight             (64,)  mean=+0.22249 std=0.25332
+    feature_layer.1.bias               (64,)  mean=+0.02072 std=0.08337
+    feature_layer.3.weight             (32, 64)  mean=+0.03948 std=0.17916
+    feature_layer.3.bias               (32,)  mean=+0.20949 std=0.09736
+    feature_layer.4.weight             (32,)  mean=+0.23787 std=0.25230
+    feature_layer.4.bias               (32,)  mean=+0.00238 std=0.07674
+    feature_layer.6.weight             (16, 32)  mean=-0.00068 std=0.20511
+    feature_layer.6.bias               (16,)  mean=+0.06727 std=0.10983
+    feature_layer.7.weight             (16,)  mean=+3.13214 std=3.42462
+    feature_layer.7.bias               (16,)  mean=+1.78815 std=0.35518
+    value_stream.0.weight              (8, 16)  mean=+0.52392 std=0.81428
+    value_stream.0.bias                (8,)  mean=+0.93405 std=0.20857
+    value_stream.2.weight              (1, 8)  mean=+0.64992 std=1.80101
+    value_stream.2.bias                (1,)  mean=+0.22232 std=nan
+    advantage_stream.0.weight          (8, 16)  mean=+0.70830 std=1.42150
+    advantage_stream.0.bias            (8,)  mean=+0.76676 std=0.13211
+    advantage_stream.2.weight          (6, 8)  mean=-0.11711 std=2.05898
+    advantage_stream.2.bias            (6,)  mean=+0.06991 std=0.33947
+  mean |trained - fresh_init| over all tensors: 0.7780

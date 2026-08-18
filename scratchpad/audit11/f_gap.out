@@ -1,0 +1,22 @@
+  50/300
+  100/300
+  150/300
+  200/300
+  250/300
+  300/300
+
+control rollout, 300 rounds, 82497 steps, exact Q-ties on 11 steps (0.0133%)
+stale trap sites within k=4 (per round)      : 5.193
+  ... of which guaranteed (E40 'sim')        : 3.503  (67.5%)
+stale trap sites we are STANDING ON (d = 0)  : 0.357
+  ... guaranteed                             : 0.163  (45.8%)
+  mean doomed fraction of the target's post-move cells at d=0: 73.8%
+
+breakdown at d = 0 (doomed of cells -> count):
+      1of1      6   0.0200/round
+      1of2     54   0.1800/round
+      1of3      1   0.0033/round
+      2of2     31   0.1033/round
+      2of3      3   0.0100/round
+      3of3     11   0.0367/round
+      4of4      1   0.0033/round

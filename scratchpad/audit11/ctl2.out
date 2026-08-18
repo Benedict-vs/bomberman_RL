@@ -1,0 +1,7 @@
+e40 ctl n=8000 mean=4.0086  first-1000 mean=4.1240
+ctl per-1000 block means: 4.124 4.080 3.910 4.054 3.804 3.976 4.140 3.981
+ctl block SD = 0.1141
+
+PLB2_s106 (=the 3.949)     ref mean=3.9490  paired ctl-ref = +0.1750  t=+1.45  boot95 [-0.0610, +0.4140]  contains 0
+shipped_e37 (=the 3.828)   ref mean=3.8280  paired ctl-ref = +0.2960  t=+2.51  boot95 [+0.0630, +0.5290]  EXCLUDES 0
+OLD table, pre-E37         ref mean=3.7180  paired ctl-ref = +0.4060  t=+3.29  boot95 [+0.1650, +0.6520]  EXCLUDES 0
