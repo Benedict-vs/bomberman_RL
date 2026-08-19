@@ -105,9 +105,93 @@ agent would be `feature_is_everything`, but it runs at ~14 ms/step — 4.6 h per
 evaluation — which makes it unaffordable inside a sweep. **It is therefore used only in the final
 1000-round confirmation**, where it is the strongest available test of generalisation.
 
-### Result
+### Result — 8 seeds/arm, 48 evaluations, 300 rounds, validation seed 550731
 
-*(pending — training launched 2026-08-18)*
+Trained 2026-08-18/19, ~8 h at 5 lanes (my 2 h estimate was 4x wrong, the same way E38's was — I
+budgeted the per-run lengthening and not the wall clock). All 8 runs reached 20 000 episodes, no
+tracebacks. **Collapse screen passes cleanly:** the last-1000-episode training band is 2.276-2.467
+across the eight seeds, a spread of 0.19 with no collapsed run, so the n = 8 MDE of 0.35 is not
+inflated by one bad seed the way E33's and E37's were.
+
+Unit of inference is the **seed**, not the round, because that is what the pre-registered MDE was
+computed on. Two-sample bootstrap CI and permutation p; tables in `scratchpad/benedict/e42/RESULTS.md`.
+
+| field | metric | control | mixed | difference | p |
+|---|---|---|---|---|---|
+| **HELD OUT** 3 x `bindist_v2` | **margin_mean** | −1.000 | −1.043 | **−0.043 [−0.174, +0.082]** | 0.57 |
+| | score | 2.965 | 2.850 | −0.115 [−0.243, +0.007] | 0.12 |
+| | survived | 0.268 | 0.268 | −0.000 [−0.027, +0.025] | 0.97 |
+| | crates/bomb | 2.214 | 2.053 | **−0.160 [−0.185, −0.137]** | 0.0000 |
+| in-distribution (training field) | score | 3.342 | 3.181 | −0.161 [−0.305, −0.014] | 0.064 |
+| | margin_mean | −0.045 | −0.164 | −0.119 [−0.292, +0.058] | 0.24 |
+| **guard** 3 x `rule_based` | score | 3.832 | 3.782 | −0.049 [−0.182, +0.075] | 0.49 |
+| | **suicides** | 0.503 | 0.687 | **+0.183 [+0.126, +0.236]** | 0.0002 |
+| | **survived** | 0.434 | 0.265 | **−0.170 [−0.218, −0.117]** | 0.0001 |
+| | killed_by_opponent | 0.062 | 0.049 | −0.014 [−0.024, −0.004] | 0.026 |
+
+**P1 REFUTED.** The bar was a **+0.35** gain in held-out `margin_mean`. Measured: **−0.043**, with a
+CI containing zero and a point estimate on the wrong side. Training against a field that hunts back
+does not transfer to an unseen aggressive opponent. **The pre-committed consequence applies: the
+deficit is not a training-distribution artefact, and E41's -1.0 gap is not closed this way.**
+
+**P2 PASSES as written — and the guard was too narrow, which is the entry's most useful mistake.**
+I registered "loses no more than 0.35 score" on `rule_based`; the loss is 0.049, comfortably inside.
+But **score held while the behaviour underneath it fell apart**: suicides **+0.183** and survival
+**−0.170**, both with p < 0.0003. A score-only regression guard passed an arm that kills itself 36 %
+more often. This is exactly `benedict_task4.md` §5.6's lesson — *the behavioural metrics are the
+discriminator, not the headline* — and I wrote the guard on the headline anyway.
+
+**P3 REFUTED on both legs.** Predicted `survived` would rise on the held-out field: it moved
+−0.000. Predicted crates/bomb would move less than 0.15: it fell **0.160**, significantly. The gain
+did not arrive through survival, and the loss *did* arrive through bomb siting — the mirror image
+of the mechanism E41 diagnosed.
+
+**P4 REFUTED, and this is the finding.** P4 asked whether the in-distribution gain would exceed the
+held-out gain, expecting overfitting to the training opponents. **There is no in-distribution gain
+to overfit with.** On the field it trained against for 20 000 episodes, the mixed arm scores
+**3.181 against the control's 3.342** — *the control, which never saw that field, plays it better.*
+
+### Verdict — training against stronger opponents made the agent worse, everywhere
+
+Not "no effect": the mixed arm is worse on the held-out field, worse in-distribution, and
+behaviourally much worse on the incumbent field. **Ship rule fires: no table changes.** No treatment
+seed beats the current ship on the held-out field, so the 1000-round confirmation against the E41
+fields is not run.
+
+**The mechanism is not lack of experience.** Total training steps are 2.89 M (mixed) against 3.15 M
+(control) — 8 % fewer, nowhere near enough to explain it. And the mixed arm suicides *less* during
+training (0.74 vs 0.82 per episode) while suiciding *more* at ε = 0 (0.687 vs 0.503). The training
+curve and the policy point in opposite directions, which is the sixth time on this project that a
+training log has looked healthy over a worse agent.
+
+**The explanation that fits the numbers is credit assignment.** Against `rule_based_agent`, most of
+our deaths are our own doing — it suicides 1.487 of its 1.820 deaths per round (E41) and rarely
+hunts. Against strong agents a large share of deaths are opponent-induced and, given our eight
+digits, essentially unattributable: the state cannot represent "an opponent is about to bomb my
+escape route", so those deaths arrive as noise on whatever action was taken. **The agent learns
+that dying is not its fault, and stops paying to avoid it** — which is precisely what suicides
++0.183 and survival −0.170 describe. Training on a harder distribution did not teach a better
+policy; it taught a *less attributable* one.
+
+**That reframes the problem E41 opened, and it does not close it.** E41 showed the deficit is
+survival under pressure. E42 shows the deficit **cannot be trained away while the feature map
+cannot see the pressure.** The order of operations is the opposite of what I proposed: the digit has
+to come first, and the mixed-field retrain is what tests it afterwards. `NEXT_STEPS.md` §3.4's
+opponent-bomb-danger digit — the one audit 10 F5 re-attributed to **91 % opponent bombs, 9 %
+opponent bodies**, and which the survey says the entire published corpus leaves unaddressed — is now
+the only candidate on the list that addresses a measured, replicated, 1.0-point deficit.
+
+### Limitations
+
+- **The held-out agent shares an author with a training opponent** (`bindist_v2` / `binary_v6`,
+  both `xiaoxiae/BombermanML`), as stated before the run. The genuinely independent test,
+  `feature_is_everything`, was reserved for a confirmation that the ship rule never triggered.
+- **One field, one mixed composition, one budget.** A different mixture (more `rule_based`, or a
+  curriculum that starts easy) is untested, and the credit-assignment story above predicts a
+  curriculum would do better. That is a hypothesis this entry does not test.
+- The control arm is E37's `PLB2` checkpoints rather than freshly trained seeds. Same configuration
+  and same commit-era defaults, but they were trained on a different day, and `main.py` does not
+  seed the provided opponents, so arm-level differences carry that too.
 
 ---
 
