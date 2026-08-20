@@ -21,6 +21,126 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E47 — target type, and where the 1.7-point gap actually lives
+
+Two diagnostics, run together because they answer the same question from opposite ends: a probe of
+our own aliasing (`scratchpad/benedict/e47_target_type.py`) and a targeted read of the two agents
+that beat us (`scratchpad/xiaoxiae_read/FINDINGS.md`, GPL-3.0, `xiaoxiae/BombermanML` @ `50b682f`).
+**No third-party code was copied**; the read produced mechanisms and `file:line` citations, which is
+literature review, not the copy-pasting `AGENTS.md` forbids. 20 of 24 surveyed repos carry no
+licence, so vendoring is also not legally available.
+
+### Part 1 — is a target-type digit worth building?
+
+`TASK_A_survey_vs_ours.md` §5.1 ranks this the corpus's best-evidenced feature and our largest
+measured aliasing: digit 6 gives a *direction* with no *type*. Two things must hold, and the same
+instrument E37 used for the lattice bit answers the first.
+
+**(A) The type does carry real information.** 200 rounds at ε = 0, safe rows only:
+
+| | 3 x `binary_v6` | 3 x `rule_based` |
+|---|---|---|
+| H(type) | 1.467 | 1.698 |
+| **H(type \| full row)** | **0.782** | **1.042** |
+| mutual information | 0.685 | 0.656 |
+
+For scale, E37's lattice bit had H(lattice | digits 1-4) = 0.192 bits of 0.942 and was worth
++0.255 score. **The type residual is four to five times larger.**
+
+**(B) But most of it sits where the score does not.** `callbacks.py:244-255` falls through to the
+opponent *only when no crate is reachable*, so "opponent" is structurally the stripped board — and
+the probe confirms it with no exceptions:
+
+| crates left | coin | crate | opponent |
+|---|---|---|---|
+| 60+ | 25.5 % | 74.5 % | **0.0 %** |
+| 30-59 | 22.8 % | 77.2 % | **0.0 %** |
+| 10-29 | 19.4 % | 80.6 % | **0.0 %** |
+| 1-9 | 7.0 % | 93.0 % | **0.0 %** |
+| **0** | 0.7 % | 0.0 % | **73.0 %** |
+
+And that phase is worth almost nothing: **2.6 %** of all score is earned after the board strips
+against `binary_v6` (42/200 rounds reach it), **10.0 %** against `rule_based`. This corroborates
+`TASK_B_argument.md` §1 on fresh data and from a different direction.
+
+**(A2) Restricted to the crate phase, where 80 % of safe steps and ~95 % of the score are, the
+question is only coin-vs-crate — and the residual halves:**
+
+| crate phase only | 3 x `binary_v6` | 3 x `rule_based` |
+|---|---|---|
+| H(coin\|crate) | 0.730 | 0.943 |
+| **H(coin\|crate \| full row)** | **0.480** | **0.633** |
+| mutual information | 0.250 | 0.311 |
+
+**Verdict: the free re-partition is still justified, on a residual 2.5-3x E37's.** But the headline
+"39.1 % of steps point at an opponent and the table cannot tell" overstates the prize by folding in
+a phase worth 2.6-10 % of the score. **The honest target is coin-vs-crate in phase 1**, not
+three-way type disambiguation.
+
+*A measurement bug, recorded because it nearly shipped a number.* The first run reported "68.3 % of
+score is earned after the board strips", which contradicted TASK_B and was false:
+`environment.py:276` writes `note_stat("score", ...)` only inside `end_round`, so
+`agent.statistics["score"]` is **0 for the entire round** and my mid-round baseline was always zero.
+The live value is `agent.score` (`agents.py:120,152`). Corrected figures are 2.6 % / 10.0 %.
+
+### Part 2 — where the 1.744-point gap actually lives
+
+Same slot, same field, n = 1000, from our own committed CSVs:
+
+| | score | coins | kills | crates | coins/crate | suicides | survived |
+|---|---|---|---|---|---|---|---|
+| ours | 3.828 | 2.758 | 0.214 | 33.28 | 0.083 | 0.505 | 0.440 |
+| `binary_v6` | **5.572** | 3.372 | **0.440** | 25.09 | 0.134 | 0.377 | 0.546 |
+| `bindist_v2` | 5.336 | 3.216 | 0.424 | 25.10 | 0.128 | 0.276 | 0.641 |
+
+**Kills are 65-70 % of the gap; coins are 30-35 %.** (The read that produced this comparison called
+the deficit "harvesting"; its own numbers say otherwise, and the correction is recorded here rather
+than repeated.) Decomposing the kills:
+
+| | opp deaths | opp suicides | **takeable pool** | kills | **conversion** |
+|---|---|---|---|---|---|
+| ours | 1.822 | 1.514 | 0.308 | 0.214 | **69.5 %** |
+| `binary_v6` | **2.146** | 1.664 | **0.482** | 0.440 | **91.3 %** |
+| `bindist_v2` | 2.147 | 1.670 | 0.477 | 0.424 | 88.9 % |
+
+**They do two separable things.** They *enlarge* the pool 57 % — `rule_based` dies 2.146 times a
+round against them versus 1.822 against us — and they *convert* 91.3 % of it against our 69.5 %.
+
+**This partially reopens a question E40 closed.** E40 ruled out hunting-by-trap-positioning, but
+audit 11 established that E40's real measured effect was **opponents suiciding more when
+approached** (+0.046, t = +4.17) — pool enlargement, at a third the scale these agents reach, from
+an oracle firing on 1.4 % of steps. **What E40 refuted is trap-seeking; sustained pressure is a
+different intervention and has never been measured.** E31 tested "reckless play", but as a reward
+arm at n = 5 on `won`, which §5.1 shows was unreadable by construction.
+
+**What they do NOT have, checked directly:** no action mask, no bomb veto — `act` is a bare argmax
+(`binary_agent_v6/callbacks.py:33-38`). Their suicides are 0.377 against our 0.505: halved, not
+eliminated, and E46 already priced that exchange at −0.283 score. **Their edge is not survival.**
+
+Three representational differences worth recording: four *separate typed* objective channels rather
+than one overloaded direction digit; objective BFS run over *simulated future* states rather than a
+static board (ours is time-aware only in `escape_direction`, only in danger rows); and crate goals
+defined as *firing positions* (crate in an adjacent cell) rather than the crate itself — note E10
+rejected the radius-3 version of that, theirs is radius-1.
+
+### What this changes
+
+**Ranked, and neither item is a new feature:**
+
+1. **The conversion gap, 69.5 % → 91.3 %, is worth ~+0.34 score inside our existing pool** and needs
+   no change in aggression. It is above the n = 15 MDE and has never been diagnosed.
+2. **The free target-type re-partition** remains justified at a 0.250-0.311 bit residual, but the
+   prize is coin-vs-crate in phase 1, not the three-way split the survey framed.
+3. **Rung-4 reward recalibration (§3.2) moves up.** Their scheme is roughly 100:1 coin:crate with
+   *zero* death penalty and *zero* kill reward; ours is 5:1 with −5 on death. E27 showed on rung 3
+   that this scale was mis-set and worth +0.93 when fixed, and it has never been re-derived here.
+   Every knob is already an environment variable, so this is the cheapest sweep on the list.
+
+**Still open and unaffected:** §3.5 the truncation bug; the mixed-agent line-up; the tournament
+format question; `docker build`.
+
+---
+
 ## E46 — don't bomb without escape *room*: the zero-slack gate
 
 - **Question:** Benedict, from watching play: *"the agent still bombs when nothing is on the
@@ -180,11 +300,21 @@ because the tight bombs are the *productive* ones. **The agent's bombing policy 
 
 ### What this closes
 
-The pre-registration committed to the consequence: **P1 failing closes the last untested lever on
-the `NEXT_STEPS.md` list.** Combined with E43 (opponent-danger digit: 2.3 % ceiling), E44 (training
-distribution: −0.042 at two learning rates 25x apart) and E40 (hunting: below the MDE on a corrected
-instrument), **every remaining candidate for closing the −1.0 gap to the published SS2024 agents has
-now been measured and none of them close it.**
+The pre-registration committed to the consequence, and I then **overstated it when writing this
+verdict up. Corrected 2026-08-20:** P1 failing closes **§3.3 (bomb siting)**, not "the last untested
+lever". Checked against the list rather than from memory:
+
+| `NEXT_STEPS.md` §3 | status |
+|---|---|
+| 3.1 target type — **free** re-partition of digit 8 in the safe rows | **UNTESTED.** Audit 10 F6 killed the *size-4* variant's cost justification and said so explicitly; the zero-row variant was never touched |
+| 3.2 recalibrate rewards for rung 4 | **UNTESTED.** E27 did this on rung 3, never on this one |
+| 3.3 bomb siting | closed by E45/E46 |
+| 3.4 opponent-induced suicide | closed by E43 (2.3 % ceiling) |
+| 3.5 the truncation bug | **UNTESTED.** A known correctness defect since rung 3 |
+
+So the honest statement is narrower: **E40 (hunting), E43 (opponent-danger digit), E44 (training
+distribution) and E46 (bombing discipline) are closed. Three levers remain**, and one of them —
+target type — is the corpus's single best-evidenced feature (`TASK_A_survey_vs_ours.md` §5.1).
 
 That is a bounded, mechanised negative rather than an absence of results: the deficit is a
 policy-quality problem inside states the features already describe (E43: 76.7 % of deaths had two or

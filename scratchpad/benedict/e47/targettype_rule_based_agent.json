@@ -1,0 +1,43 @@
+{
+  "H_cointype_cratephase": 0.943362043443291,
+  "H_cointype_given_row_cratephase": 0.6328527301375172,
+  "H_type": 1.6983580846750563,
+  "H_type_given_row": 1.0421820478432542,
+  "by_phase": {
+    "0": {
+      "coin": 79,
+      "none": 915,
+      "opponent": 10177
+    },
+    "1-9": {
+      "coin": 533,
+      "crate": 3876
+    },
+    "10-29": {
+      "coin": 1483,
+      "crate": 3275
+    },
+    "30-59": {
+      "coin": 2786,
+      "crate": 1392
+    },
+    "60+": {
+      "coin": 1989,
+      "crate": 3487
+    }
+  },
+  "crate_phase_steps": 18821,
+  "field": "rule_based_agent",
+  "mutual_information": 0.6561760368318021,
+  "n_rounds": 200,
+  "rounds_reaching_opponent": 108,
+  "safe_steps": 29992,
+  "score_after_first_opponent": 100.0,
+  "score_total": 837.0,
+  "types": {
+    "coin": 6870,
+    "crate": 12030,
+    "none": 915,
+    "opponent": 10177
+  }
+}
