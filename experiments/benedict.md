@@ -95,9 +95,99 @@ reading is that neither the training distribution nor an opponent-danger feature
 gap, and the tabular line is at its ceiling.** That is a legitimate result and it is written here
 before the run so it cannot be softened afterwards.
 
-### Result
+### Result — 16 new runs, 48 evaluations, 300 rounds, validation seed 550731
 
-*(pending — training launched 2026-08-19)*
+Trained 2026-08-19/20. All 16 reached 20 000 episodes, `"warm": ""` confirmed in the live runs'
+metadata (not just the pilot's). Tables in `scratchpad/benedict/e44/RESULTS.md`.
+
+**The completed 2x2** (score / `margin_mean`):
+
+| | held-out `bindist_v2` | in-distribution | guard `rule_based` |
+|---|---|---|---|
+| **warm x rb** (E37 `PLB2`) | 2.965 / −1.000 | 3.342 / −0.045 | **3.832 / +0.795** |
+| **warm x mix** (E42) | 2.850 / −1.043 | 3.181 / −0.164 | 3.782 / +0.804 |
+| **scratch x rb** | 1.305 / −2.642 | 1.406 / −2.206 | **1.813 / −1.522** |
+| **scratch x mix** | 1.203 / −2.684 | 1.271 / −2.312 | 1.432 / −1.966 |
+
+**P2 FAILS, decisively, and it was written to be the gate.** The bar was 3.07 on the guard field
+(80 % of warm x rb's 3.832). `scratch x rb` reaches **1.813**, `scratch x mix` **1.432** — 47 % and
+37 %. **Both scratch arms are badly undertrained, so P1 cannot be read as an absolute answer**, and
+the pre-registered consequence applies: this entry reports that rather than dressing a tie up as
+evidence.
+
+**P4 gives the mechanism, and it is coverage, not episodes.** Rows carrying any learned value:
+
+| arm | nonzero rows of 64 000 |
+|---|---|
+| warm x rb | 8 168 (8 145–8 186) |
+| warm x mix | 8 631 |
+| **scratch x rb** | **3 595** (3 389–3 772) |
+| **scratch x mix** | 4 095 |
+
+The scratch tables reach **44 % of the warm tables' coverage**. 20 000 rung-4 episodes cannot
+rebuild what the rung-2 parent supplies, which is exactly why `WARM_N` exists.
+
+**P1 — not demonstrated, as predicted.** `scratch x mix − scratch x rb` on the held-out field:
+`margin_mean` **−0.042 [−0.251, +0.181]**, p = 0.73, against a +0.35 bar. E43's reason for the
+prediction stands: if the composition of our deaths is field-independent, the training field should
+not fix it. But P2 means this is a null between two weak agents, and I am not claiming it as the
+answer.
+
+**P3 CONFIRMED — and it is what makes the entry worth its compute.** The field effect on the
+held-out field is **−0.043 at α = 0.0398 (warm) and −0.042 at α = 1.0 (scratch): a difference of
++0.001.** In-distribution, −0.119 vs −0.106. **The warm start was not what suppressed the field
+effect in E42.** This is a difference-of-differences between two equally-trained arms *within* each
+row, so it survives P2's failure — the absolute level is uninterpretable, the contrast is not.
+
+It also closes the cheaper option I passed over. I had considered keeping the warm start with
+`BM_WARM_N=1` so α starts near 1.0 with coverage intact; **P3 says the learning rate is not the
+variable**, so that arm would measure the same nothing.
+
+*(The guard-field cell is the exception, −0.453, and it should be: `scratch x mix` is the only arm
+that never trains on a pure `rule_based` field, so it is the only one being tested out of
+distribution there.)*
+
+**One positive row, reported because it is the only one.** On the held-out field `scratch x mix`
+survives more than `scratch x rb`: **+0.079 [+0.017, +0.147]**, and it is *stable* — the CI excludes
+0 on **60/60** bootstrap seeds, permutation p 0.044–0.049 across five seeds. It is real, it is
+borderline, it is a secondary metric on an undertrained arm, and it does not convert: score −0.102,
+`margin_mean` −0.042. **Consistent with six previous replications that survival does not become
+points on this board** — now extended from `rule_based` to a strong DQN field.
+
+**And the largest effect on this rung was never an intervention.** The rung-2 warm parent is worth
+**−1.661 / −1.936 / −2.019 score** across the three fields (all p ≤ 0.0001). That is **eight times
+E37's shipped +0.255** and dwarfs every feature, reward and horizon change E28–E42 tested. The
+agent that ships is mostly the rung-2 table plus a lattice bit; rung-4 training refines it.
+
+### Verdict — the training distribution is not the lever, measured two ways
+
+`margin_mean` on the held-out field moves **−0.043** when a well-trained table is fine-tuned on a
+mixed field, and **−0.042** when a table is trained on one from zero. Two learning rates spanning a
+factor of 25, the same answer.
+
+**The pre-registered reading applies, and it was written before the run so it cannot be softened
+now:** E43 refuted the opponent-danger digit at a 2.3 % ceiling, and E44 finds no field effect at
+either learning rate. **Neither the training distribution nor an opponent-danger feature closes the
+−1.0 gap to the published SS2024 agents. On both axes tested, this tabular line is at its ceiling.**
+
+That is not a failed experiment; it is a bounded negative with a mechanism (E43: 93.5 % of deaths
+are our own bomb, in states the features already describe, with 2+ surviving actions available
+76.7 % of the time). **The remaining deficit is a policy-quality problem inside states the agent can
+already see** — and E33 and E34 both already failed to fix exactly that.
+
+### Limitations
+
+- **P2's failure is the dominant one.** A from-scratch arm at 20 000 episodes is not a fair test of
+  from-scratch training; it is a test of a 20 000-episode budget without a parent. A longer
+  from-scratch budget is untested and, given E38's inverted U *with* a parent, not obviously safe.
+- The interaction in P3 rests on two cells whose absolute level is low. It says the *field* effect
+  is invariant to α; it does not say a well-trained from-scratch mixed agent would behave the same.
+- One held-out field, one mixed composition, `bindist_v2` sharing an author with a training
+  opponent (stated before the run).
+- Coverage is measured as nonzero rows in the table, not as all-zero rows among *visited* rows at
+  ε = 0, which is what P4 actually pre-registered. The stronger version needs a visitation rollout
+  and was not run; the 44 % figure is sufficient to explain P2 and is not sufficient to score P4
+  exactly as written. **Scored: not measured as specified.**
 
 ---
 
