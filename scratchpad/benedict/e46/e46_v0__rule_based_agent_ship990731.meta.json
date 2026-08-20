@@ -1,0 +1,19 @@
+{
+  "bomb_chances": 0,
+  "commit": "a1d9930-dirty",
+  "field": "rule_based_agent",
+  "label": "e46_v0__rule_based_agent_ship990731",
+  "line_up": [
+    "user_agent",
+    "rule_based_agent",
+    "rule_based_agent",
+    "rule_based_agent"
+  ],
+  "n_rounds": 4000,
+  "note": "ceiling probe, not a trained agent; user_agent driven by e46_bombgate.py",
+  "policy_steps": 1086011,
+  "seed": 990731,
+  "table": "agent_code/benedict_task4/q_table.npy",
+  "veto_at": 0,
+  "vetoed": 0
+}

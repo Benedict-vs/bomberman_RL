@@ -1,0 +1,19 @@
+{
+  "bomb_chances": 210307,
+  "commit": "a1d9930-dirty",
+  "field": "ext_xiaoxiae_binary_v6",
+  "label": "e46_v4__ext_xiaoxiae_binary_v6_ship990731",
+  "line_up": [
+    "user_agent",
+    "ext_xiaoxiae_binary_v6",
+    "ext_xiaoxiae_binary_v6",
+    "ext_xiaoxiae_binary_v6"
+  ],
+  "n_rounds": 4000,
+  "note": "ceiling probe, not a trained agent; user_agent driven by e46_bombgate.py",
+  "policy_steps": 876529,
+  "seed": 990731,
+  "table": "agent_code/benedict_task4/q_table.npy",
+  "veto_at": 4,
+  "vetoed": 132230
+}

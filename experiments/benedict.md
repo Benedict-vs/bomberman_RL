@@ -21,6 +21,190 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E46 — don't bomb without escape *room*: the zero-slack gate
+
+- **Question:** Benedict, from watching play: *"the agent still bombs when nothing is on the
+  board — maybe it should only place one when really needed."* The observation is right and the
+  inference is not, and E45 measured both.
+
+  **Right:** 72.9 % of armed steps have zero crates in blast range and the policy bombs on 18.8 %
+  of them (`bomb_siting.py` reported 71.5 % / 16 %; independently reproduced).
+
+  **Wrong:** those bombs are not what kills us. By the crate count of the **killing** bomb, against
+  3 x `binary_v6`: 0 crates is 32.2 % of bombs but 13.0 % of own-bomb deaths (**lift 0.40x**), while
+  3+ crates is 33.7 % of bombs and **52.0 %** of deaths (**lift 1.54x**). Truly worthless bombs
+  (0 crates *and* 0 opponents) cause **0.0 % / 1.2 %** of own-bomb deaths. **Bombing "only when
+  needed" would delete the safe half and keep the killers**, and pay crates for it. The mechanism is
+  structural: a bomb reaching 3+ crates is by definition in a dense pocket, where the blast is
+  contained and the escape routes are the crates being destroyed.
+
+  **What does discriminate is escape *slack*.** The fuse is `BOMB_TIMER = 4`, so a bomb whose
+  nearest safe tile is 4 steps away has zero room for interference:
+
+  | escape distance at bomb time | share of bombs | share of own-bomb deaths | lift |
+  |---|---|---|---|
+  | 2 | 50.5 % | 22.0 % | 0.44x |
+  | 3 | 45.4 % | 49.5 % | 1.09x |
+  | **4 (zero slack)** | **2.9 %** | **20.5 %** | **7.10x** |
+  | **5+ (no escape at all)** | 1.3 % | 8.0 % | 6.32x |
+
+  **4.2 % of bombs cause 28.5 % of own-bomb deaths.** And the `d = 4` row is *not* the feature
+  `TASK_A_survey_vs_ours.md` §1.2 dismissed: that one is "does an escape exist", which is the
+  `d >= 5` row alone and is 99.08 % constant. **"An escape exists but with zero slack" has never
+  been measured by anyone in this project or in the surveyed corpus.**
+
+- **Change:** an oracle veto. When the shipped greedy policy says `BOMB`, compute the post-bomb
+  escape distance with the same time-aware BFS `callbacks.escape_direction` uses; if it is >= the
+  arm's threshold, take the best non-`BOMB` action from the *same* Q-row instead, so the veto
+  changes only the bomb decision. `--veto-at 0` disables. No training; nothing under `agent_code/`
+  is written; the line-up drives the provided `user_agent`.
+
+- **Design.** Four arms x two fields, **n = 4000** paired arenas, held-out ship seed 990731.
+  Primary field is **3 x `ext_xiaoxiae_binary_v6`** — external, per E41, because every previous
+  ceiling test on this project was run against the one opponent E41 showed to be unrepresentative.
+  Secondary field 3 x `rule_based_agent`.
+
+  | arm | role |
+  |---|---|
+  | `veto 0` | control — the shipped agent |
+  | `veto 5` | **placebo / internal control**: vetoes only bombs with no escape at all, i.e. TASK_A's near-constant bit. Should reproduce the control |
+  | **`veto 4`** | **the arm** — zero-slack bombs vetoed |
+  | `veto 3` | the "gate harder" bound, powered this time rather than read off noise (E40's over-read) |
+
+- **Power and reachability, stated before the bar.** At n = 4000 the standard error on `score` is
+  ~0.06 (E40's realised value), so the 80 %-power MDE is **~0.17**. **Is +0.25 reachable by this
+  design?** E45 bounds the mechanism at 28.5 % of 0.667 own-bomb deaths/round = **0.19 deaths/round
+  addressable**, and E41's cross-field data puts roughly 9 score per unit of survival
+  (3.828 at survived 0.440 vs 2.611 at 0.310). So the bar is reachable if the intervention converts
+  even a fraction of the addressable deaths. **This check is here because E40 pre-registered +0.25
+  on a design whose own arithmetic could not reach it, and that was only caught by audit 11.**
+
+- **Disclosure — this pre-registration is not blind.** A 150-round pilot was run to fix the design,
+  because the first version of this gate (require >= 2 post-bomb escape *routes*) vetoed **99.6 %**
+  of bombs and collapsed score to 0.140 — a bomb covering your tile and all four arms usually leaves
+  exactly one way out, so the route count cannot be a gate. That pilot also showed `veto 4` at
+  score 2.807 vs 2.620 and suicides 0.400 vs 0.593. **n = 150 is far below the +/-0.12 noise floor,
+  so it is a lead, not a result** — but I saw it, and the bar below is therefore set with knowledge
+  of the direction. Recorded rather than hidden.
+
+### Prediction (written and committed before the n = 4000 run)
+
+1. **P1, primary.** `veto 4` beats the control on **`score`** by **>= +0.25** on the external field,
+   CI excluding 0 **and** a non-fragile permutation p. **Refutation:** below +0.25 → the zero-slack
+   gate is real but too small to build, and the pre-committed consequence is that no digit is
+   designed for it.
+2. **P2, mechanism — this must hold or P1 is a coincidence.** `suicides` fall by **>= 0.10** and
+   `survived` rises. E45 says the gate can only work by removing 7x-lift bombs; if score moves
+   without suicides moving, the effect is coming from somewhere else and P1 does not count.
+3. **P3, the cost.** `crates` fall (the pilot lost 3.6). The gain must survive that — score is the
+   primary, not crates, and `score = coins + 5·kills` exactly, so crates are only an input.
+4. **P4, the placebo.** `veto 5` moves **nothing** (|Δscore| < 0.17, the MDE). It vetoes only the
+   0.92 % of bombs with no escape at all — TASK_A's constant. **If `veto 5` shows a large effect,
+   the harness is wrong and P1 must be discarded**, because that arm should be a no-op.
+5. **P5, the direction bound.** `veto 3` is **worse** than the control, with a CI excluding 0.
+   The pilot has it at 0.593 vs 2.620, so this should be unmissable; it exists to bound "gate
+   harder" empirically rather than by assertion.
+6. **Guards.** `think_max_ms` irrelevant (offline harness), but the control arm must reproduce the
+   E41 head-to-head number (2.611 score, −1.008 margin) within the noise floor.
+
+**Ship rule, pre-committed.** Nothing ships from a ceiling. What this decides: **if P1 and P2 both
+clear, a digit is designed — and it is cheap, one bit, "bombing here leaves zero slack"**, which can
+go into digit 7 (currently a single bit) as a 2-bit split at a factor-2 table cost, keeping the
+current table as a warm-start parent. E44 measured that parent at ~2 score, so preserving it is not
+optional. **If P1 fails, this closes the last untested lever on the `NEXT_STEPS.md` list and the
+tabular line is done.**
+
+### Result — 4 arms x 2 fields, n = 4000 paired arenas, held-out ship seed 990731
+
+**Control validates:** 2.778 score / −0.949 margin against E41's head-to-head 2.611 / −1.008, and
+3.944 / +0.945 on `rule_based` against the shipped 3.949. Guard passes.
+
+**3 x `ext_xiaoxiae_binary_v6` (primary, external):**
+
+| arm | score | margin_mean | suicides | survived | crates | bombs |
+|---|---|---|---|---|---|---|
+| control | 2.778 | −0.949 | 0.540 | 0.302 | 39.12 | 21.59 |
+| veto 5 (placebo) | 2.748 | −1.016 | 0.536 | 0.290 | 38.77 | 21.19 |
+| **veto 4** | **2.495** | **−1.308** | **0.409** | **0.352** | 34.71 | 19.18 |
+| veto 3 | 0.523 | −3.608 | 0.117 | 0.509 | 5.82 | 3.82 |
+
+| veto 4 − control | external field | `rule_based` |
+|---|---|---|
+| **score** | **−0.283 [−0.349, −0.212]** | **−0.156 [−0.271, −0.042]** |
+| margin_mean | −0.359 [−0.453, −0.265] | −0.232 [−0.373, −0.092] |
+| **suicides** | **−0.131 [−0.147, −0.115]** | −0.023 [−0.043, −0.001] |
+| **survived** | **+0.050 [+0.035, +0.065]** | +0.017 [−0.005, +0.037] |
+| coins | −0.233 | −0.162 |
+| crates | −4.412 | −2.110 |
+
+**P1 REFUTED — and in the wrong direction.** The bar was **+0.25**; the arm delivers **−0.283**,
+significantly *worse*, on both fields. The pre-committed consequence applies: **no digit is
+designed for this.**
+
+**P2 PASSES — the mechanism worked exactly as designed.** Suicides fell **0.131** (bar was 0.10)
+and survival rose **+0.050**, both with CIs excluding zero and p < 0.0001. **The gate prevented the
+deaths E45 said it would prevent, and the agent still lost points.**
+
+**P3 is where it dies.** The gate costs **−4.412 crates** and **−0.233 coins**. `score = coins +
+5·kills` exactly, and kills did not move (−0.010, ns), so the whole loss is coins: **−0.233 coins ≈
+−0.283 score**, closing to within 0.05. Survival bought nothing; the forgone economy cost
+everything.
+
+**P4 PASSES — the placebo is a no-op on the pre-registered metric.** `veto 5` moves score by
+−0.029 (external, ns) and +0.017 (`rule_based`, ns), both far inside the 0.17 MDE, at veto rates of
+0.3 % and 1.6 %. The harness is not manufacturing effects. *(Its `margin_mean` −0.067 and
+`survived` −0.012 do reach significance on the external field; at n = 4000 a 0.3 % intervention can
+show a real sliver, and it is small enough not to threaten P1 — which failed in the opposite
+direction anyway.)*
+
+**P5 PASSES, unmissably.** `veto 3` is −2.255 score, and this time it is bounded rather than
+asserted: E40 claimed its k = 8 arm "bounds the chase-harder direction" on a t of 1.09, which
+audit 11 correctly called an over-read. This one is −2.255 [−2.334, −2.179].
+
+### Verdict — the seventh replication, and it explains the previous six
+
+**The zero-slack bombs are both the most lethal and the most productive, and on net they are worth
+placing.** E45 found 3+ crate bombs carry a 1.54x death lift; this entry shows why that is not a
+defect to fix. A bomb in a dense pocket has a contained blast and a tight escape *because* it is
+surrounded by crates — the risk and the reward are the same geometric fact. Removing 11 % of bombs
+removed 4.4 crates and 0.23 coins to buy 0.13 fewer suicides, and the trade is losing.
+
+This is now the **seventh independent replication that survival does not convert into points on
+this board** (E30, E31, E33, E34, E36, E44's `scratch x mix` survival gain, and this) — and the
+first one that isolates the exchange rate: **+0.050 survival cost −0.283 score.** Previous entries
+observed the null; this one prices it.
+
+**Benedict's hypothesis is refuted in both of its forms.** "Bomb only when needed" fails because the
+worthless bombs are the *safe* ones (E45: 0.40x death lift). "Bomb only with escape room" fails
+because the tight bombs are the *productive* ones. **The agent's bombing policy is not the deficit.**
+
+### What this closes
+
+The pre-registration committed to the consequence: **P1 failing closes the last untested lever on
+the `NEXT_STEPS.md` list.** Combined with E43 (opponent-danger digit: 2.3 % ceiling), E44 (training
+distribution: −0.042 at two learning rates 25x apart) and E40 (hunting: below the MDE on a corrected
+instrument), **every remaining candidate for closing the −1.0 gap to the published SS2024 agents has
+now been measured and none of them close it.**
+
+That is a bounded, mechanised negative rather than an absence of results: the deficit is a
+policy-quality problem inside states the features already describe (E43: 76.7 % of deaths had two or
+more surviving actions available), and this rung has now tested representation, training
+distribution, aggression and bombing discipline against it.
+
+### Limitations
+
+- **The pilot's sign was wrong.** At n = 150 `veto 4` measured +0.187 score; at n = 4000 it is
+  −0.283. A 0.47 swing between a pilot and its confirmation, on the same arm and the same seed
+  family. **This is the cleanest demonstration in the ledger of why the +/-0.12 noise floor matters**
+  — and the disclosure written into this entry's pre-registration, that the bar was set knowing the
+  pilot's direction, turns out to have protected a bar the pilot pointed the wrong way.
+- One external field. The `rule_based` field replicates the sign and the mechanism at roughly half
+  the magnitude, which is consistent with its lower death rate, but two fields is two fields.
+- The oracle recomputes true escape distance every step; a digit could offer only a bucketed
+  version. Since the oracle *loses*, that gap does not matter here.
+
+---
+
 ## E44 — the retrain E42 claimed to be: from scratch, both arms, a 2x2
 
 - **Question:** audit 12 established that E42 never ran the experiment its title claims.
