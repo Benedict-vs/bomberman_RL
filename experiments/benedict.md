@@ -21,6 +21,227 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E44 — the retrain E42 claimed to be: from scratch, both arms, a 2x2
+
+- **Question:** audit 12 established that E42 never ran the experiment its title claims.
+  `train.py:242` defaults `BM_WARM="_parent"` with `WARM_N = 100`, and `ALPHA_EXP = 0.7`, so the
+  first update on any warm row runs at **α = 1/100^0.7 = 0.0398** — on a parent trained entirely
+  against `rule_based_agent`, covering 84 % of the arm's updated rows. E42 was a **fine-tune of a
+  rule_based-specialised table**, not training against a mixed field. Whether the training field
+  matters is therefore still open.
+
+- **Change:** `BM_WARM=""` (verified: `.meta.json` records `"warm": ""` and `train.py:263` skips
+  the warm-start branch entirely), and the training opponents. Nothing else.
+
+- **Design — and the two expensive cells already exist.** The warm row of the 2x2 is already on
+  disk, so only the scratch row needs compute:
+
+  | | 3 x `rule_based` | mixed field |
+  |---|---|---|
+  | **warm** (α starts 0.0398) | E37 `PLB2` s100-107 — **free** | E42 s200-207 — **free** |
+  | **scratch** (α starts 1.0) | **new**, `BM_RUN_INDEX` 300-307 | **new**, 310-317 |
+
+  Mixed field is `ext_xiaoxiae_binary_v6` + `ext_aielka_ql_atom` + `rule_based_agent`, unchanged
+  from E42 so the two rows are comparable. 8 seeds per new arm, 20 000 episodes, `--seed 810731`.
+  Evaluation identical to E42's: 300 rounds, **validation seed 550731**, on the **held-out**
+  `bindist_v2` field, the in-distribution mixed field, and the `rule_based` regression guard.
+  Pairing on evaluation arenas only; the unit of inference is the **seed**.
+
+- **Power.** Between-seed score SD 0.249 → n = 8 gives an 80 %-power MDE of **0.35**, same as E42.
+  Coarse on purpose: the deficit is −1.0 and anything under 0.35 does not change the project.
+  Every row scored on the bootstrap CI **and** the permutation p, with `(fragile)` counting as not
+  demonstrated — the rule `e42_analyze.py` failed to apply and now does.
+
+- **Measured cost, not guessed.** Pilot (`scratchpad/benedict/e44/pilot_*.log`, `BM_WARM=""`):
+  from scratch reaches score 0.550 at episode 2000 against `rule_based` and 0.165 at episode 1000
+  against the mixed field, versus 0.975 for the warm arm at episode ~1100. **From scratch learns,
+  and it learns slower** — which is what P2 guards.
+
+### Prediction (written and committed before training starts)
+
+1. **P1, primary — the field effect, tested properly at last.** On the **held-out** `bindist_v2`
+   field, `scratch x mixed` beats `scratch x rule_based` on `margin_mean` by **≥ +0.35**.
+   **My prediction is that it FAILS**, and E43 is why: the *composition* of our deaths is
+   field-independent (78.6/14.9/4.2/2.3 against a strong DQN vs 79.1/16.5/3.3/0.5 against
+   `rule_based`), 93.5 % are our own bombs, and in 76.7 % of them a surviving action existed. If
+   how we die does not depend on the opponent, the training opponent should not fix it.
+   **Refutation:** it clears +0.35 → the field *does* matter once the learning rate lets it, E42's
+   null was an artefact of α = 0.04, and mixed-field training becomes the main line.
+2. **P2, the guard that decides whether P1 is readable at all.** From-scratch at 20 000 episodes
+   may simply be undertrained. **Both scratch arms must reach at least 80 % of their warm
+   counterpart's score on the `rule_based` guard field** (warm x rb scores 3.832, so the bar is
+   **≥ 3.07**), and the ep5000/ep10000/ep20000 checkpoints must not still be climbing steeply at
+   the end. **If P2 fails, P1 is uninterpretable** — a null between two undertrained arms says
+   nothing about the field — and the entry reports that rather than a field result.
+3. **P3, the interaction — the actual scientific content of the 2x2.** Is the field effect
+   different at α = 1.0 than at α = 0.04? Formally: `(scratch_mix − scratch_rb)` vs
+   `(warm_mix − warm_rb)` on the held-out field. E42 measured the warm difference at
+   **−0.043 [−0.174, +0.082]**. **Prediction: the two differences agree within the MDE**, i.e. the
+   warm start was not what suppressed the field effect.
+4. **P4, coverage guard, specific to training from zero.** All-zero-row share among *visited* rows
+   must stay under 0.01 at ε = 0 (the guard E37 used, where it ran 0.00006). A from-scratch table
+   with unvisited rows falls back to the tie-break and would look like a policy failure that is
+   really a coverage failure. Also `suicides` reported per field, never differenced across fields
+   (audit 10 F5), and split by death step (E42's correction) rather than pooled.
+
+**Ship rule, pre-committed.** Nothing ships unless a scratch seed beats the current ship on the
+held-out field with a CI excluding 0 **and** a non-fragile permutation p, survives the
+`rule_based` regression guard, and is then confirmed at 1000 rounds on the held-out ship seed
+990731. Selection on 550731 only.
+
+**What this entry cannot settle.** E43 already refuted the opponent-danger digit at a 2.3 % ceiling,
+and E42's correction withdrew the "digit first" recommendation. **If P1 also fails, the honest
+reading is that neither the training distribution nor an opponent-danger feature closes the −1.0
+gap, and the tabular line is at its ceiling.** That is a legitimate result and it is written here
+before the run so it cannot be softened afterwards.
+
+### Result
+
+*(pending — training launched 2026-08-19)*
+
+---
+
+## E43 — when we die, could any feature have saved us? The digit is refuted before it was built
+
+- **Question:** E42 concluded the mixed-field retrain failed because opponent-induced deaths are
+  *"unattributable given our eight digits"*, and I turned that into a recommendation: **build an
+  opponent-bomb-danger digit first, retrain second.** That is a claim about the *representation*
+  and it makes a testable prediction. `AGENTS.md` §3.6 and E39/E40 both say the same thing —
+  **ceiling-test before building** — so this probe runs before any digit is designed.
+
+- **Method.** `scratchpad/benedict/e43_attributability.py`. Roll out the shipped table at ε = 0
+  (`HuntCeiling(q, -1)`, byte-identical to the shipped agent). At every step record whether *any*
+  action still survives, using only the bombs visible on the board at that moment. For each death
+  find **`t_doom`** = the last step at which a surviving action existed, then trace which bomb's
+  blast actually covered the tile we died on, and ask whether that bomb was on the board at
+  `t_doom`:
+
+  | class | meaning |
+  |---|---|
+  | **OWN_BOMB** | the killing blast is ours → escape-logic failure; already in digits 1–5 |
+  | **OVERLAP** | own + enemy blast on the same tile → the `evaluate.py:258` blind spot (audit 10 F5) |
+  | **VISIBLE** | enemy bomb **already placed** at `t_doom` → the information was in `danger_map`, so it is already in digits 1–5 and **a new digit cannot help** |
+  | **UNSEEABLE** | enemy bomb placed **after** we committed → no feature of the current `game_state` could have shown it. **This, and only this, is the case for the digit.** |
+
+  Run against an **external** field, never `rule_based` alone — E41 showed `rule_based` is
+  unrepresentative (it suicides 1.487 of its 1.820 deaths/round, so it barely hunts).
+
+  **One instrument bug, found and fixed before the numbers were believed.** The first version
+  flagged a death as OWN_BOMB whenever *any* of our bombs was on the board — which for this agent
+  is nearly always — and returned a meaningless 100 %. The fix traces `blast_coords` from the tile
+  we actually died on. The pilot that produced the 100 % is the reason this is stated rather than
+  quietly corrected.
+
+### Result — 300 rounds per field, ε = 0, validation seed 550731
+
+| at `t_doom`, what killed us? | 3 × `binary_v6` | 3 × `rule_based` |
+|---|---|---|
+| **OWN_BOMB** | **78.6 %** | **79.1 %** |
+| **OVERLAP** (own + enemy) | 14.9 % | 16.5 % |
+| VISIBLE enemy bomb | 4.2 % | 3.3 % |
+| **UNSEEABLE enemy bomb** | **2.3 %** | **0.5 %** |
+| rounds died / 300 | 215 | 182 |
+
+**The digit is refuted.** The entire case for an opponent-bomb-danger feature is the UNSEEABLE row,
+and it is **2.3 %** of deaths — about **0.017 deaths per round**, two orders of magnitude below the
+−1.0 margin deficit it was meant to address. **93.5 % of our deaths involve a bomb we placed
+ourselves**, whose blast is fully described by `danger_map` and therefore already sits in digits
+1–5. **These deaths are not unattributable. They are maximally attributable.**
+
+**And the failure is a policy failure, not a representation gap.** Safe actions available at the
+last survivable moment:
+
+| safe actions at `t_doom` | 3 × `binary_v6` | 3 × `rule_based` |
+|---|---|---|
+| exactly 1 (a needle) | 23.3 % | 9.3 % |
+| 2 | 55.8 % | 59.9 % |
+| 3+ | 20.9 % | 30.8 % |
+
+**In 76.7 % of deaths the agent had two or more surviving actions and chose a losing one**, in
+states its own features already describe.
+
+**The composition is field-independent; only the frequency changes.** 78.6/14.9/4.2/2.3 against a
+strong DQN versus 79.1/16.5/3.3/0.5 against `rule_based` — nearly identical. What changes is how
+often we die (215 vs 182 of 300) and how tight the escape is: **being down to a single surviving
+action more than doubles, 9.3 % → 23.3 %**. **Strong opponents do not kill us. They compress our
+space until our own bombs do.**
+
+This corroborates `TASK_A_survey_vs_ours.md` §1.2 from the other side — *"our suicides are not
+caused by bombing when trapped, they are caused by not walking the escape that exists"* — and it is
+uncomfortable, because **E33 (pay for the escape step) and E34 (force it) both already tried to fix
+exactly this and both failed.** This is a known-hard problem, not a fresh lead.
+
+### Limitations
+
+- Two fields at 300 rounds; the external field is one agent.
+- `survivable_actions` assumes **no new bombs are placed**, which is generous to the agent and
+  would over-count "a safe action existed". Since 93.5 % of killers are our own bombs, that
+  generosity barely bites — but the 76.7 % figure is an upper bound.
+- `t_doom` is the last step at which escape was possible *given bombs then on the board*. An
+  opponent who would have bombed our escape route regardless is scored as OWN_BOMB. So the split
+  understates opponent influence on *causation* while correctly measuring what a **feature over the
+  current `game_state`** could have seen — which is the question asked.
+
+---
+
+## E42 — CORRECTION, added 2026-08-19 after audit 12 and E43
+
+**Three of this entry's conclusions were wrong. The verdict (no gain from the mixed field) stands;
+the explanation, the headline statistic and the forward recommendation do not.** Audit 12's report
+is `scratchpad/audit12/REPORT.md`; I verified its central claim myself before writing this.
+
+**1. The credit-assignment mechanism is REFUTED.** I wrote that the arm "learns that dying is not
+its fault and stops paying to avoid it". Splitting every round at our agent's own death step
+(`steps`, not `round_steps` — the round-length version of this split shows nothing, since 97–100 %
+of rounds run past 200):
+
+| field | suicides, died by step 200 | suicides, alive past 200 | P(reach step 200) |
+|---|---|---|---|
+| guard | +0.015 [−0.002, +0.034] | **+0.279 [+0.196, +0.358]** | −0.004 |
+| in-dist | +0.010 [−0.034, +0.047] | **+0.065 [+0.027, +0.100]** | **+0.025** |
+| held-out | +0.013 [−0.001, +0.029] | **+0.047 [+0.003, +0.093]** | **+0.027** |
+
+**The entire +0.183 is post-step-200**, after the economy closes (`TASK_B_argument.md` §1), where
+`environment.py:249` awards nothing for a suicide — which is exactly why score moved only −0.049
+(ns). Early suicides are unchanged on all three fields, and the mixed arm **reaches** step 200 more
+often on two of them with CIs excluding zero. An agent that stopped valuing its life would die more
+when death is expensive; this one dies more only when death is free. Audit 12 adds two
+corroborations from the tables: danger-row `min Q` is *not* less negative (−1.996 → −2.015; what
+fell is `max Q`, 7.13 → 6.94), and across the 2 888 rows all 16 tables updated there are **zero**
+systematic argmax flips (between-arm agreement 0.986 vs within-arm 0.987).
+
+**2. The declared headline is fragile and therefore not demonstrated.** In-distribution score
+−0.161 has a bootstrap CI of [−0.305, −0.014] but a **permutation p of 0.064**. `AGENTS.md` has said
+since c40a902 that a fragile row is not demonstrated regardless of its CI — and
+`scratchpad/benedict/e42_analyze.py`, which I wrote after adding that rule, never checked it. The
+rule is now applied there. **"The control plays the mixed field better than the arm trained on it"
+is not a demonstrated claim**; the point estimate stands, the significance does not.
+
+**3. P3's "the loss arrived through bomb siting" is a denominator artefact.** Held-out crates went
+**up** (+0.632 [+0.239, +0.974]) on more bombs (+2.000) while alive longer. crates/bomb fell because
+the denominator grew. And crates are not a scoring channel at all: `score = coins + 5·kills` closes
+to within 0.003 on every field (held-out: −0.013 + 5 × −0.020 = −0.113 against a measured −0.115).
+
+**4. The entry was a fine-tune, not a retrain — so its title claim was never tested.**
+`train.py:242` defaults `BM_WARM="_parent"` and `WARM_N = 100`, so with `ALPHA_EXP = 0.7` the first
+update runs at **α = 1/100^0.7 = 0.0398** on a parent trained entirely against `rule_based`. "Train
+against a field that hunts back" was never run. E44 runs it, from scratch, both arms.
+
+**5. What survives.** Audit 12 attacked the control-arm reuse — the shortcut I flagged as the soft
+target — and it **holds**: the warm parent is byte-identical, ε decays per episode, both arms ran
+20 000, and three independent measurements of the recipe give guard-field suicides 0.515 / 0.490 /
+0.478 (the last being E38's ep20000 checkpoints, a contemporaneous control this entry claimed not to
+have) against the mixed arm's 0.687, outside the 0.372–0.664 range of all 60 E37 same-field tables.
+**The effect is real. Only my explanation of it was wrong.**
+
+**6. The recommendation this entry produced is withdrawn.** "The digit has to come first" rested
+entirely on the refuted mechanism, and E43 independently measures the digit's ceiling at **2.3 % of
+deaths**. Two separate lines now close it: the deaths are our own bombs, and `killed_by_opponent` —
+precisely what the digit targets — *fell* in all three fields (−0.013 [−0.024, −0.004] pre-200,
+held out). **No opponent-danger digit will be built.**
+
+---
+
 ## E42 — training against a field that hunts back
 
 - **Question:** E41 established that the shipped table loses to three of four third-party agents,

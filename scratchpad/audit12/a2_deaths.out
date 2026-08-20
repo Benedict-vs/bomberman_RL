@@ -1,0 +1,42 @@
+==========================================================================================
+FIELD guard
+  ctl: n=2400  died=0.566 sui=0.503 kb=0.062
+      suicide    n= 1208  mean death-step= 174.8  median= 147.0  score=3.203
+      killed_by  n=  150  mean death-step= 150.0  median= 132.5  score=2.653
+      survived   n= 1042  mean death-step= 399.0  median= 400.0  score=4.730
+      suicides/round  before step200 = 0.319   at/after = 0.185
+      score | survived  = 4.730   | suicided = 3.203
+  mix: n=2400  died=0.735 sui=0.687 kb=0.049
+      suicide    n= 1648  mean death-step= 205.6  median= 207.0  score=3.461
+      killed_by  n=  117  mean death-step= 131.8  median= 118.0  score=2.615
+      survived   n=  635  mean death-step= 398.0  median= 400.0  score=4.831
+      suicides/round  before step200 = 0.328   at/after = 0.358
+      score | survived  = 4.831   | suicided = 3.461
+==========================================================================================
+FIELD indist
+  ctl: n=2400  died=0.645 sui=0.446 kb=0.199
+      suicide    n= 1070  mean death-step= 135.5  median= 115.0  score=2.307
+      killed_by  n=  478  mean death-step= 169.0  median= 144.0  score=2.469
+      survived   n=  852  mean death-step= 399.1  median= 400.0  score=5.131
+      suicides/round  before step200 = 0.359   at/after = 0.087
+      score | survived  = 5.131   | suicided = 2.307
+  mix: n=2400  died=0.658 sui=0.471 kb=0.187
+      suicide    n= 1131  mean death-step= 150.8  median= 128.0  score=2.344
+      killed_by  n=  449  mean death-step= 170.6  median= 146.0  score=2.434
+      survived   n=  820  mean death-step= 399.1  median= 400.0  score=4.745
+      suicides/round  before step200 = 0.345   at/after = 0.126
+      score | survived  = 4.745   | suicided = 2.344
+==========================================================================================
+FIELD heldout
+  ctl: n=2400  died=0.732 sui=0.557 kb=0.175
+      suicide    n= 1336  mean death-step= 122.3  median= 104.0  score=2.234
+      killed_by  n=  420  mean death-step= 122.1  median= 105.5  score=1.898
+      survived   n=  644  mean death-step= 399.6  median= 400.0  score=5.179
+      suicides/round  before step200 = 0.478   at/after = 0.078
+      score | survived  = 5.179   | suicided = 2.234
+  mix: n=2400  died=0.732 sui=0.568 kb=0.164
+      suicide    n= 1364  mean death-step= 133.1  median= 109.0  score=2.242
+      killed_by  n=  393  mean death-step= 132.2  median= 107.0  score=1.870
+      survived   n=  643  mean death-step= 398.6  median= 400.0  score=4.739
+      suicides/round  before step200 = 0.467   at/after = 0.102
+      score | survived  = 4.739   | suicided = 2.242

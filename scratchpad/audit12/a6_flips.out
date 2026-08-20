@@ -1,0 +1,26 @@
+/Users/benedictvonschubert/Projects/bomberman_RL/.venv/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:3862: RuntimeWarning: Mean of empty slice
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/Users/benedictvonschubert/Projects/bomberman_RL/.venv/lib/python3.12/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/Users/benedictvonschubert/Projects/bomberman_RL/scratchpad/audit12/a6_flips.py:54: RuntimeWarning: Mean of empty slice
+  print(f"  ctl gap  median {np.median(gap_c):.4f}   mean {gap_c.mean():.4f}   "
+/Users/benedictvonschubert/Projects/bomberman_RL/scratchpad/audit12/a6_flips.py:55: RuntimeWarning: Mean of empty slice
+  f"share < 0.05: {(gap_c < 0.05).mean():.2f}   < 0.5: {(gap_c < 0.5).mean():.2f}")
+/Users/benedictvonschubert/Projects/bomberman_RL/scratchpad/audit12/a6_flips.py:56: RuntimeWarning: Mean of empty slice
+  print(f"  mix gap  median {np.median(gap_m):.4f}   mean {gap_m.mean():.4f}   "
+/Users/benedictvonschubert/Projects/bomberman_RL/scratchpad/audit12/a6_flips.py:57: RuntimeWarning: Mean of empty slice
+  f"share < 0.05: {(gap_m < 0.05).mean():.2f}   < 0.5: {(gap_m < 0.5).mean():.2f}")
+common rows                              2888
+unanimous within ctl                     2813
+unanimous within mix                     2814
+SYSTEMATIC flips (8/8 vs 8/8, different) 0   (0.00 % of common rows)
+
+value gap defending each arm's own choice (mean over its 8 seeds):
+  ctl gap  median nan   mean nan   share < 0.05: nan   < 0.5: nan
+  mix gap  median nan   mean nan   share < 0.05: nan   < 0.5: nan
+
+systematic flips in danger rows: 0 of 1666 common danger rows
+action shift over systematic flips (ctl -> mix):
+
+NULL: split the control arm 4 vs 4 and repeat (same statistic, no treatment)
+   systematic 4v4 flips within ctl: median 0, max 1   (compare 0 for 8v8 ctl-vs-mix, a stricter test)

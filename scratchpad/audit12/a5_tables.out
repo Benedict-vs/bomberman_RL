@@ -1,0 +1,25 @@
+rows: 64000  danger rows 51200  safe rows 12800
+
+quantity                          ctl mean       sd    mix mean       sd      diff
+rows touched                      3995.375   30.706    4692.125   34.023  +696.750
+danger rows touched               2311.625   26.538    2783.625   22.136  +472.000
+safe rows touched                 1683.750   14.370    1908.500   22.354  +224.750
+danger minQ (touched)               -1.996    0.022      -2.015    0.022    -0.019
+danger maxQ (touched)                7.126    0.049       6.942    0.052    -0.184
+danger max-min (touched)             9.122    0.040       8.958    0.034    -0.165
+safe minQ (touched)                  0.106    0.013       0.022    0.019    -0.084
+safe max-min (touched)               8.505    0.029       8.587    0.034    +0.082
+|q| mean over touched                3.123    0.014       2.905    0.011    -0.218
+
+rows touched by >=1 ctl seed: 5434   by >=1 mix seed: 6456
+rows touched by ALL 8 ctl:    3032   by ALL 8 mix:    3523
+ctl-only (any): 308   mix-only (any): 1330
+
+common core rows (all 16 tables touched): 2888   of which danger 1666
+argmax agreement  ctl-vs-mix 0.986   within-ctl 0.987   within-mix 0.987
+
+endgame-ish rows (safe, bomb_useful=1, target set, common): 595
+  ctl: P(argmax = BOMB) = 0.324
+  mix: P(argmax = BOMB) = 0.325
+  ctl: danger rows  P(BOMB)=0.081  P(WAIT)=0.141  P(follow digit6)=0.428
+  mix: danger rows  P(BOMB)=0.080  P(WAIT)=0.140  P(follow digit6)=0.429

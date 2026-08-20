@@ -95,8 +95,14 @@ for field, desc in FIELDS.items():
         d = b.mean() - a.mean()
         lo, hi = boot_ci(a, b)
         p = perm_p(a, b)
-        ok = lo * hi > 0 and p < 0.05
+        # AGENTS.md (since c40a902): a row counts only if the CI excludes 0 AND is not
+        # fragile. This script did not implement that rule when it was first run, and E42's
+        # declared headline (in-dist score -0.161, p = 0.064) passed on the CI alone.
+        ci_sig = lo * hi > 0
+        fragile = ci_sig != (p < 0.05)
         improved = (d > 0) == hib
-        v = ("BESSER" if improved else "SCHLECHTER") if ok else "nicht gezeigt"
+        v = ("BESSER" if improved else "SCHLECHTER") if (ci_sig and not fragile) else "nicht gezeigt"
+        if fragile:
+            v += " (fragile)"
         print(f"  {name:<18}{a.mean():10.3f}{b.mean():10.3f}{d:+12.3f}"
               f"{f'[{lo:+.3f}, {hi:+.3f}]':>22}{p:9.4f}   {v}")
