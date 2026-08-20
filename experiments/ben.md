@@ -214,3 +214,61 @@ Die Schrittstrafe wurde bei ansonsten identischer v2-Konfiguration von −0,05 a
 Nach 300 Episoden sank die greedy Münzleistung signifikant von 9,433 auf 7,377. Die gepaarte Differenz betrug −2,057 Münzen mit einem 95-%-KI von [−3,313; −0,850]. Für Invalid Actions wurde keine Verbesserung nachgewiesen.
 
 Die Änderung wird verworfen. Die höhere Schrittstrafe bestraft auch sinnvolle längere Wege und löste die Warteproblematik nicht.
+
+## DQN v5 – Legal-Action-Maske
+
+Die Legal-Action-Maske schloss Bewegungen in Wände bei Exploration, greedy Auswahl und im Bellman-Target aus. `WAIT` blieb legal.
+
+Nach 300 Episoden sanken Invalid Actions auf null. Gleichzeitig fiel die greedy Münzleistung signifikant von 9,433 auf 3,973. Die Differenz betrug −5,460 Münzen mit einem 95-%-KI von [−6,693; −4,267].
+
+Die Maske verhinderte Wand-Schleifen, verschob das Problem jedoch zu häufigem Warten. Die Variante mit Coin-Reward +1 wird bei diesem Trainingsbudget verworfen.
+
+## DQN v5/v6 – Legal-Action-Maske
+
+Die Maske reduzierte Invalid Actions auf null, führte aber zu häufigem Warten und deutlich weniger Münzen. Unter der Maske verbesserte Coin-Reward +2 die Leistung signifikant von 3,973 auf 5,017 Münzen. Eine Verlängerung auf 1.000 Episoden zeigte keinen weiteren Effekt.
+
+Trotzdem blieben beide Maskenvarianten deutlich unter der maskenlosen v2. Die Legal-Action-Maske wird deshalb für Task 1 verworfen.
+
+
+## DQN v7 – Legal-Action-Maske mit Coin-Reward +5
+
+Coin +5 verbesserte die Maskenvariante signifikant gegenüber Coin +2. Gegenüber der maskenlosen v2 blieb v7 jedoch signifikant schlechter: Die Münzleistung sank von 9,433 auf 5,770, mit einer Differenz von −3,663 und einem 95-%-KI von [−4,880; −2,480].
+
+Die Legal-Action-Maske verhindert Invalid Actions, führt aber zu häufigem `WAIT`. Die Maskenfamilie wird deshalb für Task 1 verworfen.
+
+## Optimierung des CNN-DQN
+
+Alle Varianten wurden nach 300 Trainings­episoden auf denselben 300 `coin-heaven`-Arenen ohne Exploration evaluiert. Eine Änderung galt nur dann als verbessert, wenn das gepaarte 95-%-Konfidenzintervall 0 ausschloss.
+
+Die Lernrate `1e-4`, `γ = 0.99`, Batch-Größe 64 und ein Epsilon-Abbau über 100.000 Schritte erwiesen sich als beste Grundeinstellungen. Den größten Fortschritt brachte ein selteneres Update des Target Networks: Mit einem Intervall von 20.000 statt 1.000 Optimierungsschritten stieg die Leistung von 9,43 auf 20,42 Münzen. Dieser Vorteil zeigte sich auch unter einem zweiten Trainingsseed.
+
+Eine Vergrößerung des Replay Buffers verbesserte den Mittelwert weiter. Mit 200.000 Plätzen wurden in zwei Läufen 26,99 und 29,02 Münzen erreicht. Ein Warm-up von 5.000 Übergängen erzielte schließlich den bisherigen Bestwert von 29,31 Münzen. Der Vorteil gegenüber einem Warm-up von 1.000 war jedoch knapp nicht statistisch nachgewiesen. Ein Warm-up von 10.000 war mit 25,71 Münzen signifikant schlechter.
+
+Die bisher beste Arbeitskonfiguration lautet:
+
+- Replay Buffer: 200.000
+- Batch-Größe: 64
+- Warm-up: 5.000 Übergänge
+- Target-Update-Intervall: 20.000
+- Lernrate: `1e-4`
+- Discount-Faktor: `0.99`
+- Epsilon-Abbau: 100.000 Schritte
+
+Der DQN erreicht damit rund 29 Münzen pro Runde und praktisch keine ungültigen Aktionen. Er liegt jedoch weiterhin deutlich unter dem tabellarischen Task-1-Agenten mit 50 Münzen. Als nächster Algorithmusversuch wird deshalb Double DQN untersucht, um eine Überschätzung der Q-Werte zu reduzieren.
+
+## Weitere Optimierung des CNN-DQN
+
+Nach der bisherigen Hyperparameteroptimierung erreichte der Standard-DQN nach 300 Trainings­episoden 29,31 Münzen. Darauf aufbauend wurden mehrere algorithmische Erweiterungen kontrolliert untersucht. Alle angegebenen Vergleiche wurden auf identischen Arenen mit gepaarten 95-%-Konfidenzintervallen durchgeführt.
+
+### Double DQN
+
+Zunächst wurde Double DQN implementiert. Dabei wählt das Online Network die nächste Aktion, während das Target Network diese Aktion bewertet. Dies soll die Überschätzung von Q-Werten reduzieren. Die Implementierung wurde durch einen eigenen Unit-Test abgesichert.
+
+Double DQN erreichte jedoch nur 27,12 statt 29,31 Münzen. Die Differenz von −2,19 Münzen war knapp statistisch nachweisbar (95-%-KI: [−4,32; −0,05]). Daher wurde Double DQN verworfen und zum Standard-DQN zurückgekehrt.
+
+### Potential-basiertes Reward Shaping
+
+Als nächste Erweiterung wurde ein zustandsbasiertes Potential eingeführt. Dieses basiert auf der per BFS berechneten kürzesten Entfernung zur nächsten Münze:
+
+```text
+F(s, s') = β · (γ · Φ(s') − Φ(s))
