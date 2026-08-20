@@ -21,6 +21,92 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E48 — the reward table has never been calibrated for rung 4
+
+- **Question:** the reward scale was derived on **rung 3** (E27, worth **+0.93 score and +11.5
+  crates** when `CRATE_DESTROYED` alone was corrected) and has been inherited unchanged through the
+  whole of rung 4. Two of this rung's own measurements now say it is mis-set, in opposite
+  directions from the ones anybody guessed:
+
+  **(a) We over-pay for opening crates relative to harvesting them.** E47, same slot and field,
+  n = 1000: we destroy **33.28** crates and collect **2.758** coins; `binary_v6` destroys **25.09**
+  and collects **3.372**. Coins per crate **0.083 vs 0.134, +62 % for them**. `CRATE_DESTROYED` is
+  pure shaping toward a quantity that **scores nothing** — `score = coins + 5·kills`, verified to
+  within 0.003 on every field in E46 — so a crate reward that is too high buys crate-opening at the
+  expense of the coin it reveals.
+
+  **(b) We pay 5 for avoiding something measured to be worth less than nothing.** `GOT_KILLED` is
+  −5, and this rung has now replicated **seven times** that survival does not convert into points —
+  E46 being the first to price it: **+0.050 survival cost −0.283 score.** A penalty that buys
+  survival is buying a negative.
+
+- **What this entry deliberately does NOT do.** `xiaoxiae/BombermanML`'s table (read in E47) prices
+  **no game outcome at all** — no `COIN_COLLECTED`, `CRATE_DESTROYED`, `GOT_KILLED` or
+  `KILLED_OPPONENT`. Every term is a hand-authored per-step judgement (`MOVED_TOWARD_COIN: 50`,
+  `PLACED_USEFUL_BOMB: 50`, `DID_NOT_MOVE_TOWARD_SAFETY: -500`) with `EPS_START = EPS_END = 0.0`.
+  **That is a hand-written heuristic expressed as a reward function**, which means their 5.572 is
+  not evidence that a *learned* policy reaches 5.572. We are not copying it: E33 and E34 already
+  tested paying for the step our own map had found, and both failed; `AGENTS.md` further notes that
+  shaping should be potential-based (state-dependent), not action-dependent. **Both arms below come
+  from our own measurements.**
+
+- **Change:** two reward constants, already environment switches, nothing else.
+
+  | arm | change | motivated by |
+  |---|---|---|
+  | **ctl** | current: `BM_COIN=5`, `BM_CRATE=1.0`, `BM_GOT_KILLED=-5` | **free** — E37 `PLB2` s100-107 *is* this table |
+  | **C** (harvest) | `BM_CRATE=0.25` → coin:crate 20:1 | (a): coins/crate 0.083 vs 0.134 |
+  | **D** (no death price) | `BM_GOT_KILLED=0` | (b): seven replications, priced at −0.283 |
+  | **CD** | both | the interaction |
+
+- **Design.** 8 seeds per new arm (`BM_RUN_INDEX` 400-407 / 410-417 / 420-427), 20 000 episodes,
+  `--seed 810731`, warm start at its default (E44 measured the parent at ~2 score — removing it is
+  not an option, and E44's scratch arms reached only 44 % of the warm coverage). Evaluation 300
+  rounds at **validation seed 550731** on the `rule_based` guard field and the held-out
+  `bindist_v2` field; **the control's evaluations on both already exist from E42**, so only the
+  three new arms need evaluating.
+
+- **Power.** Between-seed score SD 0.249 → n = 8 gives an 80 %-power MDE of **0.35**. E27's
+  rung-3 effect was +0.93, comfortably above it; a rung-4 effect of a third that size would still
+  be readable. Every row scored on the bootstrap CI **and** the permutation p, `(fragile)` counting
+  as not demonstrated.
+
+### Prediction (written and committed before training starts)
+
+1. **P1, primary — the harvest arm.** Arm **C** beats the control on `score` on the `rule_based`
+   guard field by **≥ +0.35**, CI excluding 0 and non-fragile. **Prediction: it clears.** The crate
+   reward is shaping toward a non-scoring quantity and our own harvest efficiency is 38 % below the
+   agents that beat us. **Refutation:** below +0.35 → the 5:1 ratio was not the binding constraint
+   and the E47 coins/crate gap is a *consequence* of their better play, not a cause of ours.
+2. **P2, mechanism — required, or P1 is a coincidence.** Arm C's **coins per crate** rises by
+   **≥ 0.02** (from 0.083, i.e. ≥ 25 % of the way to their 0.134). If score moves without
+   coins/crate moving, the effect came from somewhere I have not identified and P1 does not count.
+3. **P3 — the death penalty is not load-bearing.** Arm **D** does **not lose** more than the MDE:
+   the paired CI's lower bound sits above **−0.35**. **Prediction: it holds, and suicides rise
+   substantially while score does not fall.** That is the direct test of seven replications'
+   worth of accumulated null. **Refutation:** a real loss → survival *does* have instrumental value
+   that the seven nulls missed, and E46's −0.283 pricing is wrong or field-specific.
+4. **P4 — interaction.** `CD − C − D + ctl`. No directional prediction; it is reported because a
+   2x2 costs one extra arm and settles whether the two knobs are separable.
+5. **Guards.** `crates` will fall in arm C (that is the point) and must not fall below **28.0**;
+   `invalid` must not rise above the control's; `think_max_ms` untouched (rewards do not affect
+   inference). All-zero-row share among visited rows < 0.01.
+
+**Ship rule, pre-committed.** The shipped table changes **only if** an arm beats the current ship on
+the guard field with a CI excluding 0 and a non-fragile p at 300 rounds on validation seed 550731,
+**and** does not regress on the held-out `bindist_v2` field by more than the MDE, **and** is then
+confirmed at **1000 rounds on the held-out ship seed 990731**. Selection never touches 990731.
+
+**Why this is the right last big spend.** Hyperparameter optimisation is explicitly a graded
+criterion, this is the cheapest untested lever on the `NEXT_STEPS.md` list, and it is the only one
+whose prior effect size on this project (+0.93, E27) exceeds the gap we are trying to close.
+
+### Result
+
+*(pending — training launched 2026-08-20)*
+
+---
+
 ## E47 — target type, and where the 1.7-point gap actually lives
 
 Two diagnostics, run together because they answer the same question from opposite ends: a probe of
