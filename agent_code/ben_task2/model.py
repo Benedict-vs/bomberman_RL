@@ -1,4 +1,4 @@
-"""Neural-network model for the coin-heaven DQN agent."""
+"""Neural-network model for the task-2 DQN agent."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 
-ACTIONS = ("UP", "RIGHT", "DOWN", "LEFT", "WAIT")
+ACTIONS = ("UP", "RIGHT", "DOWN", "LEFT", "BOMB", "WAIT")
 
 N_INPUT_CHANNELS = 8
 N_ACTIONS = len(ACTIONS)

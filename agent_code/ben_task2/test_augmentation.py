@@ -2,11 +2,12 @@ import unittest
 
 import numpy as np
 
-from agent_code.ben_coin_collector_dqn.augmentation import (
+from agent_code.ben_task2.augmentation import (
     transform_transition,
 )
-from agent_code.ben_coin_collector_dqn.model import ACTIONS
-from agent_code.ben_coin_collector_dqn.replay_buffer import Transition
+from agent_code.ben_task2.features import N_CHANNELS, SELF_CHANNEL
+from agent_code.ben_task2.model import ACTIONS
+from agent_code.ben_task2.replay_buffer import Transition
 
 
 class SymmetryAugmentationTest(unittest.TestCase):
@@ -17,16 +18,16 @@ class SymmetryAugmentationTest(unittest.TestCase):
         done: bool = False,
     ) -> Transition:
         state = np.zeros(
-            (3, 5, 5),
+            (N_CHANNELS, 5, 5),
             dtype=np.float32,
         )
         next_state = np.zeros_like(state)
 
         # Agent above the center.
-        state[2, 1, 2] = 1.0
+        state[SELF_CHANNEL, 1, 2] = 1.0
 
         # Agent above and right of the center.
-        next_state[2, 1, 3] = 1.0
+        next_state[SELF_CHANNEL, 1, 3] = 1.0
 
         return Transition(
             state=state,
@@ -56,12 +57,12 @@ class SymmetryAugmentationTest(unittest.TestCase):
 
         # The agent position is rotated with the board.
         self.assertEqual(
-            transformed.state[2, 2, 1],
+            transformed.state[SELF_CHANNEL, 2, 1],
             1.0,
         )
 
         self.assertEqual(
-            transformed.next_state[2, 1, 1],
+            transformed.next_state[SELF_CHANNEL, 1, 1],
             1.0,
         )
 
@@ -83,32 +84,31 @@ class SymmetryAugmentationTest(unittest.TestCase):
 
         # Horizontal reflection changes x but not y.
         self.assertEqual(
-            transformed.state[2, 1, 2],
+            transformed.state[SELF_CHANNEL, 1, 2],
             1.0,
         )
 
         self.assertEqual(
-            transformed.next_state[2, 1, 1],
+            transformed.next_state[SELF_CHANNEL, 1, 1],
             1.0,
         )
 
-    def test_wait_is_unchanged_by_every_symmetry(self):
-        transition = self.make_transition(
-            action="WAIT"
-        )
+    def test_non_directional_actions_are_unchanged_by_every_symmetry(self):
+        for action in ("BOMB", "WAIT"):
+            transition = self.make_transition(action=action)
 
-        for rotations in range(4):
-            for reflect in (False, True):
-                transformed = transform_transition(
-                    transition,
-                    rotations=rotations,
-                    reflect=reflect,
-                )
+            for rotations in range(4):
+                for reflect in (False, True):
+                    transformed = transform_transition(
+                        transition,
+                        rotations=rotations,
+                        reflect=reflect,
+                    )
 
-                self.assertEqual(
-                    ACTIONS[transformed.action],
-                    "WAIT",
-                )
+                    self.assertEqual(
+                        ACTIONS[transformed.action],
+                        action,
+                    )
 
     def test_four_rotations_restore_transition(self):
         transition = self.make_transition(

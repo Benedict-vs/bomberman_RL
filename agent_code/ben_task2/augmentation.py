@@ -1,4 +1,4 @@
-"""Symmetry augmentation for coin-heaven transitions."""
+"""Symmetry augmentation for task-2 transitions."""
 
 from __future__ import annotations
 
@@ -110,7 +110,7 @@ def _transform_action(
     """Transform one action consistently with the board."""
     action = ACTIONS[action_index]
 
-    if action == "WAIT":
+    if action in ("BOMB", "WAIT"):
         return action_index
 
     delta_y, delta_x = _ACTION_VECTORS[action]

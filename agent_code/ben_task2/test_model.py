@@ -23,9 +23,9 @@ class CoinCollectorDQNTest(unittest.TestCase):
     def test_action_space(self):
         self.assertEqual(
             ACTIONS,
-            ("UP", "RIGHT", "DOWN", "LEFT", "WAIT"),
+            ("UP", "RIGHT", "DOWN", "LEFT", "BOMB", "WAIT"),
         )
-        self.assertEqual(N_ACTIONS, 5)
+        self.assertEqual(N_ACTIONS, 6)
 
     def test_parameter_count(self):
         model = CoinCollectorDQN()
@@ -35,7 +35,7 @@ class CoinCollectorDQNTest(unittest.TestCase):
             for parameter in model.parameters()
         )
 
-        self.assertEqual(parameter_count, 118_229)
+        self.assertEqual(parameter_count, 118_358)
 
     def test_backward_pass(self):
         model = CoinCollectorDQN()

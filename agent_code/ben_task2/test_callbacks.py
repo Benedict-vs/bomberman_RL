@@ -94,7 +94,7 @@ class CallbacksTest(unittest.TestCase):
         self.assertTrue(
             selected_actions.issubset(set(ACTIONS))
         )
-        self.assertNotIn(
+        self.assertIn(
             "BOMB",
             selected_actions,
         )
