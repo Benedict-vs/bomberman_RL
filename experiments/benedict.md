@@ -10,10 +10,19 @@ Regeln, an die ich mich halte:
   sondern eine Beobachtung. Ich committe die Vorhersage, bevor ich messe — dann
   belegt die Git-Historie die Reihenfolge.
 - **Eine Änderung pro Eintrag.** Sonst ist nicht zuzuordnen, was gewirkt hat.
-- **Commit-Hash mitschreiben.** Steht in `results/eval/<label>.meta.json`. Mit festem
-  Seed ist ein Lauf damit exakt reproduzierbar.
+- **Commit-Hash mitschreiben.** Steht in `results/eval/<label>.meta.json`, seit
+  2026-08-16 zusammen mit der vollständigen `BM_*`-Umgebung. **Ein fester Seed macht
+  einen Lauf nicht exakt reproduzierbar** — `main.py` seedet die mitgelieferten Gegner
+  nicht, und `evaluate.py` erreicht deren stdlib-`random` nicht: ~21 % der Runden
+  wiederholen sich exakt, die Mittelwerte nicht. Eine 1000-Runden-Auswertung trägt ein
+  **Rauschniveau von ±0.12 auf `score`** allein durch die Gegner (E37 §5.9).
 - **Negative Ergebnisse bleiben stehen.** Sie kommen so in den Bericht.
-- Fester Seed `20260731`, 300 Runden für jede berichtete Zahl.
+- Seeds ab Rung 4: Training `810731`, Validierung `550731`, Held-out/Ship `990731`.
+  **1000 Runden** für jede berichtete Zahl, 300 für einen Sweep-Arm, 100 für einen
+  Schnelltest. Rung 1–3 nutzten `20260731` und 300 Runden.
+- **Eine Zeile zählt nur, wenn das gepaarte 95-%-KI die Null ausschließt *und*
+  `analyze.py` sie nicht `(fragile)` markiert** — der fixe Bootstrap-Seed macht sonst
+  aus einem Münzwurf ein Urteil (E39 → E40, Audit 10).
 - **Neueste Einträge oben**, wie im Logbuch. Für den Bericht wird von unten nach oben
   gelesen — E01, E02, … ist die Reihenfolge, in der die Argumentation aufgebaut ist.
 
@@ -755,6 +764,77 @@ distribution, aggression and bombing discipline against it.
   the magnitude, which is consistent with its lower death rate, but two fields is two fields.
 - The oracle recomputes true escape distance every step; a digit could offer only a bucketed
   version. Since the oracle *loses*, that gap does not matter here.
+
+---
+
+## E45 — what did the bomb that killed us actually destroy?
+
+- **Question:** Benedict, from watching play: *"the agent still bombs when nothing is on the board —
+  maybe it should only place one when really needed."* `scratchpad/strategy/bomb_siting.py` had
+  measured the setup (71.5 % of armed steps have zero crates in range, the policy bombs on 16 % of
+  them) and E43 had measured the deaths (93.5 % are our own bomb), but nobody had **joined them**:
+  what were the bombs that killed us worth?
+
+- **Method.** `scratchpad/benedict/e45_bomb_value.py`. Roll out the shipped table at ε = 0. Tag every
+  bomb at placement with what its blast could reach — crates, opponents. On death, trace which of
+  our bombs' blasts covered the tile we died on, restricted to bombs whose fuse could still be live,
+  and report that bomb's tag. 300 rounds per field, against an external field and `rule_based`.
+
+  **Two instrument bugs, both found before the numbers were believed.** The first version blamed any
+  bomb whose blast geometry covered the death tile regardless of when it was placed; the second
+  compared placement time against `world.step` *at round end* rather than at our own death step,
+  which made every bomb look long expired and returned an absurd 0.5 % own-bomb death rate. The
+  corrected run reproduces E43's independent 93.5 % from a separate instrument, which is the check
+  that the fix is right.
+
+### Result — 300 rounds per field, ε = 0, validation seed 550731
+
+| | 3 × `binary_v6` | 3 × `rule_based` |
+|---|---|---|
+| armed steps with **0 crates in range** | 53.7 % | **72.9 %** (`bomb_siting.py`: 71.5 %) |
+| P(BOMB \| 0 crates) | 18.3 % | **18.8 %** (`bomb_siting.py`: 16 %) |
+| bombs placed per round | 21.6 | 28.0 |
+| **killed by one of our own bombs** | **93.0 %** | **93.7 %** |
+
+**The observation is confirmed and the inference from it is refuted.** Ranked by what the *killing*
+bomb reached:
+
+| crates the killing bomb reached | share of deaths | share of bombs placed | **lift** |
+|---|---|---|---|
+| **0** | 13.0 % | 32.2 % | **0.40×** |
+| 1 | 16.5 % | 14.6 % | 1.13× |
+| 2 | 18.5 % | 19.5 % | 0.95× |
+| **3+** | **52.0 %** | 33.7 % | **1.54×** |
+
+*(external field; against `rule_based` the same ranking gives 0.95× / 1.40× / 1.04× / 0.81× on a
+board where 48.8 % of bombs clear no crate at all)*
+
+**Bombs that clear nothing are the *safe* ones.** Truly worthless bombs — 0 crates *and* 0 opponents
+— cause **0.0 % / 1.2 %** of own-bomb deaths; suppressing them entirely would save ~0.007 deaths per
+round. "Bomb only when needed" would delete the harmless half and keep the killers, and pay crates
+for it.
+
+**What discriminates is escape slack.** The fuse is `BOMB_TIMER = 4`, so a bomb whose nearest safe
+tile is 4 steps away has no room for interference:
+
+| escape distance at bomb time | share of bombs | share of own-bomb deaths | lift |
+|---|---|---|---|
+| 2 | 50.5 % | 22.0 % | 0.44× |
+| 3 | 45.4 % | 49.5 % | 1.09× |
+| **4 (zero slack)** | **2.9 %** | **20.5 %** | **7.10×** |
+| **5+ (no escape at all)** | 1.3 % | 8.0 % | 6.32× |
+
+**4.2 % of bombs cause 28.5 % of own-bomb deaths.** And the `d = 4` row is *not* the feature
+`TASK_A_survey_vs_ours.md` §1.2 dismissed as a near-constant: that one is "does an escape exist",
+the `d ≥ 5` row alone, which fires on 0.92 % of armed steps. **"An escape exists but with zero
+slack" had never been measured by this project or the surveyed corpus.**
+
+### Verdict
+
+The bombing *rate* is not the deficit; the bombing *geometry* might be. E46 gates on the zero-slack
+row and settles it.
+
+---
 
 ---
 

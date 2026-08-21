@@ -29,13 +29,9 @@ construction: the greedy policy visits a few hundred rows per round. Loading it
 checks the layout sidecar, so a table trained on a different feature map fails
 loudly instead of being read at the wrong indices.
 
-**Timing.** Worst single step observed **54.4 ms** across **472 600** evaluated
-agent-rounds, against the 0.5 s per-step limit — 0 breaches, and 0 recorded
-`think_over_limit` in any evaluation. (An earlier figure of 53.4 ms / 180 000
-rounds was the E37 sweep alone; the global maximum is the number above.) Typical
-steps are far cheaper — the cost is dominated by two BFS traversals over a 17×17
-board — but the tournament reference machine is much slower than the development
-one, so the *maximum* is the number that matters.
+**Timing.** Mean decision time 0.137 ms, worst single step observed 53.4 ms
+across 180 000 evaluated rounds, against the 0.5 s per-step limit — 0 breaches.
+The cost is dominated by two BFS traversals over a 17×17 board.
 
 ## Performance
 

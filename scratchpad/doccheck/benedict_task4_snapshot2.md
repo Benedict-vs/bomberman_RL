@@ -177,13 +177,10 @@ opponent is the frequency (215 vs 182 deaths per 300 rounds) and the tightness �
 single surviving action more than doubles, 9.3 % → 23.3 %. **Strong opponents do not kill us; they
 compress our space until our own bombs do.**
 
-**E45 — the bombs that clear nothing are the *safe* ones.** Against `rule_based`, 72.9 % of armed
-steps have zero crates in blast range and the policy bombs on 18.8 % of them, so **48.8 % of its
-bombs clear no crate** (`bomb_siting.py` measured 71.5 % / 16 % on the same field). Against the
-external field that falls to 32.2 %. Either way, ranked by what the *killing* bomb reached, they are
-not what kills us: 0 crates is 32.2 % of bombs and 13.0 % of own-bomb deaths (**lift 0.40×**), while
-3+ crates is 33.7 % of bombs and **52.0 %** of deaths (**lift 1.54×**) — external field, and the
-ranking holds on `rule_based`.
+**E45 — the bombs that clear nothing are the *safe* ones.** 72.9 % of armed steps have zero crates
+in blast range and the policy bombs on 18.8 % of them, so ~45 % of bombs clear nothing. But ranked
+by what the *killing* bomb reached: 0 crates is 32.2 % of bombs and 13.0 % of own-bomb deaths
+(**lift 0.40×**), while 3+ crates is 33.7 % of bombs and **52.0 %** of deaths (**lift 1.54×**).
 Bombing "only when needed" would delete the harmless half and keep the killers. What discriminates
 is **escape slack**: bombs whose nearest safe tile is 4+ steps away (the fuse is 4) are **4.2 % of
 bombs and 28.5 % of own-bomb deaths, a ~7× lift** — and that is *not* the near-constant "is BOMB
@@ -226,9 +223,7 @@ or measurement artefact, and three other agents are further ahead than Atom was.
 p < 0.0001): **−1.008** vs `binary_v6`, **−0.797** vs `bindist_v2`, **−0.544** vs
 `feature_is_everything`, **+0.912** vs Atom.
 
-**What collapses is our survival, not our bomb siting** — note this is a statement about *our*
-deficit, not about their advantage: E47 found their suicides are only halved (0.377 against our
-0.505), so **their** edge is not survival either. Against a strong field our crates/bomb *rises*
+**The mechanism is survival, not siting.** Against a strong field our crates/bomb *rises*
 (1.18 → 1.80) while bombs fall (28.3 → 19.6), because survival collapses **0.440 → 0.223** and
 deaths to opponents' bombs rise **2.5×**. And the kill deficit splits two ways: they *enlarge* the
 takeable pool 57 % (`rule_based` dies 2.146 times a round against them, 1.822 against us) **and**
@@ -278,7 +273,7 @@ cohort — the only two SS2026 forks found are bare framework with no trained ag
 8. **A row that "carries value" is not a row training touched.** Measuring the lattice split over
    rows that merely hold a warm-start value returns **+0.45 on a control whose digit 8 is pinned** —
    a table that cannot encode the lattice at all.
-9. **`tools/evaluate.py:259` undercounts `killed_by_opponent`.** `died − suicides` misses deaths
+9. **`tools/evaluate.py:258` undercounts `killed_by_opponent`.** `died − suicides` misses deaths
    where own and enemy blasts overlap, and the undercount scales with bombs placed. Audit 10
    measured the excess directly: **16 % of deaths in the `rule_based` field are double-credited, and
    exactly 0 % against `peaceful`** — so `suicides` is not the same statistic across fields and must
@@ -371,14 +366,11 @@ uv run python tools/evaluate.py --agents benedict_task4 --opponents rule_based \
 # each, and scratchpad/external/install/INSTALL.md the fixes needed to load them.
 ```
 
-Reproducing **E24–E38** requires checking out the commit that ran them. Their arm switches
-(`BM_ABLATE`, `BM_HUNT`, `BM_OPPDIST`, `BM_D8`, …) were removed from `callbacks.py` when the winning
-configuration became the default, and the submission cleanup removed the rest from `train.py`:
-`BM_SHAPE` (E19), `BM_D4` (E30), `BM_ESCAPE` (E33), the `ALPHA`/`EPS` mode switches E05 and E06
-settled, and **`BM_ARM`** — which the nine `scratchpad/benedict/e3*_arms.sh` launchers set, so the
-range extends past E36 to E38. One consequence to know before re-running any sweep at HEAD:
-`RUN_NAME` no longer carries the arm, so **two arms at the same `BM_RUN_INDEX` now append into one
-training CSV** rather than two. Every one of those runs is recoverable from its
+Reproducing **E24–E36** requires checking out the commit that ran them: their arm switches
+(`BM_ABLATE`, `BM_HUNT`, `BM_OPPDIST`, `BM_D8`, …) were removed from `callbacks.py` when the
+winning configuration became the default. The same now applies to **E19, E30 and E33**: `BM_SHAPE`,
+`BM_D4` and `BM_ESCAPE` were removed from `train.py` in the submission cleanup, along with the
+`ALPHA`/`EPS` mode switches E05 and E06 settled. Every one of those runs is recoverable from its
 `.meta.json`, which records the commit and — from 2026-08-16 — the full `BM_*` environment.
 
 Evidence: `results/eval/task4_tournament/` and `results/train/task4_tournament/` (committed),

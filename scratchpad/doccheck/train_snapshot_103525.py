@@ -117,6 +117,7 @@ except ImportError:     # tools/ is not part of the submission
 
 AGENT_NAME = "benedict_task4"
 
+# E27. An environment switch because it is one of two knobs on the same quantity:
 # E27: an action-independent per-step cost moves the fixed point without changing
 # any decision. Shipped at 0; the rung-3 derivation is in benedict_task3.md.
 STEP_COST = float(os.environ.get("BM_STEP_COST", 0))
@@ -208,15 +209,6 @@ RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 OUTPUT_FILE = MODEL_FILE if os.environ.get("BM_MODEL_SUFFIX") else os.path.join(
     os.path.dirname(MODEL_FILE), "q_table_trained.npy")
 
-# Warm-start parents live in `checkpoints/<agent>/`, never beside this file --
-# the submission zip is this folder, and 700 MB of checkpoints next to
-# callbacks.py was a submission accident waiting to happen. Anchored here rather
-# than to `MODEL_FILE`'s directory, which is `checkpoints/` only when
-# BM_MODEL_SUFFIX happens to be set: without this, --train with no environment
-# variables looked for the parent inside the agent folder and died.
-CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir,
-                              "checkpoints", AGENT_NAME)
-
 
 def setup_training(self):
     """Called once before the first round, after `setup` in callbacks.py."""
@@ -299,17 +291,12 @@ def save_table(self) -> None:
 
 
 def checkpoint_file(episode: int) -> str:
-    """`checkpoints/<agent>/q_table<suffix>__ep<N>.npy` -- exactly the path that
+    """`q_table<suffix>__ep<N>.npy` -- exactly the path that
     `BM_MODEL_SUFFIX=<suffix>__ep<N>` resolves to, so a checkpoint is evaluated
     by setting that one variable and `callbacks.py` needs no special case.
-
-    Always under `checkpoints/`, never beside this file: the submission zip is
-    this folder, and intermediate checkpoints landing in it is exactly the
-    accident the 700 MB of rung-2 tables were moved out of it to avoid.
     """
 
-    base, ext = os.path.splitext(os.path.join(CHECKPOINT_DIR,
-                                              os.path.basename(OUTPUT_FILE)))
+    base, ext = os.path.splitext(OUTPUT_FILE)
     return f"{base}__ep{episode}{ext}"
 
 
@@ -428,7 +415,8 @@ def warm_start(self) -> None:
     for nothing.
     """
 
-    coarse_file = os.path.join(CHECKPOINT_DIR, f"q_table{WARM_SUFFIX}.npy")
+    coarse_file = os.path.join(os.path.dirname(MODEL_FILE),
+                               f"q_table{WARM_SUFFIX}.npy")
     coarse = np.load(coarse_file)
     factor, remainder = divmod(N_STATES, len(coarse))
     if remainder:
