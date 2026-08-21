@@ -101,9 +101,102 @@ confirmed at **1000 rounds on the held-out ship seed 990731**. Selection never t
 criterion, this is the cheapest untested lever on the `NEXT_STEPS.md` list, and it is the only one
 whose prior effect size on this project (+0.93, E27) exceeds the gap we are trying to close.
 
-### Result
+### Result — 3 arms x 8 seeds x 2 fields, 300 rounds, validation seed 550731
 
-*(pending — training launched 2026-08-20)*
+24 runs, ~7 h at 5 lanes. Arm assignments verified from each run's live `hyperparams.rewards`,
+not from the launcher. No collapsed seeds — training bands are tight within every arm
+(C 2.13-2.31, D 2.79-3.12, CD 2.11-2.40). Tables in `scratchpad/benedict/e48/RESULTS.md`.
+
+**Guard field, 3 x `rule_based`** (cell means on `score`: ctl **3.832**, C **2.042**, D **3.929**,
+CD **2.273**):
+
+| vs control | **C** (crate 0.25) | **D** (no death price) | CD |
+|---|---|---|---|
+| **score** | **−1.789 [−2.061, −1.501]** | **+0.097 [−0.030, +0.221]** | −1.558 |
+| coins | −1.333 | +0.050 | −1.165 |
+| kills | −0.091 | +0.010 | −0.079 |
+| **crates** | **−17.735** | −0.035 | −16.235 |
+| coins/crate | +0.010 | +0.002 | +0.011 |
+| suicides | −0.178 | **+0.010** | −0.150 |
+| survived | +0.160 | −0.020 | +0.122 |
+
+Held-out `bindist_v2` reproduces it: C −2.228, CD −2.162, **D +0.000 [−0.162, +0.155]**.
+
+**P1 REFUTED, and by five times the bar in the wrong direction.** I predicted arm C would clear
++0.35; it delivers **−1.789**. The pre-registered refutation clause was that the E47 coins/crate gap
+would then be *"a consequence of their better play, not a cause of ours"* — and that is what the
+mechanism says.
+
+**Why it failed, and my reasoning was wrong in a specific way.** I argued `CRATE_DESTROYED` is
+shaping toward a quantity that scores nothing, so paying less for it should redirect effort to
+coins. But crates are not a proxy for coins — **they are the causal step that produces them.** Cut
+the reward 4x and the agent stops bombing: crates **32.98 → 15.25**, and coins fall with them
+**2.740 → 1.407**. The shaping was not mis-weighted; it was load-bearing.
+
+**P2 FAILS as written, and the way it fails is the point.** The bar was coins/crate rising ≥ 0.020;
+it rose **+0.010 [+0.004, +0.017]** on the guard field. So arm C *did* make each crate more
+productive — half the pre-registered improvement — **and still lost 1.789 score, because it opened
+less than half as many.** Efficiency rose, throughput collapsed. **A guard I wrote to keep P1 honest
+ended up explaining P1's failure**, which is the most useful thing it could have done.
+
+*(Estimator bug, caught before the entry was written: `coins_per_crate` was first computed as the
+mean of per-round ratios, and arm C leaves many rounds with **zero** crates, so the `max(crates,
+1e-9)` guard produced values of order 1e6. The correct estimator is the ratio of totals. The
+figures above are the corrected ones.)*
+
+**P3 PASSES, emphatically, and it is the finding.** Removing the **−5 `GOT_KILLED` penalty
+entirely** changes **nothing**:
+
+| arm D vs control | guard field | held out |
+|---|---|---|
+| score | +0.097 [−0.030, +0.221] | +0.000 [−0.162, +0.155] |
+| **suicides** | **+0.010 [−0.049, +0.068]** | +0.008 [−0.014, +0.031] |
+| survived | −0.020 [−0.075, +0.035] | −0.000 [−0.019, +0.017] |
+| crates | −0.035 | −0.498 |
+| kills | +0.010 | −0.003 |
+
+The pre-registered bar was a CI lower bound above −0.35; it is **−0.030**. And it is stronger than
+"survival does not convert": the penalty **does not even buy survival**. Suicides move by 0.010 with
+a CI spanning zero, survival by −0.020, on both fields, at n = 8 per arm. Training suicides agree —
+0.82/episode for arm D against the control's 0.82-0.84.
+
+**The single largest negative term in the reward table is inert.** This is the eighth replication of
+the survival null on this rung and the first to show the *price* is not doing the work either: E46
+priced the exchange (+0.050 survival = −0.283 score); E48 shows we were not even buying the
+survival we were paying for.
+
+**P4 — the knobs are near-additive.** Interaction `(CD − C) − (D − ctl)` is **+0.133** on the guard
+field and **+0.065** held out, both small against a 0.35 MDE. Arm C dominates and arm D contributes
+nothing, in combination as in isolation.
+
+**Guards.** `crates` fell to 15.25 in arm C against a pre-registered floor of 28.0 — **breached, as
+the arm's own failure implies**. `invalid` did not rise in any arm. No table ships.
+
+### Verdict — the reward table is better calibrated than it looked, in both directions
+
+**Ship rule: nothing ships.** No arm beats the control with a CI excluding 0; C and CD are
+catastrophically worse and D is indistinguishable.
+
+Two results, and neither is the one this entry was designed to find:
+
+1. **The 5:1 coin:crate ratio is not mis-set — it is close to a cliff.** Moving it to 20:1 costs
+   1.789 score by suppressing bombing outright. E27 raised `CRATE_DESTROYED` on rung 3 and gained
+   +0.93; this entry lowers it on rung 4 and loses 1.789. **The reward is a throughput control, and
+   the current value is on the right side of it.** Whether a *higher* crate reward would help on
+   rung 4 is now the obvious open question and this design did not test it.
+2. **`GOT_KILLED = −5` can be set to 0 with no measurable effect on anything.** That is not an
+   argument for changing it — a null is not a reason to move a shipped constant — but it retires
+   the last version of "the agent needs to be taught to survive", which has motivated interventions
+   on this rung since E30.
+
+### Limitations
+
+- **One step size per knob.** 1.0 → 0.25 is a 4x cut and it fell off a cliff; 1.0 → 0.5, or
+  1.0 → 2.0, are untested and the second is the direction E27 found on rung 3.
+- The death-penalty null is measured at the *current* crate reward. Arm CD shows the two are
+  near-additive, so a joint effect is unlikely, but it is not excluded at other settings.
+- `KILLED_OPPONENT` (0) and `COIN_COLLECTED` (5) were held fixed. E35 already closed the kill price
+  at 5 and 25; the coin price has never been varied on this rung.
 
 ---
 
