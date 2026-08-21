@@ -21,6 +21,250 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E50 — the truncation bug is real, is not what the list said it was, and is not worth fixing
+
+- **Question:** `NEXT_STEPS.md` §3.5 has carried this since rung 3: *"70 % of rounds hit `MAX_STEPS`
+  and `end_of_round` treats truncation as termination with no bootstrap, worth ≈ 8.8 Q units —
+  known since rung 3, never fixed in isolation."* It is the last non-reward item on the list. Before
+  spending a sweep, characterise it.
+
+- **What it actually is.** Traced through the framework rather than inferred:
+
+  1. `agents.py:168` sets `last_game_state` inside `store_game_state`, which runs **before** `act`.
+  2. `agents.py:155-159` `process_game_events` sends
+     `game_events_occurred(last_game_state, last_action, current_state, events)` and **does not
+     update `last_game_state`**.
+  3. `agents.py:183-184` `round_ended` therefore sends `end_of_round(last_game_state, last_action,
+     events)` with **the same state and action the step update just saw**.
+  4. `environment.py:158-177` `do_step` calls `send_game_events()` and *then* `end_round()`, and
+     `environment.py:467` skips dead agents in `send_game_events`.
+
+  So the two paths differ:
+
+  | round ends by | `game_events_occurred` fires? | `end_of_round` target | correct? |
+  |---|---|---|---|
+  | **death** | **no** — the agent is dead and is skipped | `reward`, no bootstrap | **yes** — it really is terminal |
+  | **truncation / survival** | **yes**, with a correct bootstrapped target | `reward`, no bootstrap, **on the same (s, a)** | **no** |
+
+  **It is not a missing bootstrap. It is a duplicate, un-bootstrapped update applied to a cell the
+  step update had already updated correctly.** §3.5's description is wrong about the mechanism, and
+  a fix written from that description — "add a bootstrap term to `end_of_round`" — would have made
+  it *worse*, double-counting the transition with two bootstrapped targets instead of one.
+
+- **How often it fires, and §3.5's other error.** The "70 % of rounds" figure is an **evaluation**
+  number (ε = 0, survival 0.44). Training runs at ε start 0.2, where the agent almost always dies.
+  Measured over full 20 000-episode runs (`SURVIVED_ROUND` per episode):
+
+  | run | overall | last 2000 episodes |
+  |---|---|---|
+  | E48 arm C (s400) | 0.224 | 0.311 |
+  | E48 arm D (s410) | 0.115 | 0.152 |
+  | E37 `PLB2` (s100) | 0.104 | 0.158 |
+
+  A 60-episode instrumented probe on the shipped configuration returned **0 survivals in 60**, which
+  is what first exposed the discrepancy.
+
+  So the bug fires on **10-22 % of episodes**, once each, against ~155 step updates per episode:
+  **≈ 0.08-0.14 % of all Q updates.** And the affected cells are by construction the states the
+  agent occupies at `MAX_STEPS` — the stripped board, which E47 measured as worth **2.6 % of score
+  against a strong field and 10.0 % against `rule_based`**.
+
+### Verdict — closed by diagnosis, not by a sweep
+
+**The defect is real and the fix is one line, but no experiment this project can run could detect
+its effect.** 0.1 % of updates, on rows in a phase worth a few percent of the score, against an
+n = 8 MDE of 0.35. Pre-registering a sweep against it would be the fifth entry on this rung to
+target something below its own detection threshold (§5.1, E33-E36, E40's unreachable +0.25, E48's
+crate floor) — and this time the arithmetic is available *before* the run rather than from an audit
+afterwards.
+
+**Recommendation: do not change the shipped agent's training code.** The current table is the
+product of this code path; altering it invalidates the warm-start parent that E44 measured at ~2
+score, and buys an effect we have bounded at roughly nothing. **It goes in the report as a
+characterised known defect with a measured bound**, which is a better outcome than a null sweep.
+
+**What would change that:** if a future configuration raised training survival substantially — arm C
+already sits at 0.311 in its last 2000 episodes — the share grows and the calculation should be
+redone. The correct fix, for the record, is to **skip the `end_of_round` update when the agent
+survived** (`e.GOT_KILLED not in events`), not to add a bootstrap term to it.
+
+---
+
+## E49 — the other side of the cliff: value coins more, rather than crates less
+
+- **Question:** E48 established that `CRATE_DESTROYED` is a steep **throughput control** — cutting
+  it 1.0 → 0.25 collapsed crates 32.98 → 15.25 and score 3.83 → 2.04 — and that `GOT_KILLED` is
+  inert. It tested one knob in one direction. Two moves remain: raise the crate reward (E27's
+  rung-3 direction, worth +0.93 there), or raise the **coin** reward, which has never been varied
+  on this rung at all.
+
+- **A correction to my own reasoning, recorded before the design.** I first proposed raising
+  `BM_CRATE` on the strength of `corr(score, crates) = +0.937`. That correlation is **within-agent,
+  across rounds**, and the between-agent comparison says the opposite:
+
+  | vs 3 x `rule_based`, n = 1000 | our crates | opponents' | our share | score |
+  |---|---|---|---|---|
+  | shipped (3.828) | 33.28 | 89.38 | **27.1 %** | 3.828 |
+  | `binary_v6` (5.572) | **25.09** | 96.90 | **20.6 %** | **5.572** |
+
+  **The agent that beats us by 1.744 opens fewer crates than we do.** Reading a within-agent
+  correlation across agents is the ecological-correlation trap `AGENTS.md` warns about, and I nearly
+  spent a sweep on it. With E47's harvest figures (0.134 coins/crate against our 0.083) the
+  mechanism is that **they collect coins revealed by the 89 crates the *field* opens** — free-riding
+  our crate reward cannot reach. So crate throughput is not the winning axis, and the arm that
+  targets the measured deficit is the **coin** price, not the crate price.
+
+- **Change:** reward constants only, all existing environment switches.
+
+  | arm | change | ratio | tests |
+  |---|---|---|---|
+  | **ctl** | `COIN=5`, `CRATE=1.0` | 5:1 | **free** — E37 `PLB2` is this table |
+  | **K** (coin) | `BM_COIN=10` | 10:1 | harvest emphasis **without** touching the throughput control E48 showed is on a cliff |
+  | **R** (crate) | `BM_CRATE=2.0` | 2.5:1 | E27's rung-3 direction, the mirror of E48's arm C |
+  | **KR** | both | 5:1 | pure **scale** — the ratio is unchanged, so this isolates magnitude from balance |
+
+- **Design.** 8 seeds per arm (`BM_RUN_INDEX` 500-507 / 510-517 / 520-527), 20 000 episodes,
+  `--seed 810731`, warm start at default. Evaluation 300 rounds at **validation seed 550731** on
+  the `rule_based` guard field and the held-out `bindist_v2` field; the control's evaluations on
+  both already exist from E42. Identical infrastructure to E48, whose per-run cost was 1 h 23 m.
+
+- **Power.** n = 8, between-seed score SD 0.249 → 80 %-power MDE **0.35**. E48's arms moved by
+  1.5-2.2, so this design reads anything of that character easily; its risk is a *small* true effect,
+  not a large one. Bootstrap CI **and** permutation p, `(fragile)` counts as not demonstrated.
+
+### Prediction (written and committed before training starts)
+
+1. **P1, primary — arm K.** Raising the coin price beats the control on `score` on the guard field
+   by **≥ +0.35**. **My prediction: it does NOT clear.** `COIN_COLLECTED` already sits at 5 against
+   the game's own +1, so coins are over-weighted relative to true score five times over, and the
+   binding constraint on harvesting is *reaching* revealed coins, which is a pathfinding property
+   (digit 6 already prioritises coins over crates, `callbacks.py:240-245`) rather than a price.
+   **Refutation:** it clears → the coin price was the mis-set constant all along and E48 tested the
+   wrong knob.
+2. **P2 — arm R, and this one is a genuine two-sided test.** E48's arm C (crate 0.25) lost 1.789.
+   If the response is monotone in the crate reward, arm R (crate 2.0) should **gain**. If it is a
+   ridge with the current value near the peak, R should lose too. **Prediction: R loses less than
+   0.35 but does not gain** — a ridge, not a slope. **Refutation either way is informative**, which
+   is why the arm is here despite the between-agent evidence above pointing away from crates.
+3. **P3, mechanism — required for any P1 claim.** If arm K gains, **coins per crate must rise by
+   ≥ 0.010** (E48's arm C achieved exactly that while losing on throughput). A score gain in arm K
+   without a harvest-efficiency gain means the effect came from somewhere I have not identified.
+4. **P4 — scale versus balance.** Arm KR holds the 5:1 ratio and doubles the magnitude. With
+   `GAMMA = 0.99` and `STEP_COST = 0` a pure rescale should be close to a no-op for the greedy
+   policy. **Prediction: |Δscore| < 0.35.** **If KR moves, reward *magnitude* interacts with the
+   visit-count learning rate** (`α = 1/visits^0.7`), which would be a finding about the optimiser
+   rather than the reward, and would apply to every entry on this rung.
+5. **Guards.** `crates` must stay above 28.0 in arms K and KR (they do not touch the crate reward,
+   so a fall would indicate an unintended interaction); `invalid` must not rise; no collapsed seed
+   by the training-band screen.
+
+**Ship rule, pre-committed.** Unchanged from E48: an arm ships only if it beats the current ship on
+the guard field with a CI excluding 0 and a non-fragile p, does not regress by more than the MDE on
+the held-out field, and is then confirmed at 1000 rounds on the held-out ship seed 990731.
+
+**This is the last reward lever.** `KILLED_OPPONENT` was closed by E35 (5 and 25, kills moved
+−0.002), `GOT_KILLED` by E48 (inert), `CRATE_DESTROYED` downward by E48 and upward here, and
+`COIN_COLLECTED` here. Custom-event shaping is closed three separate ways: E19 (potential-based —
+and the failure is **structural**, since a row of this table buckets states with different Φ so the
+offset cannot cancel between actions), E33 and E34 (action-based, paying for the escape step the map
+already found). **If E49 does not move it, the reward table is calibrated and the remaining time
+belongs to the truncation bug, the submission and the report.**
+
+### Result — 3 arms x 8 seeds x 2 fields, 300 rounds, validation seed 550731
+
+24 runs, ~1 h 20 m each. Arms verified from live metadata (K `COIN=10/CRATE=1.0`, R
+`COIN=5/CRATE=2.0`, KR `COIN=10/CRATE=2.0`). No collapsed seeds — and unlike E48, no arm's
+training band left the control's neighbourhood (K 2.66-3.12, R 2.63-2.82, KR 2.73-2.91, ctl ~2.99),
+so the crate cliff E48 found is **one-sided**: cutting the reward is catastrophic, doubling it is
+not.
+
+**Guard field, 3 x `rule_based`** (cell means: ctl **3.832**, K **3.916**, R **3.746**, KR **3.845**):
+
+| vs control | **K** (coin 10) | **R** (crate 2.0) | **KR** (both) |
+|---|---|---|---|
+| **score** | **+0.084 [−0.067, +0.230]** | −0.085 [−0.219, +0.044] | +0.013 [−0.140, +0.164] |
+| coins | +0.053 | −0.113 | −0.077 |
+| crates | −0.522 | −0.820 | −0.610 |
+| coins/crate | **+0.003 [+0.001, +0.005]** | −0.001 | −0.001 |
+| **suicides** | −0.050 | **+0.132** | **+0.198** |
+| **survived** | +0.051 *(fragile)* | **−0.117** | **−0.192** |
+| invalid | +0.342 | +0.452 *(fragile)* | **+0.873** |
+
+Held out, `bindist_v2`: K **−0.186 [−0.377, +0.004]**, R **−0.163 [−0.289, −0.043]**,
+KR **−0.202 [−0.324, −0.089]**.
+
+**P1 REFUTED, as predicted.** Arm K moves `score` **+0.084** against a +0.35 bar, CI spanning zero,
+p = 0.32 — and **−0.186 on the held-out field**. The prediction written before the run was that it
+would not clear, because `COIN_COLLECTED` already sits at 5 against the game's own +1 and the
+binding constraint on harvesting is *reaching* revealed coins (a pathfinding property of digit 6),
+not their price. Nothing here contradicts that reading.
+
+**P2 — the ridge is confirmed, and E48's cliff is one-sided.** Arm R loses **0.085** on the guard
+field, well inside the 0.35 bar and not significant: as predicted, *"R loses less than 0.35 but does
+not gain."* Against E48's arm C at **−1.789** for the same-sized move downward, the response is
+strongly asymmetric — **the current 5:1 sits on a plateau with a cliff below it and flat ground
+above.** Doubling the crate reward does not buy crates either: crates *fell* 0.820 on the guard
+field. The reward is not a throughput dial in the upward direction.
+
+**P3 — not triggered, and its one positive is worth recording.** P3 required a coins/crate rise of
+≥ 0.010 for any arm-K score claim; there is no score claim to support. Arm K did raise
+coins/crate **+0.003 [+0.001, +0.005]**, real but a third of the bar and a third of what E48's arm C
+achieved while losing 1.789. **Harvest efficiency responds to price; score does not follow.**
+
+**P4 PASSES on the guard field and FAILS held out.** KR holds the 5:1 ratio at double magnitude, so
+a pure rescale should be a near no-op: guard **+0.013**, comfortably inside |0.35|. But held out it
+is **−0.202 [−0.324, −0.089]**, CI excluding zero. The pre-registered consequence — *"if KR moves,
+reward magnitude interacts with the visit-count learning rate"* — is therefore live in weak form.
+With `α = 1/visits^0.7`, doubling every reward doubles every TD error while α is unchanged, so early
+updates take proportionally larger steps. **This is a finding about the optimiser, not the reward
+table**, and it applies to every entry on this rung that changed a reward magnitude. It is small
+(−0.202 against a 0.35 MDE, on one field of two) and I am recording it as a lead, not a result.
+
+**Guards: the informative failure is `invalid`.** It was pre-registered to not rise; it rises in
+every arm and significantly in KR (**+0.873** guard, **+1.028** held out), and in R held out
+(**+1.638**). Bigger rewards make the table pick illegal actions more often — consistent with the
+α interaction above. `crates` stayed above 28.0 everywhere (32.2-40.0), so that guard passes.
+
+**And the suicide result inverts E48's.** Arms R and KR *raise* suicides (+0.132, +0.198) and lower
+survival (−0.117, −0.192) on the guard field. E48 showed removing the −5 death penalty changes
+suicides by +0.010; here, raising the **crate** reward raises them by 0.132. **The agent's survival
+behaviour is controlled by what it is paid to do, not by what it is paid to avoid** — which is a
+cleaner statement of the eight-replication survival null than any entry has managed, and it comes
+from the reward table rather than from a feature.
+
+### Verdict — the reward table is calibrated; the last lever is closed
+
+**Ship rule: nothing ships.** No arm beats the control with a CI excluding 0 on the guard field, and
+all three are worse held out.
+
+Across E48 and E49 the table has now been probed in four directions from its operating point:
+
+| knob | direction | result |
+|---|---|---|
+| `CRATE_DESTROYED` | 1.0 → 0.25 | **−1.789** (E48) — a cliff |
+| `CRATE_DESTROYED` | 1.0 → 2.0 | −0.085 — flat, and costs survival |
+| `COIN_COLLECTED` | 5 → 10 | +0.084 guard, −0.186 held out |
+| `GOT_KILLED` | −5 → 0 | **inert** (E48) — +0.097, suicides +0.010 |
+| both, scale | x2 | +0.013 guard, **−0.202 held out** — an optimiser artefact |
+
+**`COIN_COLLECTED = 5`, `CRATE_DESTROYED = 1.0`, `GOT_KILLED = −5`, `KILLED_OPPONENT = 0` is at or
+adjacent to a local optimum**, and the one direction that is not flat is the one that falls off a
+cliff. Combined with E35 (kill price, closed), E19/E33/E34 (shaping, closed three ways) and E50 (the
+truncation defect, bounded at ~0.1 % of updates), **the reward table is done.**
+
+### Limitations
+
+- **Local, not global.** Four one-dimensional moves from one point. A jointly re-derived table
+  (Bayesian optimisation over four knobs, ~100 runs) is the thing this cannot rule out, and it is
+  not affordable in the remaining time.
+- **One step size per direction**, and E48 showed step size matters enormously downward. A 1.0 → 0.5
+  crate arm might sit between the cliff and the plateau; nothing here locates the edge.
+- The P4 optimiser interaction is a lead on one field with n = 8, not a result. Testing it properly
+  means varying `ALPHA_EXP` or `WARM_N` against a fixed reward scale, which is an experiment about
+  the learner, not the rewards.
+
+---
+
 ## E48 — the reward table has never been calibrated for rung 4
 
 - **Question:** the reward scale was derived on **rung 3** (E27, worth **+0.93 score and +11.5
