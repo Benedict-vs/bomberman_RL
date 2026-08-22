@@ -29,13 +29,18 @@ construction: the greedy policy visits a few hundred rows per round. Loading it
 checks the layout sidecar, so a table trained on a different feature map fails
 loudly instead of being read at the wrong indices.
 
-**Timing.** Worst single step observed **54.4 ms** across **472 600** evaluated
-agent-rounds, against the 0.5 s per-step limit — 0 breaches, and 0 recorded
-`think_over_limit` in any evaluation. (An earlier figure of 53.4 ms / 180 000
-rounds was the E37 sweep alone; the global maximum is the number above.) Typical
-steps are far cheaper — the cost is dominated by two BFS traversals over a 17×17
-board — but the tournament reference machine is much slower than the development
-one, so the *maximum* is the number that matters.
+**Timing.** Mean **0.110 ms per decision**, step-weighted over **125.6 million
+decisions** in 472 600 evaluated agent-rounds; worst single decision **54.4 ms**;
+**0** steps over the 0.5 s limit. The distribution is tight — the 99th-percentile
+*worst step within a round* is 2.67 ms, so the 54.4 ms outlier is one decision in
+125 million. Cost is dominated by two BFS traversals over a 17×17 board.
+
+Measured on the development machine. In the provided Docker image the worst step
+was 9.33 ms; the tournament reference (one thread of a Ryzen 5 2600) is slower
+again, so budget the *maximum*, not the mean — it still clears 0.5 s by an order
+of magnitude. (An earlier figure of 0.137 ms / 53.4 ms across 180 000 rounds was
+the E37 sweep alone and was not reproducible; the numbers above are
+step-weighted across every committed evaluation.)
 
 ## Performance
 
