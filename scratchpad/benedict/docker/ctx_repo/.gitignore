@@ -1,0 +1,218 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# .python-version is committed on purpose — uv pins the team's interpreter with it
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+
+.idea
+/models
+screenshots/*.png
+screenshots/*.mp4
+screenshots/*.webm
+
+replays/
+
+# Measurements are the evidence for the report's Experiments chapter and are
+# small text files -- they stay versioned. Training logs in particular cannot be
+# reproduced: --seed fixes the arenas, not the agent's exploration RNG.
+# Figures are pure functions of the CSVs, so they are not worth versioning.
+results/figures/
+
+# Rung-2 training logs. Committed up to 29e56be, then removed: a 100 000-episode
+# sweep is ~140 MB and they are reproducible from the commit plus the BM_* arm
+# variables (E12 verified this by rerunning a sweep to identical results). The
+# evaluations -- 35 KB each, and the actual evidence -- stay versioned.
+# `results/train_local/` is the untracked archive of what was removed.
+results/train_local/
+results/train/task2_crates/*.csv
+results/train/task2_crates/*.meta.json
+results/train/task3_opponents/*.csv
+results/train/task3_opponents/*.meta.json
+
+final_project.pdf
+
+# stdout of parallel training sweeps; the training CSV is the record
+logs/*.out
+
+# scratchpad/<person>/ holds dev-only helper scripts (table dumps, policy replays).
+# Not part of the submission, but they produce numbers that end up in the report,
+# so they are versioned.
+#
+# Q-table snapshots are not: every trained table is already in the history as
+# agent_code/<agent>/q_table.npy at the commit that produced it. Recover one with
+#   git show <commit>:agent_code/<agent>/q_table.npy > scratchpad/<person>/models/q_vN.npy
+scratchpad/*/models/
+
+scratchpad/deaths/*.pkl
+
+# Third-party agents pulled from GitHub so the agent can be measured against a
+# field that is not rule_based_agent (final_project.pdf p.2 explicitly sanctions
+# downloading other teams' agents to test against). Never committed:
+#   - 1.8 GB across 25 clones, each carrying its own .git, so staging them makes
+#     broken gitlinks rather than files;
+#   - 21 of the 25 ship no LICENSE, so we have no right to redistribute them.
+# They are an *input* to a measurement, not evidence. What we commit is the URL
+# and commit hash of each in FINDINGS.md, plus the eval CSVs those runs produce.
+scratchpad/external/*/
+!scratchpad/external/FINDINGS.md
+!scratchpad/external/install/
+
+# Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The real model is
+# q_table.npy and stays versioned; these are scratch and must never end up in
+# the submitted agent folder.
+agent_code/*/q_table_*.npy
+
+# Third-party agents installed under agent_code/ so the framework's loader can find
+# them (agents.py:204 imports agent_code.<name>.callbacks). Never committed, for the
+# same two reasons as scratchpad/external/: 20 of the 24 source repos carry no LICENSE,
+# and the submission zip is built from agent_code/<ours>/ -- a third-party folder
+# sitting beside it is exactly the accident checkpoints/ was moved out of that
+# directory to avoid. Reproduce with the repo URL + commit hash recorded in
+# scratchpad/external/FINDINGS.md and scratchpad/external/install/INSTALL.md.
+agent_code/ext_*/
+
+# Where those per-run tables now live. The submission is a zip of
+# agent_code/<agent>/, so 700 MB of checkpoints sitting beside callbacks.py was
+# a submission accident waiting to happen -- they are out of that folder
+# entirely rather than merely ignored. Reproducible from the commit plus the
+# BM_* variables in each run's .meta.json, so they are never versioned.
+checkpoints/*
+!checkpoints/benedict_task2/
+checkpoints/benedict_task2/*
+# ...with one exception. The shipped table is warm-started from this 12 800-row
+# parent, and the parent belongs to the *pre-E20* feature map, so it cannot be
+# retrained at HEAD -- without it in the repo, `q_table.npy` is not reproducible
+# from a clone at all. 614 KB, and it is an input to the submitted model.
+!checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy
+# ...and its layout sidecar, without which warm_start can only warn that the
+# append-only assumption is unchecked instead of enforcing it.
+!checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy.layout.json
+
+# Same exception for the rung-4 parent, and for a stronger reason: the claim
+# above that checkpoints are "reproducible from the commit plus the BM_*
+# variables" is FALSE from rung 3 on. main.py does not seed the provided
+# opponents (AGENTS.md), and audit 5 established that no E30-E33 run passed
+# --seed either, so two runs of the same command give different tables -- E31's
+# suicide rate is bimodal across replications of an identical configuration.
+# This file is therefore an *input* to the submitted agent, not an output of a
+# recorded command: agent_code/benedict_task4/q_table.npy is a byte-identical
+# copy of it (E33 arm ctl, seed 104, 20 000 episodes; selected on validation
+# seed 550731 at won 0.382 and confirmed on ship seed 990731 at 0.372).
+!checkpoints/benedict_task4/
+checkpoints/benedict_task4/*
+!checkpoints/benedict_task4/q_table_e33_ctl_s104__ep20000.npy
+
+# E37 replaced the above as the shipped table, and needs two files for the same
+# reason. The checkpoint is what agent_code/benedict_task4/q_table.npy is a
+# byte-identical copy of (arm PLB2, seed 106, 20 000 episodes; selected on
+# validation seed 550731 and confirmed on ship seed 990731 at score 3.949 /
+# won 0.406, paired +0.255 [+0.039, +0.475] against the E33 table above).
+# The parent is the warm start train.py loads by default, so without it a
+# training run at the documented defaults starts from a different initial
+# condition than the shipped table did -- which is exactly the confound audit 8
+# found in E36.
+!checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy
+!checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy.layout.json
+!checkpoints/benedict_task4/q_table_parent.npy
+!checkpoints/benedict_task4/q_table_parent.npy.layout.json
+
+# macOS
+.DS_Store
