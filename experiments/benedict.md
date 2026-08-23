@@ -30,6 +30,136 @@ Urteil: **BESSER** · **SCHLECHTER** · **nicht gezeigt** (KI enthält die Null)
 
 ---
 
+## E51 — veto the blunder, not the bomb: a certain-death move filter
+
+- **Question.** E43 traced every death to the last step at which some action still survived and
+  found that in **76.7 %** of them **two or more surviving actions existed**. That is a *policy*
+  failure inside states the feature map already describes, not a representation gap — and fourteen
+  of the fifteen interventions on this rung tried to fix it by changing what the table *learns*.
+  This one does not touch the table at all: it removes provably fatal moves from the argmax at
+  inference, on the shipped E37 table, unchanged.
+
+  **It is the counterpart to E46, and deliberately its mirror image.** E46 vetoed the *bomb* when
+  the escape had no slack: it cut suicides −0.131 and survival +0.050 exactly as designed and cost
+  **−0.283 score**, entirely through coins, because the zero-slack bombs are simultaneously the
+  most lethal and the most productive — a bomb in a dense pocket has a contained blast and a tight
+  escape for the same geometric reason. **This filter never vetoes BOMB.** It keeps the productive
+  bomb and forbids the fumbled escape instead, which is the one route to the same survival that
+  cannot pay for it in crates.
+
+- **The contradiction this is built to resolve.** Two slopes relating survival to score are on
+  record and they have opposite signs:
+
+  | source | slope | measured how |
+  |---|---|---|
+  | E46, causal, within field | **−5.7** score per unit survival | +0.050 survival bought, −0.283 score paid |
+  | E41 §6, correlational, across fields | **+9.4** score per unit survival | 3.828 @ 0.440 vs 2.611 @ 0.310 |
+
+  Eight replications say survival does not convert into points — **and all eight were run against
+  `rule_based`, the field E41 showed to be the one where survival is not binding** (we reach step
+  200 there anyway). Against `binary_v6` survival collapses 0.440 → 0.223 and E41 reversed the
+  conclusion. Because this intervention buys survival with the crate route closed *by construction*,
+  it separates the two slopes more cleanly than anything run on this rung.
+
+- **Change.** `agent_code/benedict_task4/callbacks.py` only; `train.py` is untouched and nothing is
+  retrained. One environment switch, `BM_DEATH_FILTER`, default off:
+
+  | mode | behaviour |
+  |---|---|
+  | unset / `0` | the shipped policy, byte for byte — the control |
+  | `step` | veto moves that are lethal at the **end of this step** only |
+  | `1` | veto moves after which **no continuation survives** the bombs already visible |
+
+  Mode `1` runs the same time-aware BFS as `escape_direction`, from the tile the action lands on,
+  and asks whether any tile outside every blast is reachable in time. Three details that are
+  decisions, not implementation:
+
+  1. **BOMB is never in the mask.** This is the whole difference from E46 and is an invariant of the
+     file, not an accident of the code path.
+  2. **Only bombs and fire visible *now* are modelled** — no opponent pessimism. E43 puts "enemy
+     bomb placed after we committed" at **2.3 %** of deaths, so modelling it would buy 2.3 % and pay
+     for it in conservatism on every step.
+  3. **A blocked direction is scored as WAIT**, because `environment.py:121-126` leaves the agent
+     where it is; scoring it on a tile it never reaches would veto the wrong action.
+
+  When every action is vetoed the filter stands aside and the unfiltered row decides, so the agent
+  is never worse off than the control in a hopeless position.
+
+- **Design.** 3 arms × 2 fields, **n = 4000** paired arenas each, held-out ship seed **990731**.
+  Primary field **3 × `ext_xiaoxiae_binary_v6`** (external, per E41 — the strongest agent measured
+  and the one against which survival is binding); secondary **3 × `rule_based_agent`**, the field
+  every earlier conclusion on this rung was drawn on.
+
+- **Power and reachability, stated before the bar.** At n = 4000 the realised SE on `score` is
+  ~0.06 (E40), so the 80 %-power MDE is **~0.17**. The control dies by its own bomb 0.552 times a
+  round on the external field, and E45 puts bombs with *no escape at all* at 8.0 % of own-bomb
+  deaths — the filter cannot save those, since it never vetoes BOMB. So **~0.51 suicides/round are
+  addressable.** Converting even half of that is ±1.4 score at E46's slope or +2.4 at E41's. **Both
+  hypotheses predict effects far above the MDE, in opposite directions**, so this design cannot
+  return an uninformative null for want of power — which is the failure mode audit 11 caught in E40.
+
+- **Disclosure — what I looked at before writing this.** Eight hand-checked cases on synthetic
+  boards (all pass, including two that caught *my* errors rather than the code's: the arena has free
+  tiles at (odd, even) so a bare row is not a corridor, and at `t = 4` a wasted step is still
+  survivable — the filter correctly vetoes nothing there). A 60-round solo-board regression
+  confirming the filter-off path is **identical on all 18 behavioural columns, 60/60 rounds**, so
+  the control is the shipped agent and not a re-implementation of it. A 30-round smoke run of all
+  three modes on the primary field in which **only the think-time columns were read** — mean 0.064 →
+  0.097 ms, worst round-max 0.59 ms, zero steps over the limit. No outcome column has been read in
+  any mode. The direction of this prediction is therefore not informed by data, unlike E46's.
+
+### Prediction (written and committed before the n = 4000 run)
+
+1. **P1, primary.** On the **external** field the `1` arm beats the control on **`score`** by
+   **≥ +0.25**, CI excluding 0 and a non-fragile permutation p.
+   **Refutation:** below +0.25 → survival bought this cheaply still does not pay, E46's slope
+   generalises beyond bomb-gating, and the pre-committed consequence is that **the action filter is
+   demoted in the CNN plan from a load-bearing component to a training-time safety rail** — it would
+   then be justified only by what it does for exploration, and must be re-argued on that ground.
+2. **P2, mechanism — this must hold or P1 is a coincidence.** `suicides` on the external field fall
+   by **≥ 0.25** (from 0.552) and `survived` rises. The filter is *designed* to make own-bomb death
+   nearly impossible; if suicides move by less, something defeats it systematically — opponents
+   blocking the escape, which the static-world model does not see — and that, not P1, is the finding.
+3. **P3, the internal control.** The `step` arm is **near-inert**: |Δscore| < 0.17 and
+   |Δsuicides| < 0.05. Digits 1-4 already carry exactly this as `NB_LETHAL`, so a trained table
+   should almost never walk into a blast that lands the same step. **If the shallow arm moves
+   substantially, the table is far worse at using its own features than E37 claims, and P1 can no
+   longer be attributed to the lookahead** — the whole effect would then be one digit the policy
+   ignores.
+4. **P4, the cost — E46's failure route, closed by construction and checked anyway.** `bombs` per
+   round stay within **±0.5** of the control and `crates` do not fall by more than 1.0. BOMB is never
+   vetoed, so a drop means the filter is suppressing bombing *indirectly* by keeping the agent out
+   of the pockets where bombs pay, and E46's cost has reopened by another door.
+5. **P5, the field split.** Δscore is **larger on the external field than on `rule_based`**. E41 says
+   survival is non-binding against `rule_based`; this is the direct test. **If the ordering reverses,
+   "survival is non-binding against `rule_based`" is wrong and the eight survival nulls need
+   revisiting** — which would be a bigger result than P1.
+6. **Guards.** The control arm must reproduce the known held-out numbers within the ±0.12 noise
+   floor: **2.611** external, **3.949** `rule_based`. `think_over_limit` must be 0 in all six runs.
+   Any arm failing a guard voids the comparison rather than being explained.
+
+### Run
+
+```bash
+# three arms x two fields, n = 4000, held-out ship seed 990731
+for MODE in 0 step 1; do
+  BM_DEATH_FILTER=$MODE BM_QUIET_LOGS=1 uv run python tools/evaluate.py \
+    --agents benedict_task4 ext_xiaoxiae_binary_v6 ext_xiaoxiae_binary_v6 ext_xiaoxiae_binary_v6 \
+    --n-rounds 4000 --seed 990731 --out-dir results/eval/task4_tournament \
+    --label benedict_q_e51_${MODE}__task4_ext_xiaoxiae_binary_v6_ship990731
+  BM_DEATH_FILTER=$MODE BM_QUIET_LOGS=1 uv run python tools/evaluate.py \
+    --agents benedict_task4 --opponents rule_based \
+    --n-rounds 4000 --seed 990731 --out-dir results/eval/task4_tournament \
+    --label benedict_q_e51_${MODE}__task4_rb_ship990731
+done
+```
+
+### Result
+
+*(to be filled in after the run — commit hash from the `.meta.json`)*
+
+---
+
 ## E50 — the truncation bug is real, is not what the list said it was, and is not worth fixing
 
 - **Question:** `NEXT_STEPS.md` §3.5 has carried this since rung 3: *"70 % of rounds hit `MAX_STEPS`

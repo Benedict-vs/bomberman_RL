@@ -65,6 +65,45 @@ MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path
 # at 0, so a wider band changes behaviour without protecting against anything.
 TIE_TOL = 0.0
 
+# E51 -- the certain-death move filter. **Off unless BM_DEATH_FILTER is set**,
+# so with the variable unset this file is byte-for-byte the shipped E37 policy
+# and the tournament never takes any branch below. That also makes the control
+# arm of the experiment free: it is this same file with the variable unset.
+#
+#   unset / "0"   off  -- shipped behaviour
+#   "step"        veto moves that are lethal at the end of *this* step only.
+#                 Shallow control arm: digits 1-4 already carry exactly this
+#                 as NB_LETHAL, so a learned table should make it near-inert.
+#   "1"           veto moves after which *no* continuation survives the bombs
+#                 already on the board -- the arm.
+#
+# **BOMB is never vetoed, in any mode.** E46 gated bomb *placement* on escape
+# slack, cut suicides -0.131 exactly as designed, and cost -0.283 score: the
+# zero-slack bombs are simultaneously the most lethal and the most productive,
+# because a bomb in a dense pocket has a contained blast and a tight escape for
+# the same geometric reason. This filter leaves the bomb alone and fixes the
+# escape instead. Keeping BOMB out of the mask is the whole difference between
+# the two interventions, so it is an invariant of this file, not an accident.
+#
+# Only bombs and explosions that are *visible now* are modelled. E43 traced
+# every death to the last step at which some action still survived: an enemy
+# bomb placed after we committed accounts for 2.3 % of deaths, so assuming
+# opponents may bomb would buy 2.3 % and pay for it in conservatism everywhere.
+DEATH_FILTER_OFF = 0
+DEATH_FILTER_STEP = 1
+DEATH_FILTER_FULL = 2
+
+_FILTER_MODES = {"": DEATH_FILTER_OFF, "0": DEATH_FILTER_OFF,
+                 "step": DEATH_FILTER_STEP, "1": DEATH_FILTER_FULL}
+_filter_env = os.environ.get("BM_DEATH_FILTER", "0").strip().lower()
+if _filter_env not in _FILTER_MODES:
+    # Fail loudly rather than silently evaluating the control arm under the
+    # arm's label -- the E18 mistake, which cost ten evaluations.
+    raise ValueError(
+        f"BM_DEATH_FILTER={_filter_env!r} is not one of {sorted(_FILTER_MODES)}"
+    )
+DEATH_FILTER = _FILTER_MODES[_filter_env]
+
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 # (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
@@ -410,6 +449,98 @@ def encode(features: tuple[int, ...]) -> int:
     return idx
 
 
+def survives(x: int, y: int, arrival: int, field: np.ndarray,
+             danger: np.ndarray, occupied: set, lookahead: bool) -> bool:
+    """Can the agent be alive on (x, y) at the end of step `arrival`, and stay alive?
+
+    Same time model as `escape_direction`, and deliberately the same
+    approximation: a node's `arrival` is the step at the end of which the agent
+    stands on it, and a tile whose blast lands at or before then is fatal. That
+    prunes a blast tile for *every* step from its timer onwards, which also
+    covers the step the explosion lingers (`EXPLOSION_TIMER = 2` is one lethal
+    step plus one more -- `environment.py:200-210` counts the explosion down
+    only after the agents have moved, so a tile burns at the end of two
+    consecutive steps). It over-prunes by one step, never under-prunes, which is
+    the side a death filter has to err on.
+
+    `lookahead=False` answers only "does the agent survive this step", which is
+    the shallow arm.
+    """
+
+    if danger[x, y] <= arrival:
+        return False                    # the blast is here at or before arrival
+    if not lookahead or danger[x, y] >= SAFE:
+        return True                     # no blast reaches this tile at all
+
+    # Standing still is never useful here: `danger` only ever counts down, so a
+    # tile that is doomed at step t is doomed for good and waiting on it just
+    # spends the grace. Hence the search moves every step and needs no WAIT edge.
+    queue = [((x, y), arrival)]
+    visited = {(x, y)}
+    head = 0
+
+    while head < len(queue):
+        (cx, cy), step = queue[head]
+        head += 1
+
+        # Every bomb on the board has gone off by then, so a tile still unsafe
+        # at this depth cannot be made safe by walking further -- the same bound
+        # `escape_direction` uses, ~60 tiles.
+        if step >= SAFE:
+            continue
+
+        for dx, dy in DELTAS:
+            nx, ny = cx + dx, cy + dy
+            if (nx, ny) in visited:
+                continue
+            if field[nx, ny] != 0 or (nx, ny) in occupied:
+                continue
+            if danger[nx, ny] <= step + 1:
+                continue
+            if danger[nx, ny] >= SAFE:
+                return True
+            visited.add((nx, ny))
+            queue.append(((nx, ny), step + 1))
+
+    return False
+
+
+def death_filter_mask(game_state: dict) -> np.ndarray:
+    """Which actions are certain death? One bool per entry of `ACTIONS`.
+
+    `BOMB` is never marked; see the `DEATH_FILTER` comment for why that is the
+    point of the whole filter rather than an omission.
+    """
+
+    veto = np.zeros(len(ACTIONS), dtype=bool)
+
+    # The overwhelmingly common case, and the reason this costs nothing on
+    # average: with no bomb and no fire on the board nothing can be vetoed.
+    if not game_state['bombs'] and not game_state['explosion_map'].any():
+        return veto
+
+    field = game_state['field']
+    x, y = game_state['self'][3]
+    danger = danger_map(game_state)
+    occupied = {pos for pos, _ in game_state['bombs']}
+    occupied.update(other[3] for other in game_state['others'])
+    lookahead = DEATH_FILTER == DEATH_FILTER_FULL
+
+    for action_idx, (dx, dy) in enumerate(DELTAS):
+        nx, ny = x + dx, y + dy
+        if field[nx, ny] != 0 or (nx, ny) in occupied:
+            # `environment.py:121-126`: a move into a wall, crate, bomb or agent
+            # leaves the agent standing where it is. Its survival is therefore
+            # WAIT's, not the target tile's -- scoring it on the tile the agent
+            # never reaches would veto the wrong action.
+            nx, ny = x, y
+        veto[action_idx] = not survives(nx, ny, 0, field, danger, occupied, lookahead)
+
+    veto[ACTIONS.index('WAIT')] = not survives(x, y, 0, field, danger, occupied,
+                                               lookahead)
+    return veto
+
+
 def setup(self):
     """Called once before a set of games to initialize data structures."""
 
@@ -446,11 +577,24 @@ def act(self, game_state: dict) -> str:
 
     state = state_to_features(game_state)
 
+    # E51. `veto.all()` means every move is fatal and BOMB is not worth taking
+    # either -- there is nothing to choose between, so the filter stands aside
+    # and the unfiltered row decides, exactly as the shipped agent would. The
+    # filter must never be the reason an action is picked from an empty set.
+    veto = death_filter_mask(game_state) if DEATH_FILTER else None
+    if veto is not None and veto.all():
+        veto = None
+
     # self.eps and self.rng are set in train.py. Outside training the policy is
     # greedy, so the tournament never reaches either -- which is what keeps the
-    # agent working when train.py is not imported at all.
+    # agent working when train.py is not imported at all. E51 evaluates a frozen
+    # table at eps = 0 and so never takes this branch; the filter is applied to
+    # it anyway, because "explore only among actions that are not suicide" is
+    # the semantics any later training run would want, and leaving the branch
+    # inconsistent with the greedy one is how that goes wrong unnoticed.
     if self.train and self.rng.random() < self.eps:
-        return ACTIONS[int(self.rng.integers(len(ACTIONS)))]
+        legal = np.arange(len(ACTIONS)) if veto is None else np.flatnonzero(~veto)
+        return ACTIONS[int(self.rng.choice(legal))]
 
     # Break ties at random rather than by action order. A converged table rarely
     # ties, but an argmax that always resolves to the same action turns a
@@ -464,5 +608,9 @@ def act(self, game_state: dict) -> str:
     # never fires in practice: the rows that absorb a collapsed policy sit at
     # margins of 1e-4 to 1e-2, never at 0.
     q_row = self.q[state]
+    if veto is not None:
+        # -inf rather than a large negative: it survives the TIE_TOL band and
+        # can never be picked up by the tie-break below.
+        q_row = np.where(veto, -np.inf, q_row)
     best = np.flatnonzero(q_row >= q_row.max() - TIE_TOL)
     return ACTIONS[int(best[0] if best.size == 1 else self.policy_rng.choice(best))]
