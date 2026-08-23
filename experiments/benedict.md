@@ -203,9 +203,123 @@ the measurement. Filter-off remains identical on 60/60 deterministic solo rounds
    primary field of this experiment considerably more powerful than §Power assumed and means a
    single external-field evaluation *is* reproducible, unlike a `rule_based` one.
 
-### Result
+### Result — commit `2e3f57f`, 6 arms × n = 4000, seed 990731
 
-*(to be filled in after the repaired run — commit hash from the `.meta.json`)*
+**Verdict: BESSER on `score`, on both fields, replicated — and P1 is refuted anyway, because the
+effect is a quarter of the pre-registered bar and arrives by a mechanism the prediction got wrong.**
+
+| 3 × `binary_v6`, n = 4000 | control | `step` | **`1`** | full − control |
+|---|---|---|---|---|
+| **score** | 2.778 | 2.812 | **2.877** | **+0.099 [+0.067, +0.132]**, t 5.96, p < 0.0001 |
+| `won` | 0.184 | 0.188 | 0.198 | +0.014 [+0.008, +0.020] |
+| kills | 0.121 | 0.126 | 0.132 | +0.011 [+0.006, +0.017] |
+| **suicides** | 0.540 | 0.538 | 0.532 | **−0.008 [−0.015, +0.000]** — not demonstrated |
+| **killed by opp.** | 0.158 | 0.151 | **0.137** | **−0.022 [−0.029, −0.015]** |
+| survived | 0.302 | 0.310 | 0.332 | +0.030 |
+| crates / bombs | 39.12 / 21.59 | 39.28 / 21.86 | 40.08 / 22.61 | +0.96 / +1.01 |
+| invalid | 2.838 | 2.874 | 3.009 | +0.171 |
+
+| 3 × `rule_based`, n = 4000 | control | `step` | **`1`** | full − control |
+|---|---|---|---|---|
+| **score** | 3.928 | 3.981 | **4.050** | **+0.121 [+0.007, +0.236]**, p = 0.042 |
+| suicides | 0.475 | 0.495 | 0.471 | −0.004 — not demonstrated |
+| killed by opp. | 0.065 | 0.052 | 0.052 | −0.013 [−0.023, −0.002] |
+
+**Predictions, scored as written:**
+
+| | prediction | outcome |
+|---|---|---|
+| **P1** | score ≥ +0.25 external | **REFUTED** — +0.099, real and non-fragile, **but 40 % of the bar** |
+| **P2** | suicides fall ≥ 0.25 | **REFUTED, 30× over** — −0.008. *This is the finding.* |
+| **P3** | `step` near-inert | **holds as written** (0.034 < 0.17 MDE; 0.002 < 0.05) — but see below |
+| **P4** | bombs within ±0.5 | **fails as written** — +1.014, in the **opposite** direction to the concern |
+| **P5** | external > `rule_based` | **REFUTED** — +0.099 vs +0.121, and the CIs overlap almost entirely |
+| **P6** | guards | **all pass** — control 2.611 exactly, 3.881 vs 3.828, 0 steps over the limit |
+
+**The mechanism is not the one the filter was built for.** Instrumented over 29 815 steps: the filter
+has something to veto on **33.6 %** of steps, stands aside as hopeless on **1.02 %**, and **changes
+the decision on 0.09 %** — 26 decisions in 150 rounds, **one every six rounds.** The shipped table
+already picks a non-vetoed action **99.91 %** of the time. The whole +0.099 is bought by ~0.17
+changed decisions per round, ≈ 0.57 score each.
+
+**And it is bought entirely on the opponents' bombs, not our own.** `killed_by` −0.022 on a base of
+0.158 is a **14 % cut**; `suicides` do not move at all. **That is the opposite split of E43's death
+census**, which put own-bomb at 93.5 % and enemy-bomb-after-commitment at 2.3 %. The filter reaches
+the small category and cannot touch the large one — **and the reason is the invariant taken from
+E46.** Own-bomb death is decided when the bomb is placed; BOMB is never vetoed; by the time the
+filter is consulted the position is already in the 1.02 % it declares hopeless, where it stands
+aside by design. **E46 and E51 now bracket the problem: you cannot fix own-bomb death by refusing to
+bomb (−0.283) and you cannot fix it by escaping better (−0.008).** That is the ninth and tenth
+independent failure to move the suicide rate, and the first pair that explains *why* — the two
+interventions are on opposite sides of a decision that has already been made.
+
+**Where the score actually comes from.** `score = coins + 5·kills` exactly: +0.043 coins + 5 × 0.011
+kills = **+0.098 of the +0.099**. Not survival converted to points — *time* converted to points. The
+agent lives longer (survived +0.030, moves +7.0), so it bombs more (+1.01), opens more crates
+(+0.96), and banks the coins and kills that follow. **This is the same route E37 won on** — output
+per round, not death avoided.
+
+**P3 passes but "near-inert" is the wrong reading.** The shallow arm is +0.034 [+0.013, +0.054],
+p = 0.0008 — statistically solid and **a third of the full effect**, from vetoing only what digits
+1–4 already encode as `NB_LETHAL`. So the table *does* walk into blasts landing the same step, just
+rarely. The lookahead contributes the remaining two thirds. It passed the pre-registered bar only
+because the bar was |Δ| < MDE and the external field turned out to have no opponent noise (§Method
+failure), which makes small effects resolvable that the design assumed were not.
+
+**P5's refutation matters more than P1's.** I predicted the filter would pay more where survival is
+binding. It pays the same on both fields (+0.099 vs +0.121, CIs overlapping), which makes this the
+second component after bomb siting (E41) to **transfer across opponents**. The rationale behind P5
+— that survival is the binding constraint against a strong field — survives as a description of the
+deficit but fails as a predictor of what interventions are worth.
+
+**P4 is a guard that fired in the wrong direction and should be re-read, not excused.** I wrote it to
+catch E46's cost route reopening — bombing suppressed indirectly. Bombs rose +1.014 and crates rose
++0.957. The guard as written fails; the failure is a consequence of living longer, not of the filter
+touching bomb policy, and `crates`/`bombs` moving *together* is what distinguishes the two.
+
+**One wart, measured rather than argued.** Of the 26 changed decisions, **9 resolve to BOMB** — when
+the filter vetoes the argmax movement, BOMB is often next in the row and is never vetoed, so it is
+the residual beneficiary. Placing a bomb does not move the agent, so if WAIT is certain death BOMB
+is certain death too. **That is not E46's intervention** (which gated productive bombs on escape
+slack from *safe* tiles) and vetoing it would not cost crates. Untested here, deliberately: it is a
+design change and this entry's design was committed. → **E52.**
+
+**What this costs.** think_mean 0.070 → 0.094 ms, worst round-max 2.4 ms in-harness, 0 steps over
+the 0.5 s limit in 24 000 rounds. Against the tournament budget, free.
+
+### What I take from it
+
+1. **The filter ships. `BM_DEATH_FILTER` now defaults to on and the Docker gate is re-run: GO.**
+   +0.099 external and +0.121 `rule_based`, both CIs excluding 0, neither fragile, on the *shipped
+   table with no retraining* — the second-largest intervention on this rung after E37's +0.255, and
+   the only one that needed no training run at all.
+   Verified before shipping: `BM_DEATH_FILTER=0` reproduces the pre-E51 agent **identically over 60
+   deterministic solo rounds**, and the new default reproduces the measured `1` arm **bit-for-bit
+   over 150 external-field rounds** — so what ships *is* what was measured, not a re-implementation
+   of it. `q_table.npy` md5 `54d63bc7…` before and after everything; E51 trained nothing.
+   Gate (`scratchpad/benedict/docker/REPORT_E51.md`): the zip runs from a pristine upstream checkout,
+   loads the table (confirmed from the agent's own in-container log), reports `DEATH_FILTER = 2`
+   with no environment variables, and times **max 2.588 ms at `--cpus=1`, 0 over the limit, 193×
+   headroom** — the tail is not worse for having the filter (the previous gate's worst was 9.33 ms).
+   `--train` still fails loudly without the warm parent and still cannot overwrite `q_table.npy`.
+2. **The pre-committed P1 consequence fires.** In the CNN plan the action filter drops from a
+   load-bearing component to a **training-time safety rail**. Its value at inference is +0.099 on a
+   1.6-point gap — 6 %. It must now be justified by what it does for exploration during PPO, which
+   is a different claim needing its own evidence, and **not** by the inference-time number.
+3. **Stop buying survival; the account is closed twice over.** Ten independent failures to move
+   `suicides`, now including one intervention from each side of the bomb decision. Any future
+   proposal to reduce own-bomb death must first say why it is not E46 and not E51.
+4. **E52 is specified, was costed, and is not worth running.** Veto BOMB when WAIT is vetoed —
+   standing still being certain death, and placing a bomb not moving the agent — is disjoint from
+   E46's gate. **Its addressable population was measured before committing a sweep to it** (400
+   rounds, shipped config): WAIT is certain death on 14.81 % of steps; the agent picks BOMB in 81 of
+   those, 0.203 per round; but **65 of the 81 are positions the filter already calls hopeless**,
+   where every action is death and the choice cannot matter. That leaves **~16 addressable decisions
+   in 400 rounds, 0.04 per round** — a quarter of E51's 0.17/round, which bought +0.099. Scaled at
+   E51's realised ~0.57 score per changed decision, the ceiling is **≈ +0.02**, below the +0.17 MDE
+   the design is powered for and an order of magnitude below what the remaining 1.6-point gap needs.
+   **Not run.** Recorded here so the next person does not re-derive it — and as the counter-example
+   to E40, where a sweep was committed to a design whose own arithmetic could not reach its bar.
 
 ---
 

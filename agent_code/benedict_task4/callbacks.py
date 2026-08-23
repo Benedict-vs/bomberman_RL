@@ -65,17 +65,25 @@ MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path
 # at 0, so a wider band changes behaviour without protecting against anything.
 TIE_TOL = 0.0
 
-# E51 -- the certain-death move filter. **Off unless BM_DEATH_FILTER is set**,
-# so with the variable unset this file is byte-for-byte the shipped E37 policy
-# and the tournament never takes any branch below. That also makes the control
-# arm of the experiment free: it is this same file with the variable unset.
+# E51 -- the certain-death move filter. **On by default**: this is the shipped
+# policy as of E51, and the tournament, which sets no environment variables,
+# gets it. `BM_DEATH_FILTER=0` reproduces the pre-E51 agent exactly and is how
+# the control arm of any comparison against it is run.
 #
-#   unset / "0"   off  -- shipped behaviour
+#   unset / "1"   veto moves after which *no* continuation survives the bombs
+#                 already on the board -- SHIPPED
 #   "step"        veto moves that are lethal at the end of *this* step only.
-#                 Shallow control arm: digits 1-4 already carry exactly this
-#                 as NB_LETHAL, so a learned table should make it near-inert.
-#   "1"           veto moves after which *no* continuation survives the bombs
-#                 already on the board -- the arm.
+#                 Shallow arm: digits 1-4 already carry this as NB_LETHAL, and
+#                 it is worth a third of the full effect (E51 P3).
+#   "0"           off -- the pre-E51 policy, byte for byte
+#
+# **Worth +0.099 [+0.067, +0.132] score against 3 x binary_v6 and
+# +0.121 [+0.007, +0.236] against 3 x rule_based**, n = 4000 each, on the frozen
+# table with no retraining. It changes the decision on only 0.09 % of steps --
+# the table already picks a non-vetoed action 99.91 % of the time -- and pays
+# through `killed_by` (-0.022), not through suicides (-0.008, not demonstrated).
+# The agent survives longer, so it bombs more and banks more coins and kills;
+# the gain is +0.043 coins + 5 x 0.011 kills = +0.098 of the +0.099.
 #
 # **BOMB is never vetoed, in any mode.** E46 gated bomb *placement* on escape
 # slack, cut suicides -0.131 exactly as designed, and cost -0.283 score: the
@@ -95,10 +103,11 @@ DEATH_FILTER_FULL = 2
 
 _FILTER_MODES = {"": DEATH_FILTER_OFF, "0": DEATH_FILTER_OFF,
                  "step": DEATH_FILTER_STEP, "1": DEATH_FILTER_FULL}
-_filter_env = os.environ.get("BM_DEATH_FILTER", "0").strip().lower()
+_filter_env = os.environ.get("BM_DEATH_FILTER", "1").strip().lower()
 if _filter_env not in _FILTER_MODES:
-    # Fail loudly rather than silently evaluating the control arm under the
-    # arm's label -- the E18 mistake, which cost ten evaluations.
+    # Fail loudly rather than silently playing a different policy than the label
+    # says -- the E18 mistake, which cost ten evaluations. The tournament sets
+    # nothing, so this cannot fire there.
     raise ValueError(
         f"BM_DEATH_FILTER={_filter_env!r} is not one of {sorted(_FILTER_MODES)}"
     )
