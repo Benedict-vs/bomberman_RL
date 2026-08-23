@@ -154,9 +154,58 @@ for MODE in 0 step 1; do
 done
 ```
 
+### Method failure — the first run was void, and the bug inverted the intervention
+
+Run at `b0bf2c6`, 6 arms × n = 4000, discarded. Kept as `benedict_q_e51bug_*` because the numbers
+are the evidence for what follows.
+
+**The bug.** `act()` tested `veto.all()` for "no action survives". **BOMB is never vetoed, so
+`veto.all()` is permanently False** and the stand-aside path never ran. In a position where every
+*movement* action is fatal, the mask therefore left BOMB as the only finite entry in the row and the
+filter **forced the agent to bomb** — a suicide with one in hand, an `INVALID_ACTION` that stands
+still and dies without. A filter written to prevent own-bomb death was compelling it.
+
+**It is visible in the metrics, on the primary field, and only in the arm that has the lookahead:**
+
+| 3 × `binary_v6`, n = 4000 | control | `step` | **`1` (void)** |
+|---|---|---|---|
+| score | 2.778 | 2.794 | 2.806 |
+| **suicides** | 0.540 | 0.535 | **0.558** — +0.019 [+0.008, +0.030], p = 0.0008, *worse* |
+| **invalid** | 2.838 | 3.489 | **4.505** |
+| killed by opp. | 0.158 | 0.159 | 0.138 |
+
+`invalid` is the tell: +1.667 actions per round that the control never wasted, which is the
+no-bomb-in-hand branch of the same forced BOMB. The one genuine signal underneath it —
+killed-by-opponent −0.021 — was cancelled by the pathology the filter itself introduced.
+
+**Why the tests passed anyway, which is the transferable part.** Eight hand-checked cases passed,
+including one named *"corridor sealed → every action fatal (`act()` falls back)"*. It asserted on
+the **mask** and never called `act()`. The name claimed a behaviour the test did not exercise, so it
+certified the exact path that was broken. **A mask is not a decision.** Three `act()`-level cases
+added: hopeless × bomb-in-hand, hopeless × no bomb, and escapable — each asserting on the action
+returned, not on the veto array.
+
+**The repair, not a redesign.** The fallback now tests `veto[FILTERABLE].all()` over the five
+vetoable actions, which is what §Change already said it did: *"when every action is vetoed the filter
+stands aside and the unfiltered row decides."* The pre-registration is unchanged and still precedes
+the measurement. Filter-off remains identical on 60/60 deterministic solo rounds.
+
+**Two guards survived the void run and are worth more than it was.**
+
+1. **The control reproduced 2.611 exactly** — Δ +0.000 — on the 1000 arenas the E41 run used.
+   (Its own 4000-round mean is 2.778; rounds 1000–3999 are simply easier, at 2.834. Compare arenas,
+   never headline means.)
+2. **The external field is fully deterministic.** Re-evaluating the same table on the same arenas:
+   **0 of 1000 rounds differ** against `binary_v6`, **999 of 1000** against `rule_based`. So the
+   **±0.12 noise floor is a property of the `rule_based` opponents' unseeded stdlib `random`, not of
+   the harness** — this file's header and `AGENTS.md` both state it as though it were universal.
+   Paired comparisons on the external field carry **no opponent noise at all**, which makes the
+   primary field of this experiment considerably more powerful than §Power assumed and means a
+   single external-field evaluation *is* reproducible, unlike a `rule_based` one.
+
 ### Result
 
-*(to be filled in after the run — commit hash from the `.meta.json`)*
+*(to be filled in after the repaired run — commit hash from the `.meta.json`)*
 
 ---
 

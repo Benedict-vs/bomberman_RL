@@ -104,10 +104,19 @@ if _filter_env not in _FILTER_MODES:
     )
 DEATH_FILTER = _FILTER_MODES[_filter_env]
 
+
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 # (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
 DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
+# The actions the filter is allowed to veto: everything except BOMB. This has to
+# be named, because `veto.all()` is the intuitive test for "no action survives"
+# and it is **wrong** -- BOMB is never vetoed, so `veto.all()` is always False,
+# the stand-aside path never runs, and a hopeless position leaves BOMB as the
+# only finite entry in the row. The filter then *forces* a bomb: a suicide when
+# one is available, an INVALID_ACTION that stands still and dies when not. The
+# first run of E51 measured exactly that -- suicides +0.019, invalid +1.667.
+FILTERABLE = np.array([a != ACTIONS.index('BOMB') for a in range(len(ACTIONS))])
 
 # Digits 1-4, one per direction. Ordered so a larger value is never a worse tile
 # to step onto, which makes a printed row readable without decoding it.
@@ -577,12 +586,13 @@ def act(self, game_state: dict) -> str:
 
     state = state_to_features(game_state)
 
-    # E51. `veto.all()` means every move is fatal and BOMB is not worth taking
-    # either -- there is nothing to choose between, so the filter stands aside
-    # and the unfiltered row decides, exactly as the shipped agent would. The
-    # filter must never be the reason an action is picked from an empty set.
+    # E51. When every action the filter may veto is fatal the agent is doomed
+    # whatever it does -- BOMB leaves it standing where it is, so it dies too --
+    # and the filter stands aside so the unfiltered row decides, exactly as the
+    # shipped agent would. The test is over FILTERABLE and not over the whole
+    # mask; see the comment there for what the whole-mask version costs.
     veto = death_filter_mask(game_state) if DEATH_FILTER else None
-    if veto is not None and veto.all():
+    if veto is not None and veto[FILTERABLE].all():
         veto = None
 
     # self.eps and self.rng are set in train.py. Outside training the policy is
