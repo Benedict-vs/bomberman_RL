@@ -4,12 +4,12 @@ import numpy as np
 import torch
 from torch import nn
 
-from agent_code.ben_coin_collector_dqn.dqn import (
+from agent_code.ben_task2.dqn import (
     optimize_dqn,
     soft_update_target_network,
     update_target_network,
 )
-from agent_code.ben_coin_collector_dqn.replay_buffer import Transition
+from agent_code.ben_task2.replay_buffer import Transition
 
 
 class TinyQNetwork(nn.Module):
@@ -43,9 +43,11 @@ class DQNUpdateTest(unittest.TestCase):
         done: bool = False,
     ) -> Transition:
         state = np.zeros(
-            (3, 17, 17),
+            (8, 17, 17),
             dtype=np.float32,
         )
+        state[3, 8, 8] = 1.0
+        state[7] = 1.0
 
         return Transition(
             state=state,
@@ -56,8 +58,8 @@ class DQNUpdateTest(unittest.TestCase):
         )
 
     def test_optimization_changes_online_network_only(self):
-        online_network = TinyQNetwork([0.0] * 5)
-        target_network = TinyQNetwork([0.0] * 5)
+        online_network = TinyQNetwork([0.0] * 6)
+        target_network = TinyQNetwork([0.0] * 6)
 
         optimizer = torch.optim.SGD(
             online_network.parameters(),
@@ -87,7 +89,7 @@ class DQNUpdateTest(unittest.TestCase):
         self.assertFalse(
             torch.equal(
                 online_network.q_values.detach(),
-                torch.zeros(5),
+                torch.zeros(6),
             )
         )
 
@@ -103,8 +105,8 @@ class DQNUpdateTest(unittest.TestCase):
         )
 
     def test_terminal_transition_does_not_bootstrap(self):
-        online_network = TinyQNetwork([0.0] * 5)
-        target_network = TinyQNetwork([100.0] * 5)
+        online_network = TinyQNetwork([0.0] * 6)
+        target_network = TinyQNetwork([100.0] * 6)
 
         optimizer = torch.optim.SGD(
             online_network.parameters(),
@@ -134,9 +136,9 @@ class DQNUpdateTest(unittest.TestCase):
 
     def test_target_update_copies_parameters(self):
         online_network = TinyQNetwork(
-            [1.0, 2.0, 3.0, 4.0, 5.0]
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         )
-        target_network = TinyQNetwork([0.0] * 5)
+        target_network = TinyQNetwork([0.0] * 6)
 
         update_target_network(
             online_network,
@@ -152,10 +154,10 @@ class DQNUpdateTest(unittest.TestCase):
 
     def test_soft_target_update_blends_parameters(self):
         online_network = TinyQNetwork(
-            [1.0, 2.0, 3.0, 4.0, 5.0]
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         )
         target_network = TinyQNetwork(
-            [0.0, 0.0, 0.0, 0.0, 0.0]
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         )
 
         online_before = (
@@ -169,7 +171,7 @@ class DQNUpdateTest(unittest.TestCase):
         )
 
         expected_target = torch.tensor(
-            [0.1, 0.2, 0.3, 0.4, 0.5],
+            [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
             dtype=torch.float32,
         )
 
@@ -188,8 +190,8 @@ class DQNUpdateTest(unittest.TestCase):
         )
 
     def test_soft_target_update_rejects_invalid_tau(self):
-        online_network = TinyQNetwork([1.0] * 5)
-        target_network = TinyQNetwork([0.0] * 5)
+        online_network = TinyQNetwork([1.0] * 6)
+        target_network = TinyQNetwork([0.0] * 6)
 
         for invalid_tau in (
             0.0,
@@ -207,8 +209,8 @@ class DQNUpdateTest(unittest.TestCase):
                     )
 
     def test_empty_batch_is_rejected(self):
-        online_network = TinyQNetwork([0.0] * 5)
-        target_network = TinyQNetwork([0.0] * 5)
+        online_network = TinyQNetwork([0.0] * 6)
+        target_network = TinyQNetwork([0.0] * 6)
 
         optimizer = torch.optim.SGD(
             online_network.parameters(),
@@ -225,13 +227,20 @@ class DQNUpdateTest(unittest.TestCase):
                 device=torch.device("cpu"),
             )
 
-    def test_standard_dqn_uses_largest_target_value(self):
+    def test_standard_dqn_uses_largest_legal_target_value(self):
         online_network = TinyQNetwork(
-            [0.0, 5.0, 0.0, 0.0, 0.0]
+            [0.0, 5.0, 0.0, 0.0, 0.0, 0.0]
         )
         target_network = TinyQNetwork(
-            [100.0, 2.0, 0.0, 0.0, 0.0]
+            [100.0, 2.0, 0.0, 0.0, 0.0, 0.0]
         )
+
+        transition = self.make_transition(
+            action=0,
+            reward=1.0,
+            done=False,
+        )
+        transition.next_state[0, 7, 8] = 1.0
 
         optimizer = torch.optim.SGD(
             online_network.parameters(),
@@ -243,22 +252,18 @@ class DQNUpdateTest(unittest.TestCase):
             target_network=target_network,
             optimizer=optimizer,
             transitions=[
-                self.make_transition(
-                    action=0,
-                    reward=1.0,
-                    done=False,
-                )
+                transition
             ],
             gamma=0.5,
             device=torch.device("cpu"),
         )
 
-        # Standard DQN uses the largest target-network value.
-        # Bellman target: 1 + 0.5 * 100 = 51.
-        # Huber loss between prediction 0 and target 51 = 50.5.
+        # UP has value 100 but is blocked by a wall. RIGHT is the
+        # largest legal target action with value 2.
+        # Bellman target: 1 + 0.5 * 2 = 2.
         self.assertAlmostEqual(
             loss,
-            50.5,
+            1.5,
             places=6,
         )
 

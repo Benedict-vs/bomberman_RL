@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .features import legal_action_mask
 from .replay_buffer import Transition
 
 
@@ -86,9 +87,23 @@ def optimize_dqn(
     ).squeeze(1)
 
     with torch.no_grad():
-        next_q_values = target_network(
+        next_action_masks = torch.from_numpy(
+            np.stack(
+                [
+                    legal_action_mask(transition.next_state)
+                    for transition in transitions
+                ]
+            )
+        ).to(device=device)
+
+        masked_next_q_values = target_network(
             next_states
-        ).max(dim=1).values
+        ).masked_fill(
+            ~next_action_masks,
+            -torch.inf,
+        )
+
+        next_q_values = masked_next_q_values.max(dim=1).values
 
         target_q_values = (
             rewards

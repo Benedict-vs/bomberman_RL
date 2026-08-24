@@ -20,6 +20,13 @@ BOMB_POWER = 3
 BOMB_TIMER = 4
 EXPLOSION_TIMER = 2
 
+ACTION_DELTAS = (
+    (0, -1),
+    (1, 0),
+    (0, 1),
+    (-1, 0),
+)
+
 
 def state_to_features(game_state: dict | None) -> np.ndarray | None:
     """Return a float32 array with shape (8, height, width)."""
@@ -77,6 +84,41 @@ def state_to_features(game_state: dict | None) -> np.ndarray | None:
     features[BOMB_AVAILABLE_CHANNEL].fill(float(bomb_available))
 
     return features
+
+
+def legal_action_mask(features: np.ndarray) -> np.ndarray:
+    """Return legal actions in UP, RIGHT, DOWN, LEFT, BOMB, WAIT order."""
+    mask = np.ones(6, dtype=np.bool_)
+    self_positions = np.argwhere(features[SELF_CHANNEL] > 0.5)
+
+    # Terminal replay states are all zero and never bootstrap. Returning
+    # a valid mask still keeps the masked maximum numerically finite.
+    if len(self_positions) == 0:
+        return mask
+
+    if len(self_positions) != 1:
+        raise ValueError("Expected exactly one agent position in features.")
+
+    self_y, self_x = self_positions[0]
+    height, width = features.shape[1:]
+    blocked = (
+        (features[WALL_CHANNEL] > 0.5)
+        | (features[CRATE_CHANNEL] > 0.5)
+        | (features[BOMB_TIMER_CHANNEL] > 0.0)
+    )
+
+    for action_index, (delta_x, delta_y) in enumerate(ACTION_DELTAS):
+        target_x = int(self_x + delta_x)
+        target_y = int(self_y + delta_y)
+        mask[action_index] = (
+            0 <= target_x < width
+            and 0 <= target_y < height
+            and not blocked[target_y, target_x]
+        )
+
+    mask[4] = bool(features[BOMB_AVAILABLE_CHANNEL].max() > 0.5)
+    mask[5] = True
+    return mask
 
 
 def _timer_urgency(timer: int) -> float:

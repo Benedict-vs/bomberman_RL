@@ -8,13 +8,32 @@ import events as e
 import numpy as np
 import torch
 
-from agent_code.ben_coin_collector_dqn import train
-from agent_code.ben_coin_collector_dqn.model import (
+from agent_code.ben_task2 import train
+from agent_code.ben_task2.model import (
     CoinCollectorDQN,
 )
 
 
 class TrainingCallbacksTest(unittest.TestCase):
+    def test_task_2_artifact_names_do_not_reuse_task_1(self):
+        self.assertEqual(
+            train.MODEL_FILE,
+            "ben_task2_safety_potential_v1_15000ep_seed11.pt",
+        )
+        self.assertEqual(
+            train.RUN_LABEL,
+            "task2_safety_potential_v1_15000ep_seed11",
+        )
+        self.assertEqual(
+            train.TRAINLOG_OUT_DIR,
+            "results/train/ben_task2",
+        )
+        self.assertEqual(
+            train.CHECKPOINT_DIR,
+            "../../results/train/ben_task2",
+        )
+        self.assertEqual(train.TRAINING_SEED, 11)
+
     @staticmethod
     def make_game_state(
         round_number: int = 1,
@@ -81,6 +100,24 @@ class TrainingCallbacksTest(unittest.TestCase):
             -1.05,
         )
 
+    def test_destroying_crate_receives_task_2_reward(self):
+        reward = train.reward_from_events(
+            [e.CRATE_DESTROYED]
+        )
+
+        self.assertAlmostEqual(reward, 0.15)
+
+    def test_death_penalty_is_applied_exactly_once(self):
+        opponent_bomb_death = train.reward_from_events(
+            [e.GOT_KILLED]
+        )
+        own_bomb_death = train.reward_from_events(
+            [e.GOT_KILLED, e.KILLED_SELF]
+        )
+
+        self.assertAlmostEqual(opponent_bomb_death, -5.05)
+        self.assertAlmostEqual(own_bomb_death, -5.05)
+
     def test_coin_potential_uses_shortest_walkable_distance(
         self,
     ):
@@ -106,7 +143,7 @@ class TrainingCallbacksTest(unittest.TestCase):
             -4.0 / 32.0,
         )
 
-    def test_potential_shaping_prefers_moving_closer(
+    def test_potential_shaping_is_disabled_for_task_2_baseline(
         self,
     ):
         old_state = self.make_game_state()
@@ -145,16 +182,10 @@ class TrainingCallbacksTest(unittest.TestCase):
             farther_state,
         )
 
-        self.assertGreater(
-            closer_reward,
-            0.0,
-        )
-        self.assertLess(
-            farther_reward,
-            0.0,
-        )
+        self.assertEqual(closer_reward, 0.0)
+        self.assertEqual(farther_reward, 0.0)
 
-    def test_wait_remains_costly_with_potential_shaping(
+    def test_wait_remains_costly_with_safety_shaping(
         self,
     ):
         game_state = self.make_game_state()
@@ -165,12 +196,52 @@ class TrainingCallbacksTest(unittest.TestCase):
                 game_state,
                 game_state,
             )
+            + train.safety_potential_shaping_reward(
+                game_state,
+                game_state,
+            )
         )
 
         self.assertLess(
             total_reward,
             0.0,
         )
+
+    def test_safety_shaping_rewards_leaving_bomb_danger(self):
+        danger_state = self.make_game_state()
+        danger_state["bombs"] = [((1, 1), 1)]
+
+        safe_state = self.make_game_state()
+
+        reward = train.safety_potential_shaping_reward(
+            danger_state,
+            safe_state,
+        )
+
+        self.assertAlmostEqual(reward, 0.79)
+
+    def test_safety_shaping_penalizes_entering_bomb_danger(self):
+        safe_state = self.make_game_state()
+
+        danger_state = self.make_game_state()
+        danger_state["bombs"] = [((1, 1), 1)]
+
+        reward = train.safety_potential_shaping_reward(
+            safe_state,
+            danger_state,
+        )
+
+        self.assertAlmostEqual(reward, -0.802)
+
+    def test_safety_shaping_penalizes_terminal_death(self):
+        safe_state = self.make_game_state()
+
+        reward = train.safety_potential_shaping_reward(
+            safe_state,
+            None,
+        )
+
+        self.assertAlmostEqual(reward, -1.0)
 
     def test_epsilon_schedule(self):
         self.assertAlmostEqual(
@@ -200,12 +271,12 @@ class TrainingCallbacksTest(unittest.TestCase):
         )
 
     @patch(
-        "agent_code.ben_coin_collector_dqn.train."
+        "agent_code.ben_task2.train."
         "torch.backends.mps.is_available",
         return_value=False,
     )
     @patch(
-        "agent_code.ben_coin_collector_dqn.train.TrainLogger",
+        "agent_code.ben_task2.train.TrainLogger",
         None,
     )
     def test_setup_training_uses_cpu_fallback(
@@ -259,12 +330,12 @@ class TrainingCallbacksTest(unittest.TestCase):
             )
 
     @patch(
-        "agent_code.ben_coin_collector_dqn.train."
+        "agent_code.ben_task2.train."
         "torch.backends.mps.is_available",
         return_value=False,
     )
     @patch(
-        "agent_code.ben_coin_collector_dqn.train.TrainLogger",
+        "agent_code.ben_task2.train.TrainLogger",
         None,
     )
     def test_end_of_round_marks_existing_transition_terminal(
@@ -343,11 +414,15 @@ class TrainingCallbacksTest(unittest.TestCase):
                 old_game_state,
                 new_game_state,
             )
+            + train.safety_potential_shaping_reward(
+                old_game_state,
+                new_game_state,
+            )
         )
 
         self.assertEqual(
             transition.action,
-            4,
+            5,
         )
         self.assertAlmostEqual(
             transition.reward,
@@ -373,6 +448,75 @@ class TrainingCallbacksTest(unittest.TestCase):
         self.assertEqual(
             agent.episode_losses,
             [],
+        )
+
+    def _assert_terminal_death_transition(
+        self,
+        events: list[str],
+    ) -> None:
+        agent = self.make_agent()
+        train.setup_training(agent)
+
+        last_game_state = self.make_game_state()
+        last_game_state["coins"] = []
+
+        previous_directory = os.getcwd()
+
+        try:
+            with tempfile.TemporaryDirectory() as temporary_directory:
+                os.chdir(temporary_directory)
+
+                train.end_of_round(
+                    agent,
+                    last_game_state=last_game_state,
+                    last_action="BOMB",
+                    events=events,
+                )
+        finally:
+            os.chdir(previous_directory)
+
+        self.assertEqual(len(agent.replay_buffer), 1)
+        self.assertEqual(agent.environment_steps, 1)
+
+        transition = agent.replay_buffer.sample(1)[0]
+
+        self.assertEqual(transition.action, 4)
+        self.assertAlmostEqual(transition.reward, -6.05)
+        self.assertTrue(transition.done)
+        self.assertTrue(np.all(transition.next_state == 0.0))
+
+    @patch(
+        "agent_code.ben_task2.train."
+        "torch.backends.mps.is_available",
+        return_value=False,
+    )
+    @patch(
+        "agent_code.ben_task2.train.TrainLogger",
+        None,
+    )
+    def test_opponent_bomb_death_is_stored_as_terminal_transition(
+        self,
+        mocked_mps_available,
+    ):
+        self._assert_terminal_death_transition(
+            [e.GOT_KILLED]
+        )
+
+    @patch(
+        "agent_code.ben_task2.train."
+        "torch.backends.mps.is_available",
+        return_value=False,
+    )
+    @patch(
+        "agent_code.ben_task2.train.TrainLogger",
+        None,
+    )
+    def test_suicide_penalty_is_not_applied_twice(
+        self,
+        mocked_mps_available,
+    ):
+        self._assert_terminal_death_transition(
+            [e.KILLED_SELF, e.GOT_KILLED]
         )
 
 

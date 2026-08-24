@@ -2,7 +2,12 @@ import unittest
 
 import torch
 
-from model import ACTIONS, N_ACTIONS, N_INPUT_CHANNELS, CoinCollectorDQN
+from agent_code.ben_task2.model import (
+    ACTIONS,
+    N_ACTIONS,
+    N_INPUT_CHANNELS,
+    CoinCollectorDQN,
+)
 
 
 class CoinCollectorDQNTest(unittest.TestCase):

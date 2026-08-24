@@ -1,4 +1,4 @@
-"""Training callbacks for the coin-heaven DQN agent."""
+"""Training callbacks for the task-2 DQN agent."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .dqn import (
     soft_update_target_network,
     update_target_network,
 )
-from .features import state_to_features
+from .features import DANGER_CHANNEL, state_to_features
 from .model import ACTIONS, CoinCollectorDQN
 from .replay_buffer import ReplayBuffer
 
@@ -40,21 +40,28 @@ EPSILON_START = 1.0
 EPSILON_END = 0.05
 EPSILON_DECAY_STEPS = 100_000
 
-# Reward design for task 1
+# Reward design for task 2
 STEP_REWARD = -0.05
 
 EVENT_REWARDS = {
     e.COIN_COLLECTED: 1.0,
+    e.CRATE_DESTROYED: 0.2,
     e.INVALID_ACTION: -1.0,
+    e.GOT_KILLED: -5.0,
+    # A suicide emits GOT_KILLED and KILLED_SELF. Keep the latter at
+    # zero so that every death receives the penalty exactly once.
+    e.KILLED_SELF: 0.0,
 }
 
 # Potential-based reward shaping
-POTENTIAL_REWARD_SCALE = 1.0
+POTENTIAL_REWARD_SCALE = 0.0
 POTENTIAL_DISTANCE_NORMALIZER = 32.0
+SAFETY_POTENTIAL_SCALE = 1.0
 MAX_EPISODE_STEPS = 400
 
-# Historical name of the 10,000-episode V29 run.
-RUN_LABEL = "dqn_v29_soft_target_1000ep_seed20260805"
+RUN_LABEL = "task2_safety_potential_v1_15000ep_seed11"
+TRAINLOG_OUT_DIR = "results/train/ben_task2"
+CHECKPOINT_DIR = "../../results/train/ben_task2"
 
 CHECKPOINT_INTERVAL = 100
 
@@ -110,8 +117,9 @@ def setup_training(self) -> None:
 
     if TrainLogger is not None:
         self.trainlog = TrainLogger(
-            agent="ben_coin_collector_dqn",
+            agent="ben_task2",
             run=RUN_LABEL,
+            out_dir=TRAINLOG_OUT_DIR,
             hyperparams={
                 "gamma": GAMMA,
                 "learning_rate": LEARNING_RATE,
@@ -128,8 +136,17 @@ def setup_training(self) -> None:
                 "coin_collected_reward": EVENT_REWARDS[
                     e.COIN_COLLECTED
                 ],
+                "crate_destroyed_reward": EVENT_REWARDS[
+                    e.CRATE_DESTROYED
+                ],
                 "invalid_action_reward": EVENT_REWARDS[
                     e.INVALID_ACTION
+                ],
+                "got_killed_reward": EVENT_REWARDS[
+                    e.GOT_KILLED
+                ],
+                "killed_self_reward": EVENT_REWARDS[
+                    e.KILLED_SELF
                 ],
                 "potential_reward_scale": (
                     POTENTIAL_REWARD_SCALE
@@ -137,7 +154,9 @@ def setup_training(self) -> None:
                 "potential_distance_normalizer": (
                     POTENTIAL_DISTANCE_NORMALIZER
                 ),
+                "safety_potential_scale": SAFETY_POTENTIAL_SCALE,
                 "symmetry_augmentation": True,
+                "legal_action_mask": True,
                 "training_seed": TRAINING_SEED,
                 "device": str(self.device),
             },
@@ -163,6 +182,10 @@ def game_events_occurred(
     reward = reward_from_events(events)
 
     reward += potential_shaping_reward(
+        old_game_state,
+        new_game_state,
+    )
+    reward += safety_potential_shaping_reward(
         old_game_state,
         new_game_state,
     )
@@ -192,10 +215,36 @@ def end_of_round(
     events: list[str],
 ) -> None:
     """Mark the final transition, save the model and log the episode."""
-    self.replay_buffer.mark_last_terminal()
+    if e.GOT_KILLED in events:
+        # The framework skips game_events_occurred() once an agent is
+        # dead. Store the otherwise missing transition of the lethal
+        # final action here, including its terminal events and reward.
+        reward = reward_from_events(events)
+        reward += potential_shaping_reward(
+            last_game_state,
+            None,
+        )
+        reward += safety_potential_shaping_reward(
+            last_game_state,
+            None,
+        )
 
-    # The final action events were already recorded by
-    # game_events_occurred(). Only SURVIVED_ROUND is new here.
+        self.replay_buffer.append(
+            state=state_to_features(last_game_state),
+            action=ACTIONS.index(last_action),
+            reward=reward,
+            next_state=None,
+            done=True,
+        )
+
+        self.episode_reward += reward
+        self.episode_events.extend(events)
+        _after_transition(self)
+    else:
+        # For a surviving agent, game_events_occurred() already stored
+        # the final action. Only its terminal marker is still missing.
+        self.replay_buffer.mark_last_terminal()
+
     if e.SURVIVED_ROUND in events:
         self.episode_events.append(
             e.SURVIVED_ROUND
@@ -216,7 +265,8 @@ def end_of_round(
 
     if episode % CHECKPOINT_INTERVAL == 0:
         checkpoint_file = (
-            f"{RUN_LABEL}__episode_{episode}.pt"
+            f"{CHECKPOINT_DIR}/{RUN_LABEL}"
+            f"__episode_{episode}.pt"
         )
 
         torch.save(
@@ -276,7 +326,7 @@ def end_of_round(
 def reward_from_events(
     events: list[str],
 ) -> float:
-    """Return the task-1 event reward for one transition."""
+    """Return the task-2 event reward for one transition."""
     reward = STEP_REWARD
 
     for event in events:
@@ -304,6 +354,31 @@ def potential_shaping_reward(
         GAMMA * new_potential
         - old_potential
     )
+
+
+def safety_potential_shaping_reward(
+    old_game_state: dict | None,
+    new_game_state: dict | None,
+) -> float:
+    """Reward transitions toward safety without prescribing an action."""
+    old_potential = _safety_potential(old_game_state)
+    new_potential = _safety_potential(new_game_state)
+
+    return SAFETY_POTENTIAL_SCALE * (
+        GAMMA * new_potential
+        - old_potential
+    )
+
+
+def _safety_potential(game_state: dict | None) -> float:
+    """Return one minus the bomb danger at the agent's current tile."""
+    if game_state is None:
+        return 0.0
+
+    features = state_to_features(game_state)
+    self_x, self_y = game_state["self"][3]
+    danger = float(features[DANGER_CHANNEL, self_y, self_x])
+    return 1.0 - danger
 
 
 def _coin_potential(

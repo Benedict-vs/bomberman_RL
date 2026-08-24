@@ -13,13 +13,15 @@ from agent_code.ben_task2.model import ACTIONS
 
 class CallbacksTest(unittest.TestCase):
     @staticmethod
-    def make_game_state() -> dict:
+    def make_game_state(
+        bomb_available: bool = False,
+    ) -> dict:
         field = np.zeros((17, 17), dtype=np.int8)
 
         return {
             "field": field,
             "coins": [(5, 5)],
-            "self": ("dqn-agent", 0, False, (1, 1)),
+            "self": ("dqn-agent", 0, bomb_available, (1, 1)),
             "bombs": [],
             "explosion_map": np.zeros_like(field),
         }
@@ -69,7 +71,9 @@ class CallbacksTest(unittest.TestCase):
             for parameter in agent.online_network.parameters():
                 parameter.zero_()
 
-            # LEFT, action index 3, has the largest Q-value.
+            # BOMB has the largest raw Q-value but is unavailable.
+            # LEFT is the largest legal action.
+            agent.online_network.q_head[-1].bias[4] = 3.0
             agent.online_network.q_head[-1].bias[3] = 2.0
 
         action = callbacks.act(
@@ -79,7 +83,7 @@ class CallbacksTest(unittest.TestCase):
 
         self.assertEqual(action, "LEFT")
 
-    def test_exploration_uses_only_known_actions(self):
+    def test_exploration_uses_only_legal_actions(self):
         agent = self.setup_agent(train=True)
         agent.epsilon = 1.0
 
@@ -91,13 +95,22 @@ class CallbacksTest(unittest.TestCase):
             for _ in range(100)
         }
 
-        self.assertTrue(
-            selected_actions.issubset(set(ACTIONS))
-        )
-        self.assertIn(
-            "BOMB",
-            selected_actions,
-        )
+        self.assertTrue(selected_actions.issubset(set(ACTIONS)))
+        self.assertNotIn("BOMB", selected_actions)
+
+    def test_exploration_can_select_available_bomb(self):
+        agent = self.setup_agent(train=True)
+        agent.epsilon = 1.0
+
+        selected_actions = {
+            callbacks.act(
+                agent,
+                game_state=self.make_game_state(bomb_available=True),
+            )
+            for _ in range(200)
+        }
+
+        self.assertIn("BOMB", selected_actions)
 
 
 if __name__ == "__main__":

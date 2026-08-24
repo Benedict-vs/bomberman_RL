@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from replay_buffer import ReplayBuffer
+from agent_code.ben_task2.replay_buffer import ReplayBuffer
 
 
 class ReplayBufferTest(unittest.TestCase):

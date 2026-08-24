@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from features import (
+from agent_code.ben_task2.features import (
     BOMB_AVAILABLE_CHANNEL,
     BOMB_TIMER_CHANNEL,
     COIN_CHANNEL,
@@ -12,6 +12,7 @@ from features import (
     N_CHANNELS,
     SELF_CHANNEL,
     WALL_CHANNEL,
+    legal_action_mask,
     state_to_features,
 )
 
@@ -98,6 +99,41 @@ class StateToFeaturesTest(unittest.TestCase):
         self.assertEqual(features[EXPLOSION_CHANNEL, 1, 2], 1.0)
         self.assertEqual(features[DANGER_CHANNEL, 1, 2], 1.0)
         self.assertTrue(np.all(features[BOMB_AVAILABLE_CHANNEL] == 0.0))
+
+    def test_legal_action_mask_excludes_blocked_actions(self):
+        field = np.zeros((5, 5), dtype=np.int8)
+        field[1, 0] = -1
+        field[2, 1] = 1
+
+        game_state = {
+            "field": field,
+            "coins": [],
+            "self": ("dqn-agent", 0, False, (1, 1)),
+            "bombs": [((1, 2), 3)],
+            "explosion_map": np.zeros_like(field),
+        }
+
+        mask = legal_action_mask(state_to_features(game_state))
+
+        np.testing.assert_array_equal(
+            mask,
+            [False, False, False, True, False, True],
+        )
+
+    def test_legal_action_mask_allows_available_bomb(self):
+        field = np.zeros((3, 3), dtype=np.int8)
+        game_state = {
+            "field": field,
+            "coins": [],
+            "self": ("dqn-agent", 0, True, (1, 1)),
+            "bombs": [],
+            "explosion_map": np.zeros_like(field),
+        }
+
+        mask = legal_action_mask(state_to_features(game_state))
+
+        self.assertTrue(mask[4])
+        self.assertTrue(mask[5])
 
     def test_returns_none_for_missing_state(self):
         self.assertIsNone(state_to_features(None))

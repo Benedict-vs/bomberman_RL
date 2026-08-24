@@ -1,4 +1,4 @@
-"""Inference callbacks for the coin-heaven DQN agent."""
+"""Inference callbacks for the task-2 DQN agent."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import random
 import numpy as np
 import torch
 
-from .features import state_to_features
+from .features import legal_action_mask, state_to_features
 from .model import ACTIONS, CoinCollectorDQN
 
 
-MODEL_FILE = "my-saved-model.pt"
+MODEL_FILE = "ben_task2_safety_potential_v1_15000ep_seed11.pt"
 
 
-TRAINING_SEED = 20260805
+TRAINING_SEED = 11
 START_FROM_SAVED_MODEL = False
 
 
@@ -68,8 +68,13 @@ def setup(self) -> None:
 
 def act(self, game_state: dict) -> str:
     """Choose an action using epsilon-greedy exploration."""
+    features = state_to_features(game_state)
+    action_mask = legal_action_mask(features)
+    legal_action_indices = np.flatnonzero(action_mask)
+
     if self.train and random.random() < self.epsilon:
-        action = random.choice(ACTIONS)
+        action_index = int(random.choice(legal_action_indices))
+        action = ACTIONS[action_index]
 
         self.logger.debug(
             "Exploration selected action %s at epsilon %.4f.",
@@ -79,8 +84,6 @@ def act(self, game_state: dict) -> str:
 
         return action
 
-    features = state_to_features(game_state)
-
     state_tensor = torch.from_numpy(features).unsqueeze(0)
     state_tensor = state_tensor.to(
         device=self.device,
@@ -89,9 +92,14 @@ def act(self, game_state: dict) -> str:
 
     with torch.inference_mode():
         q_values = self.online_network(state_tensor)
+        mask_tensor = torch.from_numpy(action_mask).to(self.device)
+        masked_q_values = q_values.masked_fill(
+            ~mask_tensor.unsqueeze(0),
+            -torch.inf,
+        )
 
         action_index = int(
-            q_values.argmax(dim=1).item()
+            masked_q_values.argmax(dim=1).item()
         )
 
     action = ACTIONS[action_index]
