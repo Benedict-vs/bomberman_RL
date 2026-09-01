@@ -5,16 +5,36 @@ from __future__ import annotations
 from collections import deque
 
 import events as e
+import numpy as np
 import torch
 
 from .augmentation import randomly_transform_transition
-from .callbacks import MODEL_FILE, TRAINING_SEED
+from .callbacks import (
+    CONTINUE_COIN_REWARD15,
+    CRATE_WAIT_PENALTY,
+    ESCAPE_FEATURE_MODE,
+    EXPERIMENT_STEM,
+    FINE_TUNE_COIN_POTENTIAL,
+    FINE_TUNE_COIN_REWARD,
+    FINE_TUNE_CRATE_WAIT,
+    LOAD_MODEL_FILE,
+    MODEL_FILE,
+    MULTISEED_ARM,
+    TOTAL_EPISODES,
+    TRAINING_SEED,
+)
 from .dqn import (
     optimize_dqn,
     soft_update_target_network,
     update_target_network,
 )
-from .features import DANGER_CHANNEL, state_to_features
+from .features import (
+    DANGER_CHANNEL,
+    ESCAPE_TILES_CHANNEL,
+    VISIT_COUNT_NORMALIZER,
+    VISIT_COUNT_MAX,
+    state_to_features,
+)
 from .model import ACTIONS, CoinCollectorDQN
 from .replay_buffer import ReplayBuffer
 
@@ -36,7 +56,7 @@ MIN_REPLAY_SIZE = 5_000
 SOFT_TARGET_TAU = 1e-4
 
 # Linear epsilon schedule, measured in environment transitions
-EPSILON_START = 1.0
+EPSILON_START = 0.05 if FINE_TUNE_CRATE_WAIT else 1.0
 EPSILON_END = 0.05
 EPSILON_DECAY_STEPS = 100_000
 
@@ -44,8 +64,8 @@ EPSILON_DECAY_STEPS = 100_000
 STEP_REWARD = -0.05
 
 EVENT_REWARDS = {
-    e.COIN_COLLECTED: 1.0,
-    e.CRATE_DESTROYED: 0.2,
+    e.COIN_COLLECTED: 1.5 if FINE_TUNE_COIN_REWARD else 1.0,
+    e.CRATE_DESTROYED: 0.3,
     e.INVALID_ACTION: -1.0,
     e.GOT_KILLED: -5.0,
     # A suicide emits GOT_KILLED and KILLED_SELF. Keep the latter at
@@ -54,12 +74,23 @@ EVENT_REWARDS = {
 }
 
 # Potential-based reward shaping
-POTENTIAL_REWARD_SCALE = 0.0
+POTENTIAL_REWARD_SCALE = 1.0 if FINE_TUNE_COIN_POTENTIAL else 0.0
 POTENTIAL_DISTANCE_NORMALIZER = 32.0
 SAFETY_POTENTIAL_SCALE = 1.0
 MAX_EPISODE_STEPS = 400
+SAFE_COIN_WAIT_PENALTY = 0.0
+SAFE_CRATE_WAIT_PENALTY = (
+    CRATE_WAIT_PENALTY if FINE_TUNE_CRATE_WAIT else 0.0
+)
 
-RUN_LABEL = "task2_safety_potential_v1_15000ep_seed11"
+VISIT_COUNT_ENABLED = True
+VISIT_COUNT_ENCODING = "linear_10"
+if FINE_TUNE_CRATE_WAIT:
+    RUN_LABEL = f"task2_{EXPERIMENT_STEM}_seed{TRAINING_SEED}"
+else:
+    RUN_LABEL = (
+        f"task2_{EXPERIMENT_STEM}_{TOTAL_EPISODES}ep_seed{TRAINING_SEED}"
+    )
 TRAINLOG_OUT_DIR = "results/train/ben_task2"
 CHECKPOINT_DIR = "../../results/train/ben_task2"
 
@@ -68,6 +99,7 @@ CHECKPOINT_INTERVAL = 100
 
 def setup_training(self) -> None:
     """Initialize all state required only during training."""
+    self.visit_count_encoding = VISIT_COUNT_ENCODING
     if torch.backends.mps.is_available():
         self.device = torch.device("mps")
     else:
@@ -81,7 +113,7 @@ def setup_training(self) -> None:
     self.online_network.to(self.device)
     self.online_network.train()
 
-    self.target_network = CoinCollectorDQN().to(
+    self.target_network = CoinCollectorDQN(input_channels=10).to(
         self.device
     )
 
@@ -151,13 +183,36 @@ def setup_training(self) -> None:
                 "potential_reward_scale": (
                     POTENTIAL_REWARD_SCALE
                 ),
+                "potential_target": (
+                    "nearest_reachable_visible_coin"
+                    if FINE_TUNE_COIN_POTENTIAL
+                    else "disabled"
+                ),
+                "safe_coin_wait_penalty": SAFE_COIN_WAIT_PENALTY,
+                "safe_crate_wait_penalty": SAFE_CRATE_WAIT_PENALTY,
                 "potential_distance_normalizer": (
                     POTENTIAL_DISTANCE_NORMALIZER
                 ),
                 "safety_potential_scale": SAFETY_POTENTIAL_SCALE,
                 "symmetry_augmentation": True,
                 "legal_action_mask": True,
+                "visit_count_channel": VISIT_COUNT_ENABLED,
+                "visit_count_encoding": VISIT_COUNT_ENCODING,
+                "visit_count_max": VISIT_COUNT_MAX,
+                "visit_count_normalizer": VISIT_COUNT_NORMALIZER,
                 "training_seed": TRAINING_SEED,
+                "planned_total_episodes": TOTAL_EPISODES,
+                "model_file": MODEL_FILE,
+                "load_model_file": LOAD_MODEL_FILE,
+                "fine_tune_crate_wait": FINE_TUNE_CRATE_WAIT,
+                "fine_tune_coin_potential": (
+                    FINE_TUNE_COIN_POTENTIAL
+                ),
+                "fine_tune_coin_reward": FINE_TUNE_COIN_REWARD,
+                "continue_coin_reward15": CONTINUE_COIN_REWARD15,
+                "input_channels": 10,
+                "escape_feature_mode": ESCAPE_FEATURE_MODE,
+                "multiseed_arm": MULTISEED_ARM,
                 "device": str(self.device),
             },
             extra_columns=[
@@ -189,9 +244,17 @@ def game_events_occurred(
         old_game_state,
         new_game_state,
     )
+    reward += safe_coin_wait_penalty(
+        old_game_state,
+        self_action,
+    )
+    reward += safe_crate_wait_penalty(
+        old_game_state,
+        self_action,
+    )
 
-    state = state_to_features(old_game_state)
-    next_state = state_to_features(new_game_state)
+    state = _features_for_stored_action(self, old_game_state)
+    next_state = _next_features_with_visit_count(self, new_game_state)
     action_index = ACTIONS.index(self_action)
 
     self.replay_buffer.append(
@@ -228,9 +291,17 @@ def end_of_round(
             last_game_state,
             None,
         )
+        reward += safe_coin_wait_penalty(
+            last_game_state,
+            last_action,
+        )
+        reward += safe_crate_wait_penalty(
+            last_game_state,
+            last_action,
+        )
 
         self.replay_buffer.append(
-            state=state_to_features(last_game_state),
+            state=_features_for_stored_action(self, last_game_state),
             action=ACTIONS.index(last_action),
             reward=reward,
             next_state=None,
@@ -338,6 +409,43 @@ def reward_from_events(
     return reward
 
 
+def _features_for_stored_action(self, game_state: dict) -> np.ndarray:
+    """Reuse exactly the features on which the stored action was selected."""
+    expected = (game_state.get("round"), game_state.get("step"))
+    if (
+        getattr(self, "last_action_features", None) is not None
+        and getattr(self, "last_feature_round_step", None) == expected
+    ):
+        return self.last_action_features
+    return state_to_features(_state_with_escape_mode(game_state))
+
+
+def _next_features_with_visit_count(self, game_state: dict) -> np.ndarray:
+    """Preview the visit count that act() will apply to the next state."""
+    if not VISIT_COUNT_ENABLED:
+        return state_to_features(_state_with_escape_mode(game_state))
+
+    visit_counts = getattr(self, "visit_counts", None)
+    if visit_counts is None:
+        return state_to_features(_state_with_escape_mode(game_state))
+
+    next_counts = visit_counts.copy()
+    self_x, self_y = game_state["self"][3]
+    next_counts[self_x, self_y] += 1.0
+    augmented_state = dict(game_state)
+    augmented_state["visit_counts"] = next_counts
+    augmented_state["visit_count_encoding"] = VISIT_COUNT_ENCODING
+    augmented_state["escape_feature_mode"] = ESCAPE_FEATURE_MODE
+    return state_to_features(augmented_state)
+
+
+def _state_with_escape_mode(game_state: dict) -> dict:
+    """Return a shallow state copy configured for the 10-channel arm."""
+    augmented_state = dict(game_state)
+    augmented_state["escape_feature_mode"] = ESCAPE_FEATURE_MODE
+    return augmented_state
+
+
 def potential_shaping_reward(
     old_game_state: dict | None,
     new_game_state: dict | None,
@@ -368,6 +476,59 @@ def safety_potential_shaping_reward(
         GAMMA * new_potential
         - old_potential
     )
+
+
+def safe_coin_wait_penalty(
+    game_state: dict | None,
+    action: str,
+) -> float:
+    """Penalize WAIT only beside a reachable goal and outside danger."""
+    if game_state is None or action != "WAIT":
+        return 0.0
+
+    coin_distance = _shortest_coin_distance(game_state)
+    if coin_distance is None or coin_distance <= 0:
+        return 0.0
+
+    features = state_to_features(game_state)
+    self_x, self_y = game_state["self"][3]
+    if features[DANGER_CHANNEL, self_y, self_x] > 0.0:
+        return 0.0
+
+    return SAFE_COIN_WAIT_PENALTY
+
+
+def safe_crate_wait_penalty(
+    game_state: dict | None,
+    action: str,
+) -> float:
+    """Penalize safe WAIT beside a crate when a bomb has an escape."""
+    if game_state is None or action != "WAIT":
+        return 0.0
+
+    self_x, self_y = game_state["self"][3]
+    if not game_state["self"][2]:
+        return 0.0
+
+    field = game_state["field"]
+    next_to_crate = any(
+        0 <= self_x + delta_x < field.shape[0]
+        and 0 <= self_y + delta_y < field.shape[1]
+        and field[self_x + delta_x, self_y + delta_y] == 1
+        for delta_x, delta_y in ((0, -1), (1, 0), (0, 1), (-1, 0))
+    )
+    if not next_to_crate:
+        return 0.0
+
+    augmented_state = dict(game_state)
+    augmented_state["escape_feature_mode"] = "reachable_safe_tiles"
+    features = state_to_features(augmented_state)
+    if features[DANGER_CHANNEL, self_y, self_x] > 0.0:
+        return 0.0
+    if features[ESCAPE_TILES_CHANNEL].max() <= 0.0:
+        return 0.0
+
+    return SAFE_CRATE_WAIT_PENALTY
 
 
 def _safety_potential(game_state: dict | None) -> float:
@@ -408,6 +569,25 @@ def _coin_potential(
         -float(distance)
         / POTENTIAL_DISTANCE_NORMALIZER
     )
+
+
+def _navigation_potential(game_state: dict | None) -> float:
+    """Prefer visible coins, otherwise approach a reachable crate."""
+    if game_state is None:
+        return 0.0
+
+    if game_state.get("step", 0) >= MAX_EPISODE_STEPS:
+        return 0.0
+
+    coin_distance = _shortest_coin_distance(game_state)
+    if coin_distance is not None:
+        return -float(coin_distance) / POTENTIAL_DISTANCE_NORMALIZER
+
+    crate_distance = _shortest_crate_approach_distance(game_state)
+    if crate_distance is None:
+        return 0.0
+
+    return -float(crate_distance) / POTENTIAL_DISTANCE_NORMALIZER
 
 
 def _shortest_coin_distance(
@@ -475,6 +655,45 @@ def _shortest_coin_distance(
                     distance + 1,
                 )
             )
+
+    return None
+
+
+def _shortest_crate_approach_distance(game_state: dict) -> int | None:
+    """Find the nearest walkable tile adjacent to at least one crate."""
+    field = game_state["field"]
+    start = tuple(game_state["self"][3])
+    width, height = field.shape
+    directions = ((0, -1), (1, 0), (0, 1), (-1, 0))
+
+    def next_to_crate(x: int, y: int) -> bool:
+        return any(
+            0 <= x + dx < width
+            and 0 <= y + dy < height
+            and field[x + dx, y + dy] == 1
+            for dx, dy in directions
+        )
+
+    queue = deque([(start[0], start[1], 0)])
+    visited = {start}
+
+    while queue:
+        x, y, distance = queue.popleft()
+        if next_to_crate(x, y):
+            return distance
+
+        for delta_x, delta_y in directions:
+            next_x = x + delta_x
+            next_y = y + delta_y
+            next_position = (next_x, next_y)
+
+            if not (0 <= next_x < width and 0 <= next_y < height):
+                continue
+            if next_position in visited or field[next_x, next_y] != 0:
+                continue
+
+            visited.add(next_position)
+            queue.append((next_x, next_y, distance + 1))
 
     return None
 

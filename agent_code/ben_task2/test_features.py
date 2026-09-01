@@ -1,4 +1,5 @@
 import unittest
+import math
 
 import numpy as np
 
@@ -8,9 +9,11 @@ from agent_code.ben_task2.features import (
     COIN_CHANNEL,
     CRATE_CHANNEL,
     DANGER_CHANNEL,
+    ESCAPE_TILES_CHANNEL,
     EXPLOSION_CHANNEL,
     N_CHANNELS,
     SELF_CHANNEL,
+    VISIT_COUNT_CHANNEL,
     WALL_CHANNEL,
     legal_action_mask,
     state_to_features,
@@ -35,6 +38,10 @@ class StateToFeaturesTest(unittest.TestCase):
             "self": ("dqn-agent", 0, True, (2, 2)),
             "bombs": [((2, 1), 3)],
             "explosion_map": explosion_map,
+            "visit_counts": np.array(
+                [[0, 0, 0], [0, 0, 4], [0, 0, 0], [0, 0, 0]],
+                dtype=np.float32,
+            ),
         }
 
         features = state_to_features(game_state)
@@ -53,10 +60,35 @@ class StateToFeaturesTest(unittest.TestCase):
         self.assertAlmostEqual(features[BOMB_TIMER_CHANNEL, 1, 2], 0.4)
         self.assertEqual(features[EXPLOSION_CHANNEL, 0, 2], 1.0)
         self.assertTrue(np.all(features[BOMB_AVAILABLE_CHANNEL] == 1.0))
+        self.assertAlmostEqual(
+            features[VISIT_COUNT_CHANNEL, 2, 1],
+            math.log1p(4) / math.log1p(400),
+        )
 
         self.assertEqual(features[WALL_CHANNEL].sum(), 2.0)
         self.assertEqual(features[COIN_CHANNEL].sum(), 2.0)
         self.assertEqual(features[SELF_CHANNEL].sum(), 1.0)
+
+    def test_legacy_visit_encoding_remains_reproducible(self):
+        field = np.zeros((3, 3), dtype=np.int8)
+        visit_counts = np.zeros_like(field, dtype=np.float32)
+        visit_counts[1, 2] = 4.0
+        game_state = {
+            "field": field,
+            "coins": [],
+            "self": ("dqn-agent", 0, False, (1, 1)),
+            "bombs": [],
+            "explosion_map": np.zeros_like(field),
+            "visit_counts": visit_counts,
+            "visit_count_encoding": "linear_10",
+        }
+
+        features = state_to_features(game_state)
+
+        self.assertAlmostEqual(
+            features[VISIT_COUNT_CHANNEL, 2, 1],
+            0.4,
+        )
 
     def test_danger_uses_blast_geometry_and_earliest_timer(self):
         field = np.zeros((9, 9), dtype=np.int8)
@@ -99,6 +131,40 @@ class StateToFeaturesTest(unittest.TestCase):
         self.assertEqual(features[EXPLOSION_CHANNEL, 1, 2], 1.0)
         self.assertEqual(features[DANGER_CHANNEL, 1, 2], 1.0)
         self.assertTrue(np.all(features[BOMB_AVAILABLE_CHANNEL] == 0.0))
+
+    def test_escape_channel_marks_reachable_tiles_outside_own_blast(self):
+        field = np.zeros((7, 7), dtype=np.int8)
+        field[1, 2] = -1
+        field[2, 1] = 1
+        game_state = {
+            "field": field,
+            "coins": [],
+            "self": ("dqn-agent", 0, True, (1, 1)),
+            "bombs": [],
+            "explosion_map": np.zeros_like(field),
+        }
+
+        game_state["escape_feature_mode"] = "reachable_safe_tiles"
+        escape = state_to_features(game_state)[ESCAPE_TILES_CHANNEL]
+
+        self.assertEqual(escape[1, 1], 0.0)
+        self.assertEqual(escape[1, 4], 0.0)
+        self.assertEqual(escape[2, 0], 1.0)
+
+    def test_escape_channel_can_be_zeroed_for_architecture_control(self):
+        field = np.zeros((7, 7), dtype=np.int8)
+        game_state = {
+            "field": field,
+            "coins": [],
+            "self": ("dqn-agent", 0, True, (3, 3)),
+            "bombs": [],
+            "explosion_map": np.zeros_like(field),
+            "escape_feature_mode": "zero",
+        }
+
+        escape = state_to_features(game_state)[ESCAPE_TILES_CHANNEL]
+
+        self.assertTrue(np.all(escape == 0.0))
 
     def test_legal_action_mask_excludes_blocked_actions(self):
         field = np.zeros((5, 5), dtype=np.int8)

@@ -40,7 +40,7 @@ class CoinCollectorDQNTest(unittest.TestCase):
             for parameter in model.parameters()
         )
 
-        self.assertEqual(parameter_count, 118_358)
+        self.assertEqual(parameter_count, 118_502)
 
     def test_backward_pass(self):
         model = CoinCollectorDQN()

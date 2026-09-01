@@ -1,8 +1,10 @@
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import torch
@@ -111,6 +113,125 @@ class CallbacksTest(unittest.TestCase):
         }
 
         self.assertIn("BOMB", selected_actions)
+
+    def test_visit_count_increases_for_repeated_state(self):
+        agent = self.setup_agent(train=False)
+        game_state = self.make_game_state()
+        game_state["round"] = 1
+        game_state["step"] = 1
+
+        with patch.object(callbacks, "VISIT_COUNT_ENABLED", True):
+            first = callbacks._features_with_visit_count(agent, game_state)
+            game_state["step"] = 2
+            second = callbacks._features_with_visit_count(agent, game_state)
+
+        self.assertAlmostEqual(first[8, 1, 1], 0.1)
+        self.assertAlmostEqual(second[8, 1, 1], 0.2)
+
+    def test_zero_control_keeps_visit_channel_zero(self):
+        agent = self.setup_agent(train=False)
+        game_state = self.make_game_state()
+        game_state["round"] = 1
+        game_state["step"] = 1
+
+        with patch.object(callbacks, "VISIT_COUNT_ENABLED", False):
+            first = callbacks._features_with_visit_count(agent, game_state)
+            game_state["step"] = 2
+            second = callbacks._features_with_visit_count(agent, game_state)
+
+        self.assertEqual(float(first[8].sum()), 0.0)
+        self.assertEqual(float(second[8].sum()), 0.0)
+
+    def test_coin_reward_arm_uses_separate_model_and_source(self):
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "BM_TASK2_ESCAPE_ARM": "reachable",
+                "BM_TASK2_TRAINING_SEED": "11",
+                "BM_TASK2_TOTAL_EPISODES": "2000",
+                "BM_TASK2_FINETUNE_CRATE_WAIT": "1",
+                "BM_TASK2_CRATE_WAIT_PENALTY": "-0.03",
+                "BM_TASK2_FINETUNE_COIN_REWARD": "1",
+            }
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from agent_code.ben_task2 import callbacks, train; "
+                    "print(callbacks.MODEL_FILE); "
+                    "print(callbacks.LOAD_MODEL_FILE); "
+                    "print(train.EVENT_REWARDS['COIN_COLLECTED']); "
+                    "print(train.POTENTIAL_REWARD_SCALE)"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                (
+                    "ben_task2_escape_crate_wait003_coin_reward15_"
+                    "finetune2000_from_wait003_v1_seed11.pt"
+                ),
+                (
+                    "ben_task2_escape_crate_wait003_"
+                    "finetune2000_from10000_v1_seed11.pt"
+                ),
+                "1.5",
+                "0.0",
+            ],
+        )
+
+    def test_coin_reward_continuation_loads_a_new_output(self):
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "BM_TASK2_ESCAPE_ARM": "reachable",
+                "BM_TASK2_TRAINING_SEED": "11",
+                "BM_TASK2_TOTAL_EPISODES": "5000",
+                "BM_TASK2_FINETUNE_CRATE_WAIT": "1",
+                "BM_TASK2_CRATE_WAIT_PENALTY": "-0.03",
+                "BM_TASK2_FINETUNE_COIN_REWARD": "1",
+                "BM_TASK2_CONTINUE_COIN_REWARD15": "1",
+            }
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from agent_code.ben_task2 import callbacks, train; "
+                    "print(callbacks.MODEL_FILE); "
+                    "print(callbacks.LOAD_MODEL_FILE); "
+                    "print(train.EVENT_REWARDS['COIN_COLLECTED']); "
+                    "print(train.TOTAL_EPISODES)"
+                ),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+        self.assertEqual(
+            result.stdout.splitlines(),
+            [
+                (
+                    "ben_task2_escape_crate_wait003_coin_reward15_"
+                    "continue5000_from_reward15_v1_seed11.pt"
+                ),
+                (
+                    "ben_task2_escape_crate_wait003_coin_reward15_"
+                    "finetune2000_from_wait003_v1_seed11.pt"
+                ),
+                "1.5",
+                "5000",
+            ],
+        )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,56 @@
+{
+  "agent_provenance": {
+    "ben_task3": {
+      "callbacks_sha256": "fb45a82958091f8126ce876eadf230f5d8bf6b28a387eefeb214f507d0174e23",
+      "configured_model_file": "ben_task3_peaceful_v1_5000ep_seed11.pt",
+      "escape_feature_mode": "reachable_safe_tiles",
+      "model_exists": true,
+      "model_file": "ben_task3_task2_baseline_11ch_seed11.pt",
+      "model_sha256": "b918737e47e6ad23eeb91af7ba3e4998be8739b5bd54eb860d03cc3f00c11399",
+      "training_seed": 11,
+      "visit_count_encoding": "linear_10"
+    },
+    "peaceful_agent": {
+      "callbacks_sha256": "db408b7c86d8d308e20b529da378c29a26deb11a34f4a2b69dd942491bc44d82"
+    }
+  },
+  "agents": [
+    "ben_task3",
+    "peaceful_agent",
+    "peaceful_agent",
+    "peaceful_agent"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1",
+    "BM_TASK3_TOTAL_EPISODES": "5000",
+    "BM_TASK3_TRAINING_SEED": "11"
+  },
+  "git_commit": "39c770a-dirty",
+  "label": "ben_dqn_task3_11ch_task2_baseline_seed11__task3_peaceful_quick100_retry1",
+  "n_rounds": 100,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20260830
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-08-29T11:22:06+00:00",
+  "wall_clock_s": 10.2
+}

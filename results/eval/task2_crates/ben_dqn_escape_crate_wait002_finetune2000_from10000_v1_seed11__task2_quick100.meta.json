@@ -1,0 +1,51 @@
+{
+  "agent_provenance": {
+    "ben_task2": {
+      "callbacks_sha256": "b4f19acf358678c45dc5dd7cc97924a0885c05f66bcfa03910de8aabbb5e0cbd",
+      "escape_feature_mode": "reachable_safe_tiles",
+      "model_exists": true,
+      "model_file": "ben_task2_escape_crate_wait002_finetune2000_from10000_v1_seed11.pt",
+      "model_sha256": "5e72661f9d3b214d1d8f3400dc2f0f203e57e8d434df9a71979c1adab694cd22",
+      "training_seed": 11,
+      "visit_count_encoding": "linear_10"
+    }
+  },
+  "agents": [
+    "ben_task2"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1",
+    "BM_TASK2_ESCAPE_ARM": "reachable",
+    "BM_TASK2_FINETUNE_CRATE_WAIT": "1",
+    "BM_TASK2_TOTAL_EPISODES": "2000",
+    "BM_TASK2_TRAINING_SEED": "11"
+  },
+  "git_commit": "39c770a-dirty",
+  "label": "ben_dqn_escape_crate_wait002_finetune2000_from10000_v1_seed11__task2_quick100",
+  "n_rounds": 100,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20260830
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-08-28T11:35:25+00:00",
+  "wall_clock_s": 7.8
+}

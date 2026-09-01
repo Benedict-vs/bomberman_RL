@@ -1,0 +1,53 @@
+{
+  "agent_provenance": {
+    "coin_collector_agent": {
+      "callbacks_sha256": "bb9007137dd89712c142b67ff8b26d81b075511e572ad334f94414d96eb40a9c"
+    },
+    "dqn_task3_coin_collector": {
+      "callbacks_sha256": "da9cab353f45bfa5aea6030e52ae7e65cdb33174e3d15a3257aaff3ff16ba9b1",
+      "escape_feature_mode": "reachable_safe_tiles",
+      "model_exists": true,
+      "model_file": "dqn_task3_coin_collector_seed11.pt",
+      "model_sha256": "a9bd850a8b3eb4052b3c56aa87d39235b674e3b01cd5532325e3805e15f6c8f5",
+      "training_seed": 11,
+      "visit_count_encoding": "linear_10"
+    }
+  },
+  "agents": [
+    "dqn_task3_coin_collector",
+    "coin_collector_agent",
+    "coin_collector_agent",
+    "coin_collector_agent"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1"
+  },
+  "git_commit": "39c770a-dirty",
+  "label": "ben_dqn_task3_coin_collector_frozen_seed11__task3_coin_collector_quick100",
+  "n_rounds": 100,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20260830
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-08-29T21:10:40+00:00",
+  "wall_clock_s": 35.4
+}

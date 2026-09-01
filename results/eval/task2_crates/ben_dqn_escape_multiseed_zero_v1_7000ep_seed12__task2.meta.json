@@ -1,0 +1,49 @@
+{
+  "agent_provenance": {
+    "ben_task2": {
+      "callbacks_sha256": "5e1cfb56ddc8899ed0ae34d3cc7092e5db19194dda80414ad7922df3e3386089",
+      "escape_feature_mode": "zero",
+      "model_exists": true,
+      "model_file": "ben_task2_escape_multiseed_zero_v1_7000ep_seed12.pt",
+      "model_sha256": "9828c820afa8dfcde5a55375282a6173610ae41e3ee7be1ce4c1cd33f07f448f",
+      "training_seed": 12,
+      "visit_count_encoding": "linear_10"
+    }
+  },
+  "agents": [
+    "ben_task2"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1",
+    "BM_TASK2_ESCAPE_ARM": "zero",
+    "BM_TASK2_TRAINING_SEED": "12"
+  },
+  "git_commit": "39c770a-dirty",
+  "label": "ben_dqn_escape_multiseed_zero_v1_7000ep_seed12__task2",
+  "n_rounds": 1000,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20261730
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-08-27T18:37:59+00:00",
+  "wall_clock_s": 67.0
+}

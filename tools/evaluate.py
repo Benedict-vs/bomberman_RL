@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import importlib
 import json
 import os
 import platform
@@ -181,6 +183,61 @@ def resolve_agents(agents: list[str], opponents: str | None) -> list[str]:
     return line_up
 
 
+def collect_agent_provenance(agent_names: list[str]) -> dict[str, dict]:
+    """Snapshot callback configuration and model bytes used by each agent."""
+    provenance = {}
+    for agent_name in dict.fromkeys(agent_names):
+        entry = {}
+        try:
+            callbacks = importlib.import_module(
+                f"agent_code.{agent_name}.callbacks"
+            )
+        except (ImportError, ValueError) as error:
+            entry["callbacks_import_error"] = str(error)
+            provenance[agent_name] = entry
+            continue
+
+        callbacks_path = Path(callbacks.__file__).resolve()
+        entry["callbacks_sha256"] = _sha256_file(callbacks_path)
+
+        for attribute in (
+            "MODEL_FILE",
+            "TRAINING_SEED",
+            "ESCAPE_FEATURE_MODE",
+            "VISIT_COUNT_ENCODING",
+            "MODEL_VARIANT",
+        ):
+            if hasattr(callbacks, attribute):
+                entry[attribute.lower()] = getattr(callbacks, attribute)
+
+        configured_model_file = getattr(callbacks, "MODEL_FILE", None)
+        model_file = getattr(
+            callbacks,
+            "INFERENCE_MODEL_FILE",
+            configured_model_file,
+        )
+        if model_file:
+            entry["model_file"] = model_file
+            if configured_model_file != model_file:
+                entry["configured_model_file"] = configured_model_file
+            model_path = REPO_ROOT / "agent_code" / agent_name / model_file
+            entry["model_exists"] = model_path.is_file()
+            if model_path.is_file():
+                entry["model_sha256"] = _sha256_file(model_path)
+
+        provenance[agent_name] = entry
+
+    return provenance
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 # --------------------------------------------------------------------------
 # Main evaluation loop
 # --------------------------------------------------------------------------
@@ -312,6 +369,7 @@ def evaluate(
         # evaluation two ways, because the artifact did not say.
         "bm_env": {k: v for k, v in sorted(os.environ.items())
                    if k.startswith("BM_")},
+        "agent_provenance": collect_agent_provenance(agent_names),
         # Snapshot the rules, so we notice if someone evaluated against edited
         # settings (the classic "why can't I reproduce this" cause).
         "settings": {
