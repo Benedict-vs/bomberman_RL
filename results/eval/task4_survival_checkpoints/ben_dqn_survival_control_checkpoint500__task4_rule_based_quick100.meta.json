@@ -1,0 +1,60 @@
+{
+  "agent_provenance": {
+    "ben_task4": {
+      "callbacks_sha256": "92f7bc6fa6cf99749e39a7954a9237d7219bd27f16ebc6bf761294e19bc7016c",
+      "configured_model_file": "ben_task4_survival_penalty_control_v1_1000ep_seed11.pt",
+      "escape_feature_mode": "reachable_safe_tiles",
+      "model_exists": true,
+      "model_file": "../../results/train/ben_task4/task4_survival_penalty_control_v1_1000ep_seed11__episode_500.pt",
+      "model_sha256": "465fde1466cf2149e6c0a624b6cd55a21dce1d9b671a1eb453a9e5402a9a35f6",
+      "model_variant": "trained",
+      "training_seed": 11,
+      "visit_count_encoding": "linear_10"
+    },
+    "rule_based_agent": {
+      "callbacks_sha256": "78fae8121ffab5c849d69857aeaeabcee23e1015c923e5e701d9a2bce2c879f6"
+    }
+  },
+  "agents": [
+    "ben_task4",
+    "rule_based_agent",
+    "rule_based_agent",
+    "rule_based_agent"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1",
+    "BM_TASK4_CHECKPOINT_EPISODE": "500",
+    "BM_TASK4_MODEL_VARIANT": "trained",
+    "BM_TASK4_TOTAL_EPISODES": "1000",
+    "BM_TASK4_TRAINING_ARM": "survival_penalty_control_v1",
+    "BM_TASK4_TRAINING_SEED": "11"
+  },
+  "git_commit": "3dac0c5-dirty",
+  "label": "ben_dqn_survival_control_checkpoint500__task4_rule_based_quick100",
+  "n_rounds": 100,
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20260830
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-09-09T13:43:17+00:00",
+  "wall_clock_s": 43.3
+}

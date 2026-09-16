@@ -1,0 +1,5 @@
+round,seed,slot,agent,code,survived,round_steps,score,coins,kills,suicides,crates,bombs,moves,invalid,steps,time,think_mean_ms,think_max_ms,think_over_limit,died,killed_by_opponent,rank,won
+0,20260731,0,ext_xiaoxiae_bindist_v2,ext_xiaoxiae_bindist_v2,0,400,3,3,0,1,28,40,313,8,381,0.47129392623901367,1.237,4.283,0,1,0,1,1
+0,20260731,1,rule_based_agent_0,rule_based_agent,1,400,3,3,0,0,58,33,359,8,400,0.18535113334655762,0.4634,1.116,0,0,0,1,1
+0,20260731,2,rule_based_agent_1,rule_based_agent,0,400,1,1,0,1,19,6,77,2,85,0.02505946159362793,0.2948,0.6971,0,1,0,4,0
+0,20260731,3,rule_based_agent_2,rule_based_agent,0,400,2,2,0,1,11,6,43,7,56,0.012056827545166016,0.2153,0.4449,0,1,0,3,0

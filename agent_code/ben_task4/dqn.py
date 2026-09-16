@@ -9,7 +9,8 @@ import torch
 from torch import nn
 
 from .features import legal_action_mask
-from .replay_buffer import Transition
+from .features import OPPONENT_CHANNEL
+from .replay_buffer import BombOutcomeExample, Transition
 
 
 def optimize_dqn(
@@ -19,7 +20,14 @@ def optimize_dqn(
     transitions: Sequence[Transition],
     gamma: float,
     device: torch.device,
-) -> float:
+    double_dqn: bool = False,
+    importance_weights: np.ndarray | None = None,
+    return_td_errors: bool = False,
+    auxiliary_opponent_prediction: bool = False,
+    auxiliary_scale: float = 0.1,
+    bomb_outcome_examples: Sequence[BombOutcomeExample] | None = None,
+    auxiliary_bomb_outcome: bool = False,
+) -> float | tuple[float, np.ndarray]:
     """Perform one DQN optimization step and return the loss."""
     if not transitions:
         raise ValueError(
@@ -77,6 +85,12 @@ def optimize_dqn(
         device=device,
     )
 
+    n_steps = torch.tensor(
+        [transition.n_steps for transition in transitions],
+        dtype=torch.float32,
+        device=device,
+    )
+
     predicted_q_values = online_network(
         states
     )
@@ -96,26 +110,76 @@ def optimize_dqn(
             )
         ).to(device=device)
 
-        masked_next_q_values = target_network(
-            next_states
-        ).masked_fill(
-            ~next_action_masks,
-            -torch.inf,
+        target_next_q_values = target_network(next_states).masked_fill(
+            ~next_action_masks, -torch.inf
         )
-
-        next_q_values = masked_next_q_values.max(dim=1).values
+        if double_dqn:
+            online_next_actions = online_network(next_states).masked_fill(
+                ~next_action_masks, -torch.inf
+            ).argmax(dim=1)
+            next_q_values = target_next_q_values.gather(
+                dim=1, index=online_next_actions.unsqueeze(1)
+            ).squeeze(1)
+        else:
+            next_q_values = target_next_q_values.max(dim=1).values
 
         target_q_values = (
             rewards
-            + gamma
+            + torch.pow(gamma, n_steps)
             * (1.0 - dones)
             * next_q_values
         )
 
-    loss = nn.functional.smooth_l1_loss(
+    per_item_loss = nn.functional.smooth_l1_loss(
         selected_q_values,
         target_q_values,
+        reduction="none",
     )
+    if importance_weights is None:
+        loss = per_item_loss.mean()
+    else:
+        weights = torch.as_tensor(
+            importance_weights, dtype=torch.float32, device=device
+        )
+        if weights.shape != per_item_loss.shape:
+            raise ValueError("Importance weights must match batch size.")
+        loss = (weights * per_item_loss).mean()
+
+    if auxiliary_opponent_prediction:
+        if not hasattr(online_network, "forward_with_opponent_prediction"):
+            raise ValueError("Auxiliary head missing from online network.")
+        _q_values, prediction_logits = online_network.forward_with_opponent_prediction(
+            states
+        )
+        opponent_target = next_states[:, OPPONENT_CHANNEL]
+        positive_weight = torch.tensor(32.0, device=device)
+        auxiliary_loss = nn.functional.binary_cross_entropy_with_logits(
+            prediction_logits, opponent_target, pos_weight=positive_weight
+        )
+        loss = loss + auxiliary_scale * auxiliary_loss
+
+    if auxiliary_bomb_outcome and bomb_outcome_examples:
+        if not hasattr(online_network, "forward_with_bomb_outcome"):
+            raise ValueError("Bomb-outcome head missing from online network.")
+        outcome_states = torch.from_numpy(np.stack([
+            example.state for example in bomb_outcome_examples
+        ])).to(device=device, dtype=torch.float32)
+        outcome_targets = torch.tensor(
+            [example.outcome for example in bomb_outcome_examples],
+            dtype=torch.long, device=device,
+        )
+        _q_values, outcome_logits = online_network.forward_with_bomb_outcome(
+            outcome_states
+        )
+        # Kills are rare; weighting prevents the neutral class from becoming
+        # the trivial auxiliary solution.
+        class_weights = torch.tensor([1.0, 8.0, 3.0], device=device)
+        auxiliary_loss = nn.functional.cross_entropy(
+            outcome_logits, outcome_targets, weight=class_weights
+        )
+        loss = loss + auxiliary_scale * auxiliary_loss
+
+    td_errors = (target_q_values - selected_q_values).abs().detach().cpu().numpy()
 
     optimizer.zero_grad()
     loss.backward()
@@ -127,7 +191,8 @@ def optimize_dqn(
 
     optimizer.step()
 
-    return float(loss.item())
+    result = float(loss.item())
+    return (result, td_errors) if return_td_errors else result
 
 
 def update_target_network(

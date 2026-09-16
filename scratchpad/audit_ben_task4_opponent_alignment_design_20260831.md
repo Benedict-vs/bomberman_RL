@@ -145,3 +145,45 @@ The standard launcher caveat remains: `TRAINING_OPPONENTS` records intent but do
 Pre-registered direct contrast is `enabled - zero`: score must be positive, non-fragile, CI exclude zero and exceed the practical `0.12` noise threshold; kills must be positive/non-fragile with CI excluding zero. Safety guards are point changes no worse than `+0.03` suicides, `+0.02` killed-by and `-0.03` survival, with no demonstrated regression. Timing requires zero 500-ms overruns and actual global maximum below 500 ms, preferably below 50 ms.
 
 This is only a seed-11 interaction screen. Passing permits matched-source multiseed work; failing score/kills or any safety guard stops the arm. The implementation is ready to launch after the usual all-target collision check immediately before execution.
+
+## Post-run audit: mixed-opponent interaction
+
+### Completeness and identity
+
+Both arms contain exactly 1,000 unique training rows numbered 1–1,000, ten checkpoints at 100-episode intervals, and final models tensor-identical to Episode 1,000. They load the same converted 12-channel source, record the same `peaceful_agent,rule_based_agent,rule_based_agent` training distribution, seed, rewards and hyperparameters, and correctly distinguish only alignment mode `zero` versus `enabled`.
+
+Final model hashes:
+
+- mixed zero placebo: `6ffda1bba5f551b15c066f8c3213d5a2f8be684ab16cc46d2a1a7968fa386bdb`;
+- mixed enabled: `13027823cb062360da230fc3148b99c6d01556f01a48684050dd8ad4bdb465ce`.
+
+Both quick evaluations contain 400 rows/100 rounds and both full evaluations contain 4,000 rows/1,000 complete rounds. Each full run uses the correct slot-0 DQN model plus three rule-based opponents, explicit trained arm environment and matching model SHA. Score/death arithmetic holds in every row. The common callbacks hash confirms the same implementation.
+
+### Quick screen versus full measurement
+
+The enabled quick screen looked favorable (score `3.95` versus `3.49`, kills `0.16` versus `0.12`, survival `0.71` versus `0.54`). It was only a pre-specified gate and cannot override the full result. At 1,000 rounds the direction reverses on the primary/mechanism metrics:
+
+| metric | mixed zero | mixed enabled | enabled − zero (95% CI) | sign-flip p | verdict |
+|---|---:|---:|---:|---:|---|
+| score | 3.685 | 3.409 | `-0.276 [-0.467,-0.089]` | 0.0039 | worse |
+| kills | 0.151 | 0.106 | `-0.045 [-0.075,-0.015]` | 0.0035 | worse |
+| suicides | 0.355 | 0.259 | `-0.096 [-0.136,-0.056]` | <0.0001 | better |
+| killed by opponent | 0.061 | 0.053 | `-0.008 [-0.028,+0.012]` | 0.499 | no effect shown |
+| survival | 0.584 | 0.688 | `+0.104 [+0.063,+0.146]` | <0.0001 | better |
+| win rate (secondary) | 0.407 | 0.384 | `-0.023 [-0.064,+0.018]` | 0.302 | no effect shown |
+
+No row is fragile; bootstrap and sign-flip verdicts agree. The score deficit is larger than the approximately `0.12` opponent-noise heuristic. Arena-only pairing and unseeded opponent stdlib trajectories remain limitations, but cannot plausibly rescue clear, same-direction score and kill losses of these magnitudes.
+
+Score decomposition is consistent: coins fall nominally by `0.051`, while `-0.045 × 5 = -0.225` kill points account for most of the `-0.276` total. Behavior explains the trade-off more directly: enabled alignment drops `8.325` fewer bombs per round (`28.061→19.736`, clear and non-fragile), lives `13.826` steps longer, and moves more. It learns caution/suppressed bombing rather than more effective attacking. Invalid actions also rise `0.573→0.819`, so the channel is not simply a uniformly cleaner policy.
+
+### Gates and timing
+
+Both attack gates fail decisively: score and kills are negative with CIs excluding zero. All safety guards pass, but safety cannot substitute for primary score and the combined aggression+safety goal is not met.
+
+Timing is legal and better behaved than the prior outlier-heavy runs: zero timeouts, global maxima `24.379 ms` (zero) and `21.296 ms` (enabled), both below the preferred 50 ms margin and far below 500 ms. Enabled mean action time remains higher (`0.483` versus `0.197 ms`) as expected from feature construction, with ample budget.
+
+### Decision and next direction
+
+Stop this interaction and do not run seeds 12/13. Retain it as replicated-in-context evidence that the alignment map acts primarily as a safety/bomb-suppression feature, not an aggression feature. Do not inspect its ten checkpoints: the apparent quick-test promise and endpoint reversal make post-hoc checkpoint selection especially vulnerable to noise.
+
+The repeated trade-off now has a concrete mechanism: easy-opponent training can increase bombing/kills but harms safety; alignment restores safety mainly by suppressing bombs and therefore kills. The next scientifically distinct approach should teach **safe offensive bomb use**, not add more global death pressure or passive alignment input. A controlled candidate is a small dense auxiliary training event awarded only when the agent chooses `BOMB`, an opponent lies in the hypothetical blast relation, and the existing escape feature indicates a reachable safe exit; compare it with an otherwise identical zero-reward/placebo arm under three rule-based opponents. This preserves ML legality—the reward supplies a training signal, while the DQN still learns the action policy—and directly targets the missing conjunction observed in the data. Pre-register a small scale, guard against repeated useless bomb farming, keep official score primary, and use the same kill and safety gates. Begin with seed 11; only a passing controlled pilot justifies matched-source seeds 12/13.

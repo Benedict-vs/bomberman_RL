@@ -1,0 +1,5 @@
+round,seed,slot,agent,code,survived,round_steps,score,coins,kills,suicides,crates,bombs,moves,invalid,steps,time,think_mean_ms,think_max_ms,think_over_limit,died,killed_by_opponent,rank,won
+0,20260731,0,ext_lijesse_featureeverything,ext_lijesse_featureeverything,1,400,2,2,0,0,39,13,376,10,400,4.751990556716919,11.88,36.4668,0,0,0,2,0
+0,20260731,1,rule_based_agent_0,rule_based_agent,0,400,2,2,0,1,28,31,283,13,327,0.16456055641174316,0.5032,1.143,0,1,0,2,0
+0,20260731,2,rule_based_agent_1,rule_based_agent,0,400,4,4,0,1,31,22,195,10,227,0.09524679183959961,0.4196,1.0638,0,1,0,1,1
+0,20260731,3,rule_based_agent_2,rule_based_agent,1,400,1,1,0,0,24,31,355,14,400,0.22559046745300293,0.564,1.1611,0,0,0,4,0

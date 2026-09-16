@@ -21,6 +21,12 @@ VISIT_COUNT_CHANNEL = 8
 ESCAPE_TILES_CHANNEL = 9
 OPPONENT_CHANNEL = 10
 OPPONENT_BOMB_ALIGNMENT_CHANNEL = 11
+OPPONENT_ESCAPE_PRESSURE_CHANNEL = 11
+OPPONENT_BOMB_READY_CHANNEL = 11
+TEMPORAL_SAFETY_CHANNEL = 11
+OPPONENT_BOMB_TRADEOFF_CHANNEL = 11
+SPACETIME_SAFETY_CHANNEL = 11
+COIN_NAVIGATION_CHANNEL = 11
 VISIT_COUNT_NORMALIZER = 10.0
 VISIT_COUNT_MAX = 400.0
 VISIT_COUNT_ENCODING = "log_400"
@@ -38,7 +44,7 @@ ACTION_DELTAS = (
 
 
 def state_to_features(game_state: dict | None) -> np.ndarray | None:
-    """Return Task-4 board channels with optional bomb alignment."""
+    """Return Task-4 board channels with one optional combat feature."""
     if game_state is None:
         return None
 
@@ -47,11 +53,77 @@ def state_to_features(game_state: dict | None) -> np.ndarray | None:
 
     escape_feature_mode = game_state.get("escape_feature_mode")
     alignment_mode = game_state.get("opponent_alignment_mode", "disabled")
+    escape_pressure_mode = game_state.get(
+        "opponent_escape_pressure_mode",
+        "disabled",
+    )
+    bomb_ready_mode = game_state.get(
+        "opponent_bomb_ready_mode",
+        "disabled",
+    )
+    temporal_safety_mode = game_state.get(
+        "temporal_safety_mode",
+        "disabled",
+    )
+    bomb_tradeoff_mode = game_state.get(
+        "opponent_bomb_tradeoff_mode",
+        "disabled",
+    )
+    spacetime_safety_mode = game_state.get(
+        "spacetime_safety_mode",
+        "disabled",
+    )
+    coin_navigation_mode = game_state.get("coin_navigation_mode", "disabled")
     if alignment_mode not in {"disabled", "zero", "enabled"}:
         raise ValueError(f"Unknown opponent-alignment mode: {alignment_mode}")
+    if escape_pressure_mode not in {"disabled", "zero", "enabled"}:
+        raise ValueError(
+            "Unknown opponent-escape-pressure mode: "
+            f"{escape_pressure_mode}"
+        )
+    if bomb_ready_mode not in {"disabled", "zero", "enabled"}:
+        raise ValueError(
+            f"Unknown opponent-bomb-ready mode: {bomb_ready_mode}"
+        )
+    if temporal_safety_mode not in {"disabled", "zero", "enabled"}:
+        raise ValueError(
+            f"Unknown temporal-safety mode: {temporal_safety_mode}"
+        )
+    if bomb_tradeoff_mode not in {"disabled", "zero", "enabled"}:
+        raise ValueError(
+            f"Unknown opponent-bomb-tradeoff mode: {bomb_tradeoff_mode}"
+        )
+    if spacetime_safety_mode not in {"disabled", "zero", "enabled"}:
+        raise ValueError(
+            f"Unknown spacetime-safety mode: {spacetime_safety_mode}"
+        )
+    if coin_navigation_mode not in {"disabled", "zero", "enabled"}:
+        raise ValueError(f"Unknown coin-navigation mode: {coin_navigation_mode}")
+    active_optional_modes = sum(
+        mode != "disabled"
+        for mode in (
+            alignment_mode,
+            escape_pressure_mode,
+            bomb_ready_mode,
+            temporal_safety_mode,
+            bomb_tradeoff_mode,
+            spacetime_safety_mode,
+            coin_navigation_mode,
+        )
+    )
+    if active_optional_modes > 1:
+        raise ValueError(
+            "Optional opponent features cannot share channel 11."
+        )
     channel_count = (
         N_ALIGNMENT_CHANNELS
         if alignment_mode in {"zero", "enabled"}
+        or escape_pressure_mode in {"zero", "enabled"}
+        or bomb_ready_mode in {"zero", "enabled"}
+        or temporal_safety_mode in {"zero", "enabled"}
+        or bomb_tradeoff_mode in {"zero", "enabled"}
+        or spacetime_safety_mode in {"zero", "enabled"}
+        or coin_navigation_mode in {"zero", "enabled"}
         else N_CHANNELS
     )
     features = np.zeros(
@@ -73,6 +145,8 @@ def state_to_features(game_state: dict | None) -> np.ndarray | None:
     for other in game_state.get("others", []):
         other_x, other_y = other[3]
         features[OPPONENT_CHANNEL, other_y, other_x] = 1.0
+        if bomb_ready_mode == "enabled" and bool(other[2]):
+            features[OPPONENT_BOMB_READY_CHANNEL, other_y, other_x] = 1.0
 
     if alignment_mode == "enabled":
         opponent_positions = {
@@ -90,6 +164,37 @@ def state_to_features(game_state: dict | None) -> np.ndarray | None:
                         source_y,
                         source_x,
                     ] = 1.0
+
+    if escape_pressure_mode == "enabled":
+        opponent_positions = {
+            tuple(other[3]) for other in game_state.get("others", [])
+        }
+        bomb_positions = {
+            tuple(position) for position, _timer in game_state.get("bombs", [])
+        }
+        for source_x in range(width):
+            for source_y in range(height):
+                source = (source_x, source_y)
+                if (
+                    field[source] != 0
+                    or source in bomb_positions
+                    or source in opponent_positions
+                ):
+                    continue
+                pressures = (
+                    _opponent_escape_pressure(
+                        field,
+                        source,
+                        opponent,
+                        bomb_positions | (opponent_positions - {opponent}),
+                    )
+                    for opponent in opponent_positions
+                )
+                features[
+                    OPPONENT_ESCAPE_PRESSURE_CHANNEL,
+                    source_y,
+                    source_x,
+                ] = max(pressures, default=0.0)
 
     for (bomb_x, bomb_y), timer in game_state.get("bombs", []):
         urgency = _timer_urgency(timer)
@@ -119,8 +224,89 @@ def state_to_features(game_state: dict | None) -> np.ndarray | None:
         features[EXPLOSION_CHANNEL],
     )
 
+    if temporal_safety_mode == "enabled":
+        features[TEMPORAL_SAFETY_CHANNEL] = _temporal_safety_slack(
+            field=field,
+            start=(self_x, self_y),
+            bombs=game_state.get("bombs", []),
+            explosion_map=explosion_map,
+            opponent_positions={
+                tuple(other[3]) for other in game_state.get("others", [])
+            },
+        ).T
+
+    if spacetime_safety_mode == "enabled":
+        features[SPACETIME_SAFETY_CHANNEL] = _spacetime_safe_endpoints(
+            field=field,
+            start=(self_x, self_y),
+            bombs=game_state.get("bombs", []),
+            explosion_map=explosion_map,
+            opponent_positions={
+                tuple(other[3]) for other in game_state.get("others", [])
+            },
+        ).T
+
+    if coin_navigation_mode == "enabled":
+        features[COIN_NAVIGATION_CHANNEL] = _coin_navigation_map(
+            field,
+            game_state.get("coins", []),
+            game_state.get("bombs", []),
+            {tuple(other[3]) for other in game_state.get("others", [])},
+        ).T
+
     bomb_available = bool(game_state["self"][2])
     features[BOMB_AVAILABLE_CHANNEL].fill(float(bomb_available))
+
+    if bomb_tradeoff_mode == "enabled":
+        opponent_positions = {
+            tuple(other[3]) for other in game_state.get("others", [])
+        }
+        bomb_positions = {
+            tuple(position) for position, _timer in game_state.get("bombs", [])
+        }
+        for source_x in range(width):
+            for source_y in range(height):
+                source = (source_x, source_y)
+                if (
+                    field[source] != 0
+                    or source in bomb_positions
+                    or source in opponent_positions
+                ):
+                    continue
+                hit_opponents = opponent_positions.intersection(
+                    _blast_coordinates(field, source)
+                )
+                if not hit_opponents:
+                    continue
+                own_escape_tiles = _reachable_escape_tiles(
+                    field,
+                    source,
+                    game_state.get("bombs", []),
+                    features[DANGER_CHANNEL],
+                    bomb_available,
+                    opponent_positions,
+                )
+                own_escape_score = min(
+                    float(np.count_nonzero(own_escape_tiles)) / 10.0,
+                    1.0,
+                )
+                opponent_pressure = max(
+                    (
+                        _opponent_escape_pressure(
+                            field,
+                            source,
+                            opponent,
+                            bomb_positions | (opponent_positions - {opponent}),
+                        )
+                        for opponent in hit_opponents
+                    ),
+                    default=0.0,
+                )
+                features[
+                    OPPONENT_BOMB_TRADEOFF_CHANNEL,
+                    source_y,
+                    source_x,
+                ] = own_escape_score * opponent_pressure
 
     visit_counts = np.asarray(
         game_state.get("visit_counts", np.zeros_like(field)),
@@ -162,6 +348,217 @@ def state_to_features(game_state: dict | None) -> np.ndarray | None:
         )
 
     return features
+
+
+def _temporal_safety_slack(
+    field: np.ndarray,
+    start: tuple[int, int],
+    bombs: list[tuple[tuple[int, int], int]],
+    explosion_map: np.ndarray,
+    opponent_positions: set[tuple[int, int]],
+) -> np.ndarray:
+    """Map reachable tiles to normalized time remaining before danger.
+
+    One denotes a reachable tile with no scheduled blast. Threatened tiles
+    remain positive only if the agent arrives strictly before detonation. This
+    supplies state information rather than prescribing an action. The framework
+    has no bomb-chain reactions, so each bomb timer is evaluated independently.
+    """
+    width, height = field.shape
+    danger_time = np.full((width, height), np.inf, dtype=np.float32)
+
+    for (bomb_x, bomb_y), timer in bombs:
+        detonation_time = float(max(int(timer), 0))
+        for blast_x, blast_y in _blast_coordinates(field, (bomb_x, bomb_y)):
+            danger_time[blast_x, blast_y] = min(
+                danger_time[blast_x, blast_y],
+                detonation_time,
+            )
+
+    danger_time[np.asarray(explosion_map) > 0] = 0.0
+
+    bomb_positions = {tuple(position) for position, _timer in bombs}
+    distances = {start: 0}
+    frontier = [start]
+    while frontier:
+        x, y = frontier.pop(0)
+        distance = distances[(x, y)]
+        for delta_x, delta_y in ACTION_DELTAS:
+            neighbor = (x + delta_x, y + delta_y)
+            next_x, next_y = neighbor
+            if (
+                not (0 <= next_x < width and 0 <= next_y < height)
+                or neighbor in distances
+                or neighbor in bomb_positions
+                or neighbor in opponent_positions
+                or field[next_x, next_y] != 0
+            ):
+                continue
+            arrival_time = distance + 1
+            if arrival_time >= danger_time[next_x, next_y]:
+                continue
+            distances[neighbor] = arrival_time
+            frontier.append(neighbor)
+
+    slack = np.zeros_like(field, dtype=np.float32)
+    for (x, y), arrival_time in distances.items():
+        deadline = danger_time[x, y]
+        if np.isinf(deadline):
+            slack[x, y] = 1.0
+        elif arrival_time < deadline:
+            slack[x, y] = min(
+                (deadline - arrival_time) / float(BOMB_TIMER),
+                1.0,
+            )
+
+    return slack
+
+
+def _spacetime_safe_endpoints(
+    field: np.ndarray,
+    start: tuple[int, int],
+    bombs: list[tuple[tuple[int, int], int]],
+    explosion_map: np.ndarray,
+    opponent_positions: set[tuple[int, int]],
+) -> np.ndarray:
+    """Mark safe endpoints reachable through all scheduled blast times.
+
+    The search state is ``(tile, time)``.  It allows moving or waiting one
+    tick, blocks existing bombs until their explosion has faded and rejects a
+    tile whenever it is exploding at that exact tick.  Crates are deliberately
+    kept blocked even if a scheduled blast could destroy one: this conservative
+    map never invents an escape path that the current board does not contain.
+    """
+    width, height = field.shape
+    horizon = BOMB_TIMER + EXPLOSION_TIMER
+    hazardous = np.zeros((horizon + 1, width, height), dtype=np.bool_)
+
+    current_explosions = np.asarray(explosion_map)
+    for time in range(horizon + 1):
+        hazardous[time] |= current_explosions > time
+
+    bomb_fade_times: dict[tuple[int, int], int] = {}
+    for bomb_position, timer in bombs:
+        bomb_x, bomb_y = bomb_position
+        detonation_time = max(int(timer), 0)
+        fade_time = detonation_time + EXPLOSION_TIMER
+        bomb_fade_times[(bomb_x, bomb_y)] = fade_time
+        for time in range(detonation_time, min(fade_time, horizon + 1)):
+            for blast_x, blast_y in _blast_coordinates(field, (bomb_x, bomb_y)):
+                hazardous[time, blast_x, blast_y] = True
+
+    static_blocked = field != 0
+    for opponent_x, opponent_y in opponent_positions:
+        static_blocked[opponent_x, opponent_y] = True
+
+    def passable(position: tuple[int, int], time: int) -> bool:
+        x, y = position
+        if not (0 <= x < width and 0 <= y < height):
+            return False
+        if static_blocked[x, y] or hazardous[time, x, y]:
+            return False
+        return time >= bomb_fade_times.get(position, 0)
+
+    endpoints = np.zeros_like(field, dtype=np.float32)
+    if not passable(start, 0):
+        return endpoints
+
+    reachable = {start}
+    earliest_arrival = {start: 0}
+    for time in range(1, horizon + 1):
+        following = set()
+        for x, y in reachable:
+            for delta_x, delta_y in ACTION_DELTAS + ((0, 0),):
+                target = (x + delta_x, y + delta_y)
+                if not passable(target, time):
+                    continue
+                following.add(target)
+                earliest_arrival.setdefault(target, time)
+        reachable = following
+        if not reachable:
+            return endpoints
+
+    for x, y in reachable:
+        endpoints[x, y] = 1.0 - earliest_arrival[(x, y)] / float(horizon)
+
+    return endpoints
+
+
+def _coin_navigation_map(
+    field: np.ndarray,
+    coins: list[tuple[int, int]],
+    bombs: list[tuple[tuple[int, int], int]],
+    opponent_positions: set[tuple[int, int]],
+) -> np.ndarray:
+    """Map each free tile to its static shortest-path proximity to a coin."""
+    navigation = np.zeros_like(field, dtype=np.float32)
+    if not coins:
+        return navigation
+    width, height = field.shape
+    blocked = field != 0
+    for position, _timer in bombs:
+        blocked[position] = True
+    for position in opponent_positions:
+        blocked[position] = True
+    distances = {
+        tuple(coin): 0 for coin in coins
+        if 0 <= coin[0] < width and 0 <= coin[1] < height and not blocked[coin]
+    }
+    frontier = list(distances)
+    while frontier:
+        x, y = frontier.pop(0)
+        for delta_x, delta_y in ACTION_DELTAS:
+            target = (x + delta_x, y + delta_y)
+            target_x, target_y = target
+            if (not (0 <= target_x < width and 0 <= target_y < height)
+                    or target in distances or blocked[target]):
+                continue
+            distances[target] = distances[(x, y)] + 1
+            frontier.append(target)
+    for position, distance in distances.items():
+        navigation[position] = max(0.0, 1.0 - distance / 32.0)
+    return navigation
+
+
+def _opponent_escape_pressure(
+    field: np.ndarray,
+    bomb_source: tuple[int, int],
+    opponent: tuple[int, int],
+    blocked_positions: set[tuple[int, int]],
+) -> float:
+    """Score how few static safe endpoints an aligned opponent can reach."""
+    hypothetical_blast = set(_blast_coordinates(field, bomb_source))
+    if opponent not in hypothetical_blast:
+        return 0.0
+
+    blocked = set(blocked_positions)
+    blocked.add(bomb_source)
+    frontier = [(opponent, 0)]
+    visited = {opponent}
+    safe_endpoints: set[tuple[int, int]] = set()
+
+    while frontier:
+        position, distance = frontier.pop(0)
+        if position not in hypothetical_blast:
+            safe_endpoints.add(position)
+        if distance >= BOMB_TIMER:
+            continue
+
+        x, y = position
+        for delta_x, delta_y in ACTION_DELTAS:
+            neighbor = (x + delta_x, y + delta_y)
+            if (
+                neighbor in visited
+                or neighbor in blocked
+                or not (0 <= neighbor[0] < field.shape[0])
+                or not (0 <= neighbor[1] < field.shape[1])
+                or field[neighbor] != 0
+            ):
+                continue
+            visited.add(neighbor)
+            frontier.append((neighbor, distance + 1))
+
+    return 1.0 / (1.0 + len(safe_endpoints))
 
 
 def _reachable_escape_tiles(

@@ -1,0 +1,59 @@
+{
+  "agent_provenance": {
+    "dqn_task3": {
+      "callbacks_sha256": "3a601738fef20b2f6101a26bece2908a2b92193cd52c6298c04c1cd5b925d11f",
+      "escape_feature_mode": "reachable_safe_tiles",
+      "model_exists": true,
+      "model_file": "dqn_task3_seed13.pt",
+      "model_sha256": "1285ac5cb78a25b0e6cc6a0e0a68fdd86e153db537832938f940cb1ad4fd8b63",
+      "training_seed": 13,
+      "visit_count_encoding": "linear_10"
+    },
+    "ext_lijesse_featureeverything": {
+      "callbacks_sha256": "08325acea9944ecf76c38005de359fcc1cfa4d75ec8560f36e7c20d8b7bdea88"
+    },
+    "ext_xiaoxiae_binary_v6": {
+      "callbacks_sha256": "fbce85557b7905eb78869eb673fcd7c9918fe26c01055c52c67dd5c48f823915"
+    },
+    "ext_xiaoxiae_bindist_v2": {
+      "callbacks_sha256": "fbce85557b7905eb78869eb673fcd7c9918fe26c01055c52c67dd5c48f823915"
+    }
+  },
+  "agents": [
+    "dqn_task3",
+    "ext_lijesse_featureeverything",
+    "ext_xiaoxiae_bindist_v2",
+    "ext_xiaoxiae_binary_v6"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1"
+  },
+  "git_commit": "3dac0c5-dirty",
+  "label": "ben_dqn_task3_seed13__task4_external_top3_eval1000",
+  "n_rounds": 1000,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20261730
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-09-04T15:25:59+00:00",
+  "wall_clock_s": 4562.2
+}

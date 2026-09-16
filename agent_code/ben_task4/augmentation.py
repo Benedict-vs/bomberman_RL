@@ -55,6 +55,8 @@ def transform_transition(
         reward=transition.reward,
         next_state=transformed_next_state,
         done=transition.done,
+        n_steps=transition.n_steps,
+        event_tags=transition.event_tags,
     )
 
 
@@ -72,6 +74,17 @@ def randomly_transform_transition(
         rotations=rotations,
         reflect=reflect,
     )
+
+
+def all_symmetry_transforms(
+    transition: Transition,
+) -> list[Transition]:
+    """Return all eight rotations/reflections of one transition."""
+    return [
+        transform_transition(transition, rotations=rotations, reflect=reflect)
+        for rotations in range(4)
+        for reflect in (False, True)
+    ]
 
 
 def _transform_board(
