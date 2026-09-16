@@ -15,6 +15,11 @@ welche Ideen ich habe und warum ich mich so entschieden habe.
 - **Nächster Schritt / Ideen:** ...
 -->
 
+### 2026-09-16 — `final-project-agent-code.zip` für Agent-B-Abgabe geprüft und freigegeben
+- **Archivinhalt:** `final-project-agent-code.zip` enthält genau einen Top-Level-Agentenordner `Agent_B/` mit ausschließlich `Agent_B_model.pt`, `__init__.py`, `callbacks.py`, `features.py` und `model.py`. Es enthält keine Logs, `__pycache__`, `.pyc`- oder `.DS_Store`-Dateien.
+- **Integrität / Provenienz:** `unzip -t` meldet keine Kompressionsfehler. Der Modellhash aus dem ZIP entspricht bytegenau dem lokalen `Agent_B_model.pt` und dem finalen Incumbent: `d50ae3d1ce80018a8a834f7df28cff3dfead5c0c99d578d7af1604a3cf0806c6`.
+- **Abgabeentscheidung:** Der Ordner erfüllt die im PDF beschriebene Form für den MaMPF-Submission-Test: die erste relevante Unterstruktur besitzt `callbacks.py`, die Modell-/Codeabhängigkeiten sind lokal und relativ. Der sichtbare Framework-Smoke-Test lief zuvor ohne Traceback. Das Archiv ist damit für den Upload als Agent B freigegeben.
+
 ### 2026-09-16 — `Agent_B` im sichtbaren GUI-Smoke-Test gestartet
 - **Gemacht:** Ben startete `Agent_B` manuell im `classic`-Szenario gegen drei `random_agent` mit GUI und einem festen Seed. Der Prozess kehrte ohne Python-Traceback zurück.
 - **Prüfung:** `agent_code/Agent_B/logs/Agent_B.log` belegt wiederholte Netzwerkinferenz mit konkreten Q-Werten und ausgewählten legalen Aktionen. Damit sind Agentname, Paketimport, relativer Modellzugriff, CPU-Netz und `act()` im echten Frameworkpfad integriert. Die angezeigte einzelne tqdm-Zeile `0 %` ist kein Leistungsresultat und wird nicht als vollständige Evaluation interpretiert.
