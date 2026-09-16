@@ -15,6 +15,31 @@ welche Ideen ich habe und warum ich mich so entschieden habe.
 - **Nächster Schritt / Ideen:** ...
 -->
 
+### 2026-09-16 — `Agent_B` im sichtbaren GUI-Smoke-Test gestartet
+- **Gemacht:** Ben startete `Agent_B` manuell im `classic`-Szenario gegen drei `random_agent` mit GUI und einem festen Seed. Der Prozess kehrte ohne Python-Traceback zurück.
+- **Prüfung:** `agent_code/Agent_B/logs/Agent_B.log` belegt wiederholte Netzwerkinferenz mit konkreten Q-Werten und ausgewählten legalen Aktionen. Damit sind Agentname, Paketimport, relativer Modellzugriff, CPU-Netz und `act()` im echten Frameworkpfad integriert. Die angezeigte einzelne tqdm-Zeile `0 %` ist kein Leistungsresultat und wird nicht als vollständige Evaluation interpretiert.
+- **ZIP-Hinweis:** Der erste ZIP-Aufruf wurde versehentlich im Projektstamm statt in `agent_code/` ausgeführt; deshalb fand `zip` den relativen Ordner `Agent_B` nicht und erzeugte kein Archiv. Es gab keine falsche Abgabedatei.
+- **Nächster Schritt:** Das ZIP aus `.../bomberman_RL/agent_code/` erzeugen, sodass der Archivwurzelordner genau `Agent_B/` lautet. Vor Upload dessen Inhalt auf die fünf erwarteten Dateien prüfen.
+
+### 2026-09-16 — `Agent_B` auf festen abgabesicheren Modellpfad gehärtet
+- **Korrektur:** Der zunächst kopierte Callback enthielt noch ungenutzte historische Trainingsarm-, Checkpoint- und `BM_TASK4_*`-Auswahllogik. Der normale Standardpfad war funktionsfähig, aber gesetzte Umgebungsvariablen hätten eine nicht im Abgabeordner liegende historische Datei auswählen können.
+- **Gemacht:** `Agent_B/callbacks.py` lädt nun ausschließlich die relative lokale Datei `Agent_B_model.pt`, nutzt fest elf Kanäle, die bestätigten Escape-/Visit-Features und ausschließlich greedy CPU-Inferenz. Es gibt keine Trainings-, Checkpoint-, Arm-, Pfadarchiv- oder Umgebungsvariablenabhängigkeit mehr. Das Modell wurde nur lokal umbenannt; sein Hash bleibt `d50ae3d1ce80018a8a834f7df28cff3dfead5c0c99d578d7af1604a3cf0806c6`.
+- **Prüfung:** Paketimport plus Framework-äquivalentes Arbeitsverzeichnis lädt die Gewichte erfolgreich auf CPU in die erwartete erste Faltung `(16, 11, 3, 3)`. Eine Textsuche findet keine Restreferenz zu `ben_task4`, `dqn_task4`, `BM_TASK4_*`, Trainingsresultaten oder absoluten lokalen Pfaden; die Enddateiliste enthält nur Modell und vier Pythonmodule. `git diff --check` besteht. Kein Spiel, Training oder Evaluation gestartet.
+- **Nächster Schritt:** `Agent_B` ist nun der eindeutige Ordner für die Agentenabgabe. Der echte 1-Runden-Submission-Smoke-Test bleibt vor dem finalen ZIP durch Ben auszuführen.
+
+### 2026-09-16 — Eigenständiger Abgabeordner `Agent_B` angelegt
+- **Gemacht:** `agent_code/Agent_B/` ist ein schlanker, eigenständiger Klon des zuvor getesteten Submission-Agents `dqn_task4`. Er enthält genau `__init__.py`, `callbacks.py`, `features.py`, `model.py` und das trainierte Modell `ben_task4_mixed_kill_v1_2000ep_seed11.pt`; keine Trainingsdateien, Checkpoints, Logs oder Entwicklungsarchive.
+- **Provenienz:** Der Modellhash in `Agent_B` ist byteidentisch zum ausgewählten Incumbent und zu `dqn_task4`: `d50ae3d1ce80018a8a834f7df28cff3dfead5c0c99d578d7af1604a3cf0806c6`. Die Policy selbst wurde nicht verändert.
+- **Prüfung:** Alle vier Pythonmodule kompilieren. Ein separater Import lädt die erwartete relative Modelldatei und bestätigt elf Eingabekanäle. Der nach dem Syntaxcheck entstandene `__pycache__` wurde entfernt; `git diff --check` besteht. Kein Spiel, Training oder Evaluation gestartet.
+- **Abgabe:** Für die MaMPF-Agentenabgabe kann ausschließlich dieser Ordner als ZIP verpackt werden; der Agentenname beim lokalen Smoke-Test lautet `Agent_B`. Vor dem finalen ZIP bleibt ein echter Spiel-Smoke-Test durch Ben empfohlen.
+
+### 2026-09-16 — Offizielle Projektanforderungen für die Abgabe erneut geprüft
+- **Quelle / Umfang:** `final_project.pdf` vollständig gelesen (12 Seiten); keine Agenten-, Modell-, Trainings- oder Evaluationsänderung.
+- **Abgabe-Agent:** Für das MaMPF-ZIP darf ausschließlich ein einziger vollständiger Unterordner aus `agent_code/` enthalten sein. Der Prüfserver sucht die erste enthaltene Datei `callbacks.py`, kopiert diesen Ordner in sein `agent_code/` und spielt mit `self.train=False` eine Runde gegen drei `random_agent`. Für Bens DQN ist daher `agent_code/dqn_task4` der richtige schlanke Submission-Ordner; `ben_task4` bleibt Entwicklungsarchiv, und `final_task4_Ben_agent.pt` ist dessen aufgeräumter Entwicklungs-Incumbent, kein eigener Agentenordner.
+- **Harte technische Punkte:** Keine Framework-Änderungen voraussetzen, keine Multiprocessing-Inferenz, nur relative Pfade, CPU-Entscheidung unter `0,5 s`; zusätzliche Bibliotheken müssten in `requirements.txt` stehen. Die Deadline für den optionalen Submission-Test ist `17.09.2026, 21:00`, die finale Agentenabgabe `21.09.2026, 21:00`.
+- **Bericht / Note:** Rund `4.000` Wörter je Teammitglied, Abschnitte mit Hauptautor, öffentliche Repository-URL im Bericht (den Bericht selbst nicht hochladen). Geforderte Struktur: Introduction, Background, Project planning, Methods, Training, Experiments and Results, Conclusion. Entscheidend für die Benotung sind systematische Hypothesen, kontrollierte Varianten, Metriken, auch negative Resultate und die begründete Wahl des besten Agents. Mindestens zwei unterschiedliche Modelle müssen beschrieben werden: Agent A des Teams und Bens DQN-Agent B erfüllen diese Anforderung, sofern Zusammenarbeit und gegenseitige Einordnung im Bericht sichtbar sind.
+- **Nächster Schritt:** Wenn die LaTeX-Datei vorliegt, sie gegen diese Pflichtpunkte prüfen und nur dort ergänzen, wo Agent B, Experimentmethodik, Teamarbeit, Autorenmarkierungen oder Abgabe-Readiness noch fehlen.
+
 ### 2026-09-16 — Große lokale Resume-Zustände dauerhaft von Git ausgeschlossen
 - **Gemacht:** `.gitignore` ignoriert nun `results/train/ben_task4/*__training_state.pt`. Diese PyTorch-Snapshots enthalten Replay, Optimizer und RNG-Zustand für lokale Trainingsfortsetzung und überschreiten mit mehreren hundert MB bis über 1 GB GitHubs 100-MB-Dateigrenze.
 - **Prüfung:** `git check-ignore -v` bestätigt die Regel für die beiden vorhandenen Consolidate-Resume-Dateien. Sie bleiben lokal erhalten, erscheinen nicht mehr als untracked und werden nicht versehentlich durch spätere Sammel-Adds übernommen. `git diff --check` besteht.
