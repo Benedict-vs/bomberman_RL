@@ -127,6 +127,11 @@ results/train/task2_crates/*.meta.json
 results/train/task3_opponents/*.csv
 results/train/task3_opponents/*.meta.json
 
+# Local PyTorch resume snapshots contain replay/optimizer/RNG state and can be
+# larger than GitHub's per-file limit. They are only needed to continue an
+# interrupted local run; final models and compact training CSVs remain tracked.
+results/train/ben_task4/*__training_state.pt
+
 final_project.pdf
 
 # stdout of parallel training sweeps; the training CSV is the record

@@ -213,25 +213,39 @@ if LOAD_MODEL_OVERRIDE:
     if os.path.isabs(LOAD_MODEL_OVERRIDE):
         raise ValueError("BM_TASK4_LOAD_MODEL_FILE must be relative.")
     LOAD_MODEL_FILE = LOAD_MODEL_OVERRIDE
+_AGENT_DIRECTORY = os.path.dirname(__file__)
+ARCHIVED_MODELS_DIRECTORY = "archived_models"
+
+
+def _archived_model_file(model_file: str) -> str:
+    """Use the local archive when a historical model was moved there."""
+    archived_file = os.path.join(ARCHIVED_MODELS_DIRECTORY, model_file)
+    if os.path.isfile(os.path.join(_AGENT_DIRECTORY, archived_file)):
+        return archived_file
+    return model_file
+
+
+LOAD_MODEL_FILE = _archived_model_file(LOAD_MODEL_FILE)
 ESCAPE_FEATURE_MODE = "reachable_safe_tiles"
 MODEL_FILE = (
     f"ben_task4_{EXPERIMENT_STEM}_{TOTAL_EPISODES}ep_seed"
     f"{TRAINING_SEED}.pt"
 )
 START_FROM_SAVED_MODEL = True
-_AGENT_DIRECTORY = os.path.dirname(__file__)
 # Inference deliberately names the selected policy independently of the next
 # training artifact. A future output path must never silently select a policy.
-INCUMBENT_INFERENCE_MODEL_FILE = "ben_task4_mixed_kill_v1_2000ep_seed11.pt"
+INCUMBENT_INFERENCE_MODEL_FILE = "final_task4_Ben_agent.pt"
 MODEL_VARIANT = os.environ.get("BM_TASK4_MODEL_VARIANT", "incumbent")
 if MODEL_VARIANT == "incumbent":
     INFERENCE_MODEL_FILE = INCUMBENT_INFERENCE_MODEL_FILE
 elif MODEL_VARIANT == "baseline":
     INFERENCE_MODEL_FILE = LOAD_MODEL_FILE
 elif MODEL_VARIANT == "trained":
-    if not os.path.isfile(os.path.join(_AGENT_DIRECTORY, MODEL_FILE)):
-        raise FileNotFoundError(f"Task-4 trained model not found: {MODEL_FILE}")
-    INFERENCE_MODEL_FILE = MODEL_FILE
+    INFERENCE_MODEL_FILE = _archived_model_file(MODEL_FILE)
+    if not os.path.isfile(os.path.join(_AGENT_DIRECTORY, INFERENCE_MODEL_FILE)):
+        raise FileNotFoundError(
+            f"Task-4 trained model not found: {INFERENCE_MODEL_FILE}"
+        )
 else:
     raise ValueError(
         "BM_TASK4_MODEL_VARIANT must be 'incumbent', 'baseline', or 'trained'."

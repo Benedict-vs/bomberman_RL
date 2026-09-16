@@ -15,6 +15,17 @@ welche Ideen ich habe und warum ich mich so entschieden habe.
 - **Nächster Schritt / Ideen:** ...
 -->
 
+### 2026-09-16 — Große lokale Resume-Zustände dauerhaft von Git ausgeschlossen
+- **Gemacht:** `.gitignore` ignoriert nun `results/train/ben_task4/*__training_state.pt`. Diese PyTorch-Snapshots enthalten Replay, Optimizer und RNG-Zustand für lokale Trainingsfortsetzung und überschreiten mit mehreren hundert MB bis über 1 GB GitHubs 100-MB-Dateigrenze.
+- **Prüfung:** `git check-ignore -v` bestätigt die Regel für die beiden vorhandenen Consolidate-Resume-Dateien. Sie bleiben lokal erhalten, erscheinen nicht mehr als untracked und werden nicht versehentlich durch spätere Sammel-Adds übernommen. `git diff --check` besteht.
+- **Grenze:** Finale Modelle, Trainings-CSV-Dateien und Metadaten bleiben davon unberührt. Kein Training, keine Evaluation und keine Modellgewichtsänderung.
+
+### 2026-09-16 — Ben-Task-4-Modelle auf finalen Abgabestand aufgeräumt
+- **Gemacht:** Der eigene beste Mixed-Kill-2000-Checkpoint heißt nun `agent_code/ben_task4/final_task4_Ben_agent.pt`. Sein SHA-256 ist unverändert `d50ae3d1ce80018a8a834f7df28cff3dfead5c0c99d578d7af1604a3cf0806c6`; es handelt sich ausschließlich um eine Umbenennung, nicht um ein neues Modell.
+- **Archivierung:** Die übrigen `91` historischen `.pt`-Modelle wurden nach `agent_code/ben_task4/archived_models/` verschoben. Im Hauptordner von `ben_task4` liegt damit genau ein reales Modell. Ein relativer Kompatibilitätslink im Archiv erhält den alten Incumbentnamen für frühere reproduzierbare Entwicklungsarme, ohne eine zweite Modellkopie anzulegen.
+- **Code / Prüfung:** Die Entwicklungs-Callbacks laden den finalen Default explizit aus `final_task4_Ben_agent.pt`; historische Quellen und `MODEL_VARIANT=trained` werden relativ aus `archived_models/` aufgelöst. Pfadtests wurden angepasst. Vollständige Task-4-Suite: `50` Tests bestanden in `22,853 s`; `git diff --check` bestanden. `dqn_task4` als eigentlicher Submission-Agent blieb unverändert.
+- **Git-Hinweis:** Die beiden großen Resume-States sind lokal vorhanden, aber wieder untracked und dürfen nicht eingecheckt werden. Eine passende `.gitignore`-Regel muss vor dem nächsten `git add` vom Benutzer ergänzt und committed werden.
+
 ### 2026-09-16 — Eigener Task-4-Agent als finaler Abgabestand festgelegt
 - **Entscheidung:** Ben beendet die Weiterentwicklung des eigenen Agents. Es werden keine weiteren Trainings, Evaluationen, Architektur-, Feature-, Reward-, Replay- oder Gegnerfeldvarianten vorbereitet oder gestartet.
 - **Abgabestand:** Eingereicht wird ausschließlich der eingefrorene Submission-Agent `agent_code/dqn_task4` mit der kopierten Mixed-Kill-2000-Policy `ben_task4_mixed_kill_v1_2000ep_seed11.pt` (SHA-256 `d50ae3d1ce80018a8a834f7df28cff3dfead5c0c99d578d7af1604a3cf0806c6`). `ben_task4` bleibt die vollständige Entwicklungs- und Negativbefundhistorie; weder dieser Ordner noch `benedict_task4` werden als spätere Ersatzagenten verändert.

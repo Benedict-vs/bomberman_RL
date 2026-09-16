@@ -33,25 +33,28 @@ TASK4_BASELINE_MODEL = (
     REPO_ROOT
     / "agent_code"
     / "ben_task4"
+    / "archived_models"
     / "ben_task4_task3_baseline_seed13.pt"
 )
 TASK4_SAFE_11CH_MODEL = (
     REPO_ROOT
     / "agent_code"
     / "ben_task4"
+    / "archived_models"
     / "ben_task4_rule_based_continue_control1000_v1_1000ep_seed11.pt"
 )
 TASK4_ALIGNMENT_12CH_MODEL = (
     REPO_ROOT
     / "agent_code"
     / "ben_task4"
+    / "archived_models"
     / "ben_task4_safe_seed11_12ch_alignment_source.pt"
 )
 TASK4_INCUMBENT_MODEL = (
     REPO_ROOT
     / "agent_code"
     / "ben_task4"
-    / "ben_task4_mixed_kill_v1_2000ep_seed11.pt"
+    / "final_task4_Ben_agent.pt"
 )
 
 
@@ -157,6 +160,7 @@ class Task4ScaffoldTest(unittest.TestCase):
             callbacks.TRAINING_ARM,
             "ben_task4_task3_baseline_seed13.pt",
         )
+        expected_source = os.path.join("archived_models", expected_source)
         self.assertEqual(callbacks.LOAD_MODEL_FILE, expected_source)
         self.assertEqual(
             callbacks.MODEL_FILE,
@@ -181,7 +185,7 @@ class Task4ScaffoldTest(unittest.TestCase):
         self.assertEqual(callbacks.MODEL_VARIANT, "incumbent")
         self.assertEqual(
             callbacks.INFERENCE_MODEL_FILE,
-            "ben_task4_mixed_kill_v1_2000ep_seed11.pt",
+            "final_task4_Ben_agent.pt",
         )
         agent = SimpleNamespace(train=False, logger=Mock())
         previous_directory = os.getcwd()
@@ -230,7 +234,10 @@ class Task4ScaffoldTest(unittest.TestCase):
         )
         self.assertEqual(
             result.stdout.splitlines(),
-            ["baseline", "ben_task4_baseline_v1_5000ep_seed11.pt"],
+            [
+                "baseline",
+                "archived_models/ben_task4_baseline_v1_5000ep_seed11.pt",
+            ],
         )
 
     def test_training_output_does_not_reuse_baseline_name(self):
@@ -299,11 +306,11 @@ class Task4ScaffoldTest(unittest.TestCase):
 
         self.assertEqual(
             outputs["full_symmetry_control_v1"][0],
-            "ben_task4_mixed_kill_v1_2000ep_seed11.pt",
+            "archived_models/ben_task4_mixed_kill_v1_2000ep_seed11.pt",
         )
         self.assertEqual(
             outputs["full_symmetry_v1"][0],
-            "ben_task4_mixed_kill_v1_2000ep_seed11.pt",
+            "archived_models/ben_task4_mixed_kill_v1_2000ep_seed11.pt",
         )
         self.assertEqual(outputs["full_symmetry_control_v1"][1], "False")
         self.assertEqual(outputs["full_symmetry_v1"][1], "True")
@@ -346,7 +353,9 @@ class Task4ScaffoldTest(unittest.TestCase):
                 env=environment,
             )
             outputs[arm] = result.stdout.splitlines()
-            self.assertEqual(outputs[arm][0], expected_source)
+            self.assertEqual(
+                outputs[arm][0], os.path.join("archived_models", expected_source)
+            )
 
         values = list(outputs.values())
         self.assertEqual(values[0][1:], values[1][1:])
@@ -659,7 +668,7 @@ class Task4ScaffoldTest(unittest.TestCase):
         self.assertEqual(outputs[0][:4], outputs[1][:4])
         self.assertEqual(
             outputs[0][0],
-            "ben_task4_baseline_v1_5000ep_seed11.pt",
+            "archived_models/ben_task4_baseline_v1_5000ep_seed11.pt",
         )
         self.assertNotEqual(outputs[0][4], outputs[1][4])
 
@@ -853,7 +862,10 @@ class Task4ScaffoldTest(unittest.TestCase):
         self.assertEqual(control[0], candidate[0])
         self.assertEqual(
             control[0],
-            "ben_task4_rule_based_continue_control1000_v1_1000ep_seed11.pt",
+            (
+                "archived_models/"
+                "ben_task4_rule_based_continue_control1000_v1_1000ep_seed11.pt"
+            ),
         )
         self.assertNotIn("exploration_eps", control[0])
         self.assertEqual(control[2:4], candidate[2:4])
