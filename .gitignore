@@ -221,3 +221,8 @@ checkpoints/benedict_task4/*
 
 # macOS
 .DS_Store
+
+# The report (LaTeX source snapshot from Overleaf, section drafts, compiled
+# previews). final_project.pdf forbids uploading the report to the repo, so this
+# folder is never versioned; Overleaf is the source of truth.
+report/
