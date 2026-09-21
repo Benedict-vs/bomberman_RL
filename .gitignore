@@ -219,6 +219,18 @@ checkpoints/benedict_task4/*
 !checkpoints/benedict_task4/q_table_parent.npy
 !checkpoints/benedict_task4/q_table_parent.npy.layout.json
 
+# Model B's local artifacts. Both are already ignored on `submit/benedict-cnn`
+# (that branch carries the full rule set); mirrored here so a `git add -A` on
+# main cannot pick them up while the CNN branch is checked out elsewhere.
+#
+# data/cnn_distill/: 134 MB of teacher-rollout shards, an *input* to the
+# distillation run and regenerable from it, so never versioned.
+data/
+# agent_code/benedict_cnn/ppo_actor.pt: overwritten once per PPO iteration and
+# scratch by construction -- experiments/benedict_cnn.md records that an
+# evaluation naming it measured whichever replication wrote it last.
+agent_code/benedict_cnn/ppo_actor.pt
+
 # macOS
 .DS_Store
 
