@@ -1,0 +1,4 @@
+# Runtime dependencies of Arminator (Model A, tabular Q-learning).
+# callbacks.py imports only numpy and the framework's `settings`; numpy is already
+# in the provided Dockerfile, so nothing extra is installed on the tournament machine.
+numpy

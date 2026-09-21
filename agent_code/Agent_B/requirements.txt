@@ -1,0 +1,5 @@
+# Runtime dependencies of Agent_B (Model B, DQN, CPU-only inference).
+# Both are already in the provided Dockerfile. torch>=1.13 because callbacks.py
+# loads the weights with torch.load(..., weights_only=True).
+numpy
+torch>=1.13

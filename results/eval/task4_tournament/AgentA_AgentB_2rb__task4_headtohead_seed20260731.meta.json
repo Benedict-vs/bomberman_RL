@@ -1,0 +1,58 @@
+{
+  "agent_provenance": {
+    "Agent_A": {
+      "callbacks_sha256": "b6464806cd33fd53fcefc0dca6ba29cdfe71d45c8de13cecc291a5556c5d82d1",
+      "model_exists": true,
+      "model_file": "/Users/benedictvonschubert/Projects/bomberman_RL/agent_code/Agent_A/q_table.npy",
+      "model_sha256": "67a0bd09203a05d706c265a7c5e60672212fcd01f0fc01787976248eab392dcf"
+    },
+    "Agent_B": {
+      "callbacks_sha256": "6a0d27470cd65535d307492ea5bf8371e26b41dcc0e63b777a362e014c8ff394",
+      "escape_feature_mode": "reachable_safe_tiles",
+      "model_exists": true,
+      "model_file": "Agent_B_model.pt",
+      "model_sha256": "d50ae3d1ce80018a8a834f7df28cff3dfead5c0c99d578d7af1604a3cf0806c6",
+      "visit_count_encoding": "linear_10"
+    },
+    "rule_based_agent": {
+      "callbacks_sha256": "78fae8121ffab5c849d69857aeaeabcee23e1015c923e5e701d9a2bce2c879f6"
+    }
+  },
+  "agents": [
+    "Agent_A",
+    "Agent_B",
+    "rule_based_agent",
+    "rule_based_agent"
+  ],
+  "base_seed": 20260731,
+  "bm_env": {
+    "BM_QUIET_LOGS": "1"
+  },
+  "git_commit": "4d80416-dirty",
+  "label": "AgentA_AgentB_2rb__task4_headtohead_seed20260731",
+  "n_rounds": 1000,
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "python": "3.12.13",
+  "scenario": "classic",
+  "seeds": [
+    20260731,
+    20261730
+  ],
+  "settings": {
+    "BOMB_POWER": 3,
+    "BOMB_TIMER": 4,
+    "COLS": 17,
+    "EXPLOSION_TIMER": 2,
+    "MAX_STEPS": 400,
+    "REWARD_COIN": 1,
+    "REWARD_KILL": 5,
+    "ROWS": 17,
+    "TIMEOUT": 0.5,
+    "scenario_config": {
+      "COIN_COUNT": 9,
+      "CRATE_DENSITY": 0.75
+    }
+  },
+  "timestamp_utc": "2026-09-21T05:09:19+00:00",
+  "wall_clock_s": 300.8
+}
