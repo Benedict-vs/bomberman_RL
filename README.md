@@ -57,12 +57,7 @@ uv run python tools/analyze.py --compare results/eval/old.csv results/eval/new.c
 ## Repository layout
 
 - `agent_code/`: our agents next to the provided ones (`rule_based_agent`, `coin_collector_agent`,
-  `peaceful_agent`, `random_agent`, `tpl_agent`, `user_agent`). Each of us developed in their own
-  folders, one per task, which we kept so that versions can be compared without checking out old
-  commits:
-  - `tabular_q_task1`: the shared task 1 baseline for Agent A
-  - `benedict_*`, `maxi_*`: Agent A development; `benedict_task4` became `Arminator`
-  - `ben_*`, `dqn_*`: Ben's development folders leading to Agent B; `dqn_task4` became `Agent_B`
+  `peaceful_agent`, `random_agent`, `tpl_agent`, `user_agent`).
 - `tools/`: the evaluation and analysis scripts shared by both models (`evaluate.py`,
   `analyze.py`, `trainlog.py`, plotting). Not part of the submission.
 - `experiments/`: our experiment ledgers. Each entry records the question, the change, the
