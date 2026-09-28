@@ -99,9 +99,3 @@ We agreed on these so that numbers from different people stay comparable:
 - The primary metric is the score per round, since the tournament is decided by total score.
 - Training logs go to `results/train/<task>/`, next to the evaluations of the same task in
   `results/eval/<task>/`.
-
-## History
-
-Before publishing we removed our working notes (`scratchpad/`) and the configuration files of the AI
-coding assistants we used from the tree. Some ledger entries refer to files in `scratchpad/`; these are still in the git history
-before that commit.
