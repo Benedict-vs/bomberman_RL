@@ -5,37 +5,37 @@ The state is a single mixed-radix row index over eight digits, sizes in
 
     1-4  each neighbour: blocked / lethal this step / in a blast / clear
      5   moves of grace left on my own tile, 0 = safe
-     6   BFS first step to the objective. While a bomb covers my tile that is
-         the way *out*; otherwise the nearest coin, else the nearest crate,
+     6   BFS first step to the objective. While a bomb covers my tile this is
+         the way out; otherwise the nearest coin, else the nearest crate,
          else the nearest opponent.
      7   a bomb here would open a crate or catch an opponent, and I have one
      8   two meanings, selected by digit 5:
            safe rows   how far digit 6's target is: 1 / 2 / 3-4 / 5+
-           danger rows (x + y) % 4 -- see below
+           danger rows (x + y) % 4, see below
 
-4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions, and deliberately sparse: the
-greedy policy visits a few hundred rows per round, so the table is dense
-storage over a state space that is mostly unreachable by construction.
+4^4 x 5 x 5 x 2 x 5 = 64 000 rows x 6 actions. The table is sparse in practice:
+the greedy policy visits a few hundred rows per round, and most of the state
+space cannot be reached at all.
 
-**Digit 8 in the danger rows.** Digit 6 carries the escape direction there, so
-there is no "target distance" to encode and the digit would otherwise sit at a
-constant, making two thirds of the table unreachable. `(x + y) % 4` fills it,
-and its low bit is exactly the wall lattice: stone pillars sit at (even, even),
-so a free tile with `x + y` even has both coordinates odd and is a **crossing**
--- four structural exits, and a bomb dropped there clears twelve tiles -- while
-`x + y` odd is a **corridor**, two exits and six tiles. Digits 1-4 nearly carry
-this already but not quite, because a blocked neighbour merges wall with crate,
-so a corridor's two permanent walls look exactly like two crates.
+Digit 8 in the danger rows: digit 6 holds the escape direction there, so there
+is no target distance to encode. A constant digit would make two thirds of the
+table unreachable, so `(x + y) % 4` is used instead. Its low bit matches the
+wall lattice. Stone pillars sit at (even, even), so a free tile with `x + y` even
+has both coordinates odd and is a crossing (four structural exits, a bomb there
+clears twelve tiles), while `x + y` odd is a corridor (two exits, six tiles).
+Digits 1-4 almost contain this information, but a blocked neighbour does not
+distinguish wall from crate, so a corridor's two permanent walls look the same
+as two crates.
 
-The learned table splits hard on it, and conditionally: a crossing is worth
-*more* with one move of grace left, when what matters is having exits, and
-*less* with two or more, when what matters is clearing a blast that covers
-twice as many tiles. Encoding it is worth +0.20 score against a matched
-control. Full derivation and the arms that rule out the alternatives:
+The learned values depend strongly on this digit, and the direction depends on
+the grace left. With one move of grace a crossing is worth more, because exits
+matter. With two or more it is worth less, because the blast to get out of
+covers twice as many tiles. Encoding it gives +0.20 score against a matched
+control. The derivation and the arms that rule out the alternatives are in
 `experiments/benedict_task4.md`.
 
-Everything here runs in the tournament, so this file imports numpy and
-`settings` only, uses paths relative to `__file__`, and never touches `tools/`.
+This file runs in the tournament, so it imports only numpy and `settings`, uses
+paths relative to `__file__`, and does not use `tools/`.
 """
 
 import os
@@ -44,15 +44,14 @@ import numpy as np
 
 import settings as s    # BOMB_POWER / BOMB_TIMER
 
-# Training-only escape hatch: parallel training runs would otherwise all write
-# the same file. Unset -- every normal game, and the tournament -- this is
-# exactly "q_table.npy" beside this file. Relative to this file, never absolute.
+# Training only: without a suffix, parallel training runs would all write the
+# same file. When the variable is unset (normal games and the tournament) the
+# model is "q_table.npy" next to this file. The path is relative to this file.
 #
-# When it IS set, the table lives in checkpoints/<agent>/ instead of here. The
-# submission is a zip of this folder, and per-run tables sitting next to
-# callbacks.py is a submission accident waiting to happen -- keeping them out by
-# construction beats remembering to delete them. The tournament never sets the
-# variable, so the branch below is not even taken there.
+# When it is set, the table is stored in checkpoints/<agent>/ instead. The
+# submission is a zip of this folder, so per-run tables must not end up next to
+# callbacks.py. The tournament never sets the variable, so it always takes the
+# first branch.
 _SUFFIX = os.environ.get("BM_MODEL_SUFFIX", "")
 _AGENT_DIR = os.path.dirname(__file__)
 MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path.join(
@@ -60,43 +59,44 @@ MODEL_FILE = os.path.join(_AGENT_DIR, "q_table.npy") if not _SUFFIX else os.path
     os.path.basename(_AGENT_DIR), f"q_table{_SUFFIX}.npy",
 )
 
-# How close two actions must be to count as tied in `act`. Exact equality: the
-# rows that can absorb a collapsed policy sit at margins of 1e-4 to 1e-2, never
-# at 0, so a wider band changes behaviour without protecting against anything.
+# How close two actions must be to count as tied in `act`. We use exact
+# equality: the rows that can absorb a collapsed policy have margins of 1e-4 to
+# 1e-2, never 0, so a wider band would change behaviour without preventing them.
 TIE_TOL = 0.0
 
-# E51 -- the certain-death move filter. **On by default**: this is the shipped
-# policy as of E51, and the tournament, which sets no environment variables,
-# gets it. `BM_DEATH_FILTER=0` reproduces the pre-E51 agent exactly and is how
-# the control arm of any comparison against it is run.
+# E51: the certain-death move filter. It is on by default, since it is part of
+# the shipped policy and the tournament sets no environment variables.
+# `BM_DEATH_FILTER=0` reproduces the pre-E51 agent and is used for the control
+# arm of any comparison against it.
 #
-#   unset / "1"   veto moves after which *no* continuation survives the bombs
-#                 already on the board -- SHIPPED
-#   "step"        veto moves that are lethal at the end of *this* step only.
-#                 Shallow arm: digits 1-4 already carry this as NB_LETHAL, and
-#                 it is worth a third of the full effect (E51 P3).
-#   "0"           off -- the pre-E51 policy, byte for byte
+#   unset / "1"   veto moves after which no continuation survives the bombs
+#                 already on the board (shipped)
+#   "step"        veto moves that are lethal at the end of this step only.
+#                 Shallow arm: digits 1-4 already encode this as NB_LETHAL, and
+#                 it gives a third of the full effect (E51 P3).
+#   "0"           off, identical to the pre-E51 policy
 #
-# **Worth +0.099 [+0.067, +0.132] score against 3 x binary_v6 and
-# +0.121 [+0.007, +0.236] against 3 x rule_based**, n = 4000 each, on the frozen
-# table with no retraining. It changes the decision on only 0.09 % of steps --
-# the table already picks a non-vetoed action 99.91 % of the time -- and pays
-# through `killed_by` (-0.022), not through suicides (-0.008, not demonstrated).
-# The agent survives longer, so it bombs more and banks more coins and kills;
-# the gain is +0.043 coins + 5 x 0.011 kills = +0.098 of the +0.099.
+# Worth +0.099 [+0.067, +0.132] score against 3 x binary_v6 and
+# +0.121 [+0.007, +0.236] against 3 x rule_based, n = 4000 each, on the frozen
+# table with no retraining. It changes the decision on only 0.09 % of steps (the
+# table already picks a non-vetoed action 99.91 % of the time). The gain comes
+# from `killed_by` (-0.022); the change in suicides (-0.008) is not demonstrated.
+# The agent survives longer, so it bombs more and collects more coins and kills:
+# +0.043 coins + 5 x 0.011 kills = +0.098 of the +0.099.
 #
-# **BOMB is never vetoed, in any mode.** E46 gated bomb *placement* on escape
-# slack, cut suicides -0.131 exactly as designed, and cost -0.283 score: the
-# zero-slack bombs are simultaneously the most lethal and the most productive,
-# because a bomb in a dense pocket has a contained blast and a tight escape for
-# the same geometric reason. This filter leaves the bomb alone and fixes the
-# escape instead. Keeping BOMB out of the mask is the whole difference between
-# the two interventions, so it is an invariant of this file, not an accident.
+# BOMB is never vetoed, in any mode. E46 gated bomb placement on escape slack;
+# this cut suicides by -0.131 as intended but cost -0.283 score. The zero-slack
+# bombs are both the most lethal and the most productive, because a bomb in a
+# dense pocket has a small blast and a tight escape for the same geometric
+# reason. This filter leaves bomb placement alone and corrects the escape
+# instead. Keeping BOMB out of the mask is the only difference between the two
+# approaches, so it must stay that way.
 #
-# Only bombs and explosions that are *visible now* are modelled. E43 traced
-# every death to the last step at which some action still survived: an enemy
-# bomb placed after we committed accounts for 2.3 % of deaths, so assuming
-# opponents may bomb would buy 2.3 % and pay for it in conservatism everywhere.
+# Only bombs and explosions visible in the current state are modelled. E43
+# traced every death back to the last step at which some action still survived:
+# enemy bombs placed after we committed account for 2.3 % of deaths. Assuming
+# that opponents may bomb would gain at most 2.3 % and make every step more
+# conservative.
 DEATH_FILTER_OFF = 0
 DEATH_FILTER_STEP = 1
 DEATH_FILTER_FULL = 2
@@ -105,9 +105,9 @@ _FILTER_MODES = {"": DEATH_FILTER_OFF, "0": DEATH_FILTER_OFF,
                  "step": DEATH_FILTER_STEP, "1": DEATH_FILTER_FULL}
 _filter_env = os.environ.get("BM_DEATH_FILTER", "1").strip().lower()
 if _filter_env not in _FILTER_MODES:
-    # Fail loudly rather than silently playing a different policy than the label
-    # says -- the E18 mistake, which cost ten evaluations. The tournament sets
-    # nothing, so this cannot fire there.
+    # Raise instead of silently playing a different policy than the label says
+    # (the E18 mistake, which cost ten evaluations). The tournament sets
+    # nothing, so this cannot happen there.
     raise ValueError(
         f"BM_DEATH_FILTER={_filter_env!r} is not one of {sorted(_FILTER_MODES)}"
     )
@@ -116,20 +116,20 @@ DEATH_FILTER = _FILTER_MODES[_filter_env]
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
-# (dx, dy) for UP, RIGHT, DOWN, LEFT -- image coords, y grows downwards
+# (dx, dy) for UP, RIGHT, DOWN, LEFT in image coords, y grows downwards
 DELTAS = [(0, -1), (1, 0), (0, 1), (-1, 0)]
-# The actions the filter is allowed to veto: everything except BOMB. This has to
-# be named, because `veto.all()` is the intuitive test for "no action survives"
-# and it is **wrong** -- BOMB is never vetoed, so `veto.all()` is always False,
-# the stand-aside path never runs, and a hopeless position leaves BOMB as the
-# only finite entry in the row. The filter then *forces* a bomb: a suicide when
-# one is available, an INVALID_ACTION that stands still and dies when not. The
-# first run of E51 measured exactly that -- suicides +0.019, invalid +1.667.
+# The actions the filter may veto: everything except BOMB. `veto.all()` looks
+# like the right test for "no action survives", but it is wrong. BOMB is never
+# vetoed, so `veto.all()` is always False, the filter is never skipped, and in a
+# hopeless position BOMB is the only finite entry left in the row. The filter
+# then forces a bomb: a suicide if the agent has one, otherwise an
+# INVALID_ACTION that stands still and dies. The first run of E51 showed this
+# (suicides +0.019, invalid +1.667).
 FILTERABLE = np.array([a != ACTIONS.index('BOMB') for a in range(len(ACTIONS))])
 
 # Digits 1-4, one per direction. Ordered so a larger value is never a worse tile
 # to step onto, which makes a printed row readable without decoding it.
-NB_BLOCKED = 0      # wall, crate, bomb or other agent -- invalid move
+NB_BLOCKED = 0      # wall, crate, bomb or other agent: invalid move
 NB_LETHAL = 1       # free, but blast lands here at the end of the step
 NB_IN_BLAST = 2     # free and survivable this step, but a live bomb covers it
 NB_CLEAR = 3        # free and outside every blast
@@ -151,8 +151,8 @@ POLICY_SEED = 20260731
 def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
     """Tiles a bomb at (x, y) covers. Mirrors `items.py:Bomb.get_blast_coords`.
 
-    Stone walls stop the blast, crates do **not** -- `items.py:56` breaks on -1
-    only -- which is why one bomb in a dense corridor clears several crates.
+    Stone walls stop the blast, crates do not (`items.py:56` only breaks on -1),
+    which is why one bomb in a dense corridor clears several crates.
     The blast does not turn corners. No bounds check is needed: the arena is
     walled all round, so the -1 test always fires before an index goes negative.
     """
@@ -168,13 +168,13 @@ def blast_coords(x: int, y: int, field: np.ndarray) -> list[tuple[int, int]]:
 
 
 def danger_map(game_state: dict) -> np.ndarray:
-    """Steps of grace per tile: 0 = deadly at the end of *this* step, SAFE = free.
+    """Steps of grace per tile: 0 = deadly at the end of this step, SAFE = free.
 
-    The timing comes straight out of `environment.py:166-173`, which runs the
-    agents first and only then counts bombs down and evaluates explosions. So a
-    bomb the agent sees at timer `t` kills at the end of step `now + t`, and a
-    tile with `explosion_map > 0` is still burning when this step is evaluated.
-    Both are therefore expressed in the same unit and can be minimised over.
+    The timing follows `environment.py:166-173`, which runs the agents first and
+    then counts bombs down and evaluates explosions. A bomb the agent sees at
+    timer `t` therefore kills at the end of step `now + t`, and a tile with
+    `explosion_map > 0` is still burning when this step is evaluated. Both are
+    expressed in the same unit, so we can take the minimum over them.
     """
 
     field = game_state['field']
@@ -225,14 +225,13 @@ def bomb_hits_crate(x: int, y: int, field: np.ndarray,
 def bfs_first_step(x: int, y: int, field: np.ndarray, is_goal) -> tuple[int, int]:
     """First move of a shortest path to a tile satisfying `is_goal`, and its length.
 
-    Breadth-first over free tiles. Goal tiles are *tested but never expanded*,
-    so the goal itself may be impassable -- a crate is a legitimate destination
-    even though the agent cannot stand on it.
+    Breadth-first over free tiles. Goal tiles are tested but never expanded, so
+    the goal itself may be impassable: a crate is a valid destination even
+    though the agent cannot stand on it.
 
-    Returns `(direction, distance)`, `(NO_TARGET, 0)` when nothing is reachable.
-    E20 needs the distance as a digit of its own; taking it from this traversal
-    rather than a second one keeps the two digits describing one objective by
-    construction, so they cannot drift apart.
+    Returns `(direction, distance)`, or `(NO_TARGET, 0)` when nothing is
+    reachable. E20 uses the distance as a separate digit. Taking it from the
+    same traversal guarantees that both digits describe the same objective.
     """
 
     queue = [((x, y), None, 0)]
@@ -269,18 +268,17 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list,
                      others: list | None = None) -> tuple[int, int]:
     """First step of a shortest path to whatever the agent is currently after.
 
-    Coins while one is reachable, otherwise the nearest crate. The crate is the
-    *goal*, not somewhere to stand: E10 measured that on a fresh `classic` arena
-    99.7 % of free tiles are already within blast range of some crate, so the
-    older rule -- "head for a tile a bomb could hit a crate from" -- was
-    satisfied wherever the agent happened to be, and this digit read 0 almost
-    everywhere. With no gradient in the safe part of the state, two mirror-image
-    rows pointed at each other and the agent oscillated between two tiles in 20
-    rounds out of 20.
+    Coins while one is reachable, otherwise the nearest crate. The crate itself
+    is the goal, not a tile next to it. E10 measured that on a fresh `classic`
+    arena 99.7 % of free tiles are already within blast range of some crate, so
+    the older rule ("head for a tile a bomb could hit a crate from") was
+    satisfied almost anywhere and this digit was 0 almost everywhere. Without a
+    gradient in the safe part of the state, two mirror-image rows pointed at
+    each other and the agent oscillated between two tiles in 20 of 20 rounds.
 
     A visible but unreachable coin falls through to the crate branch instead of
-    returning NO_TARGET: a coin sealed in a pocket of crates is a reason to go
-    bombing, not a reason to have no objective at all.
+    returning NO_TARGET, since a coin enclosed by crates means the agent should
+    bomb its way there.
     """
 
     coin_set = set(coins)
@@ -302,12 +300,12 @@ def target_direction(x: int, y: int, field: np.ndarray, coins: list,
     if step != NO_TARGET or not others:
         return step, dist
 
-    # The board is out of crates, so the objective becomes the nearest opponent.
-    # Four agents strip all 122 crates by ~step 140, and without this branch the
-    # agent has no objective at all for the rest of the round -- the table's
-    # answer in that row is an invalid BOMB, at -1 a time. Same rule as the crate
-    # branch: the goal tile is tested but never expanded, so an occupied tile is
-    # a legal destination even though the agent cannot stand on it.
+    # No crates left, so the objective becomes the nearest opponent. Four agents
+    # clear all 122 crates by ~step 140, and without this branch the agent would
+    # have no objective for the rest of the round. The table's choice in that
+    # row is an invalid BOMB, at -1 each time. As in the crate branch, the goal
+    # tile is tested but never expanded, so an occupied tile is a valid
+    # destination even though the agent cannot stand on it.
     other_set = set(others)
     return bfs_first_step(x, y, field, lambda pos: pos in other_set)
 
@@ -316,10 +314,10 @@ def escape_direction(x: int, y: int, field: np.ndarray, danger: np.ndarray,
                      occupied: set) -> int:
     """First step of a shortest path out of every blast, or NO_TARGET if none.
 
-    Time-aware, which is what separates it from `target_direction`: a tile that
-    is safe now can be lethal by the time the agent gets there, and a tile that
-    is in a blast now can be crossed if the agent is past it before the timer
-    runs out. Both cases occur constantly while escaping one's own bomb.
+    Unlike `target_direction` this search is time-aware: a tile that is safe
+    now can be lethal by the time the agent gets there, and a tile inside a
+    blast can be crossed if the agent has left it before the timer runs out.
+    Both cases are common when escaping from one's own bomb.
     """
 
     queue = [((x, y), None, 0)]
@@ -330,9 +328,8 @@ def escape_direction(x: int, y: int, field: np.ndarray, danger: np.ndarray,
         (cx, cy), first, depth = queue[head]
         head += 1
 
-        # Every bomb currently on the board has detonated by then, so a tile
-        # that is still unsafe at this depth cannot be made safe by walking
-        # further. Bounds the search at ~60 tiles.
+        # Every bomb currently on the board has detonated by then, so walking
+        # further cannot help. This bounds the search at ~60 tiles.
         if depth >= SAFE:
             continue
 
@@ -365,12 +362,12 @@ DIST_NONE = 0
 def distance_bucket(distance: int) -> int:
     """How far away digit 6's target is, in four buckets.
 
-    The boundaries are measured rather than guessed. Over 40 greedy rounds of
-    the incumbent the target distance spends 26.4 % of its steps at 1, 23.2 % at
-    2, 28.8 % at 3-4 and 21.6 % at 5+, and splitting there cuts the within-row
-    spread of the distance from 1.28 tiles to 0.48. A uniform {1,2,3,4+} costs
-    the same number of rows and only reaches 0.64 -- the distance is not
-    concentrated near 1, which is what makes the wide top bucket the cheap one.
+    The boundaries come from measurement. Over 40 greedy rounds of the previous
+    agent the target distance is 1 in 26.4 % of steps, 2 in 23.2 %, 3-4 in
+    28.8 % and 5+ in 21.6 %. Splitting there reduces the within-row spread of
+    the distance from 1.28 tiles to 0.48. A uniform {1,2,3,4+} split uses the
+    same number of rows and only reaches 0.64, because the distance is not
+    concentrated near 1, so a wide top bucket loses little.
     """
 
     if distance <= 0:
@@ -385,13 +382,12 @@ def distance_bucket(distance: int) -> int:
 def lattice_class(x: int, y: int) -> int:
     """Digit 8 in the danger rows: `(x + y) % 4`.
 
-    Its low bit is the wall lattice exactly -- pillars sit at (even, even), so
+    The low bit matches the wall lattice. Pillars sit at (even, even), so
     `x + y` even means both coordinates are odd, which is a crossing (four
-    structural exits, twelve tiles cleared by a bomb) and odd means a corridor
-    (two exits, six tiles). The high bit is a diagonal stripe carrying position
-    but no structure; it is kept because the four-way split measurably
-    outperforms the lattice bit alone, and dropping it would be a change this
-    project has not tested.
+    structural exits, twelve tiles cleared by a bomb), and odd means a corridor
+    (two exits, six tiles). The high bit is a diagonal stripe that carries
+    position but no structure. We keep it because the four-way split did better
+    than the lattice bit alone, and dropping it has not been tested.
     """
 
     return (x + y) % 4
@@ -400,7 +396,7 @@ def lattice_class(x: int, y: int) -> int:
 def state_to_features(game_state: dict) -> int:
     """Map a game state onto a row index of the Q-table."""
 
-    if game_state is None:      # every caller guards; fail loudly if one stops
+    if game_state is None:      # every caller checks this; raise if one stops
         raise ValueError("state_to_features called without a game state")
 
     field = game_state['field']     # indexing is field[x, y]
@@ -409,32 +405,31 @@ def state_to_features(game_state: dict) -> int:
 
     danger = danger_map(game_state)
 
-    # environment.py:121-126: bombs and other agents block a move exactly like
-    # walls do. That belongs in "can I go there", not in "will I die there".
+    # environment.py:121-126: bombs and other agents block a move like walls do.
+    # They go into "can I go there", while `danger` answers "will I die there".
     occupied = {pos for pos, _ in game_state['bombs']}
     occupied.update(other[3] for other in game_state['others'])
 
-    # Digit 5, in moves rather than in timer units: 0 = safe, otherwise how many
-    # moves are left *including this one*. A bomb seen at t leaves t+1 moves.
+    # Digit 5, in moves rather than timer units: 0 = safe, otherwise the number
+    # of moves left including this one. A bomb seen at t leaves t+1 moves.
     own_danger = 0 if danger[x, y] >= SAFE else int(danger[x, y]) + 1
 
-    # Digit 7 folds in `bomb_possible` deliberately. Without it the agent sits
-    # in a "crate in range" row with no bomb left, picks BOMB, gets
-    # INVALID_ACTION -- and an invalid action leaves the state unchanged, which
-    # is an absorbing row the policy cannot leave.
+    # Digit 7 includes `bomb_possible`. Otherwise the agent can sit in a "crate
+    # in range" row with no bomb left and pick BOMB, which gives INVALID_ACTION.
+    # An invalid action leaves the state unchanged, so the policy never leaves
+    # that row.
     others = [o[3] for o in game_state['others']]
     bomb_useful = int(have_bomb and bomb_hits_crate(x, y, field, others))
 
-    # Digit 6 is "the direction that matters right now". While a bomb covers the
-    # agent's tile that is the way out, and nothing else is worth encoding --
-    # a coin four tiles away is irrelevant if the agent is dead in three.
+    # Digit 6 is the direction that matters right now. While a bomb covers the
+    # agent's tile that is the way out, and nothing else needs encoding: a coin
+    # four tiles away is irrelevant if the agent dies in three.
     if own_danger:
         target = escape_direction(x, y, field, danger, occupied)
-        # Digit 6 already carries the escape direction here, so there is no
-        # target distance for digit 8 to hold. Pinning it to a constant -- which
-        # is what this branch used to do -- left two thirds of the table
-        # unreachable and the rows where essentially every death happens
-        # carrying no structural information at all.
+        # Digit 6 already holds the escape direction here, so digit 8 has no
+        # target distance to hold. This branch used to set it to a constant,
+        # which left two thirds of the table unreachable and gave the rows where
+        # almost all deaths happen no structural information.
         target_dist = lattice_class(x, y)
     else:
         target, distance = target_direction(x, y, field, game_state['coins'], others)
@@ -456,9 +451,8 @@ def encode(features: tuple[int, ...]) -> int:
     distinct tuples always map to distinct rows in [0, N_STATES). Adding a
     feature only requires extending FEATURE_SIZES.
 
-    Storage is an implementation detail behind this function: swapping the
-    dense array for a dict is a two-line change if the product of the radices
-    ever stops being countable.
+    Storage is hidden behind this function: if the product of the radices gets
+    too large for a dense array, switching to a dict is a two-line change.
     """
 
     idx = 0
@@ -471,18 +465,18 @@ def survives(x: int, y: int, arrival: int, field: np.ndarray,
              danger: np.ndarray, occupied: set, lookahead: bool) -> bool:
     """Can the agent be alive on (x, y) at the end of step `arrival`, and stay alive?
 
-    Same time model as `escape_direction`, and deliberately the same
-    approximation: a node's `arrival` is the step at the end of which the agent
-    stands on it, and a tile whose blast lands at or before then is fatal. That
-    prunes a blast tile for *every* step from its timer onwards, which also
-    covers the step the explosion lingers (`EXPLOSION_TIMER = 2` is one lethal
-    step plus one more -- `environment.py:200-210` counts the explosion down
-    only after the agents have moved, so a tile burns at the end of two
-    consecutive steps). It over-prunes by one step, never under-prunes, which is
-    the side a death filter has to err on.
+    Same time model and same approximation as `escape_direction`: a node's
+    `arrival` is the step at the end of which the agent stands on it, and a tile
+    whose blast lands at or before then is fatal. This prunes a blast tile for
+    every step from its timer onwards, which also covers the step in which the
+    explosion lingers. `EXPLOSION_TIMER = 2` means one lethal step plus one
+    more, because `environment.py:200-210` counts the explosion down only after
+    the agents have moved, so a tile burns at the end of two consecutive steps.
+    The search can over-prune by one step but never under-prunes, which is the
+    safe direction for a death filter.
 
-    `lookahead=False` answers only "does the agent survive this step", which is
-    the shallow arm.
+    `lookahead=False` only checks whether the agent survives this step (the
+    shallow arm).
     """
 
     if danger[x, y] <= arrival:
@@ -490,9 +484,9 @@ def survives(x: int, y: int, arrival: int, field: np.ndarray,
     if not lookahead or danger[x, y] >= SAFE:
         return True                     # no blast reaches this tile at all
 
-    # Standing still is never useful here: `danger` only ever counts down, so a
-    # tile that is doomed at step t is doomed for good and waiting on it just
-    # spends the grace. Hence the search moves every step and needs no WAIT edge.
+    # Standing still never helps here: `danger` only counts down, so a tile that
+    # is doomed at step t stays doomed and waiting on it only uses up the grace.
+    # The search therefore moves every step and needs no WAIT edge.
     queue = [((x, y), arrival)]
     visited = {(x, y)}
     head = 0
@@ -501,9 +495,8 @@ def survives(x: int, y: int, arrival: int, field: np.ndarray,
         (cx, cy), step = queue[head]
         head += 1
 
-        # Every bomb on the board has gone off by then, so a tile still unsafe
-        # at this depth cannot be made safe by walking further -- the same bound
-        # `escape_direction` uses, ~60 tiles.
+        # Every bomb on the board has gone off by then, so walking further
+        # cannot help. Same bound as in `escape_direction`, ~60 tiles.
         if step >= SAFE:
             continue
 
@@ -526,14 +519,13 @@ def survives(x: int, y: int, arrival: int, field: np.ndarray,
 def death_filter_mask(game_state: dict) -> np.ndarray:
     """Which actions are certain death? One bool per entry of `ACTIONS`.
 
-    `BOMB` is never marked; see the `DEATH_FILTER` comment for why that is the
-    point of the whole filter rather than an omission.
+    `BOMB` is never marked; the `DEATH_FILTER` comment explains why.
     """
 
     veto = np.zeros(len(ACTIONS), dtype=bool)
 
-    # The overwhelmingly common case, and the reason this costs nothing on
-    # average: with no bomb and no fire on the board nothing can be vetoed.
+    # By far the most common case, which keeps the average cost low: with no
+    # bomb and no fire on the board nothing can be vetoed.
     if not game_state['bombs'] and not game_state['explosion_map'].any():
         return veto
 
@@ -548,9 +540,8 @@ def death_filter_mask(game_state: dict) -> np.ndarray:
         nx, ny = x + dx, y + dy
         if field[nx, ny] != 0 or (nx, ny) in occupied:
             # `environment.py:121-126`: a move into a wall, crate, bomb or agent
-            # leaves the agent standing where it is. Its survival is therefore
-            # WAIT's, not the target tile's -- scoring it on the tile the agent
-            # never reaches would veto the wrong action.
+            # leaves the agent where it is, so its survival is the same as for
+            # WAIT. Checking the blocked target tile would veto the wrong action.
             nx, ny = x, y
         veto[action_idx] = not survives(nx, ny, 0, field, danger, occupied, lookahead)
 
@@ -568,20 +559,20 @@ def setup(self):
         self.logger.info("Starting from an empty Q-table")
         self.q = np.zeros((N_STATES, len(ACTIONS)))
     elif not os.path.isfile(MODEL_FILE):
-        # E18 post-mortem: evaluating a table that does not exist must fail, not
-        # silently play the uniform-random policy of an all-zero table -- ten
-        # evaluations of a missing checkpoint measured exactly that, at 2.82
-        # crates and 1.000 suicides, identically across five "seeds". In the
-        # tournament the table ships beside this file, so this can only fire
-        # when something is genuinely broken -- and the submission pre-run
-        # should say so loudly rather than play a random agent.
+        # E18: evaluating a missing table has to raise an error. Otherwise the
+        # agent plays the uniform-random policy of an all-zero table, which is
+        # what ten evaluations of a missing checkpoint measured (2.82 crates,
+        # 1.000 suicides, identical across five "seeds"). In the tournament the
+        # table is shipped next to this file, so this only triggers if the
+        # submission is broken, and the submission test run should then fail
+        # instead of playing a random agent.
         raise FileNotFoundError(f"No Q-table at {MODEL_FILE} and not training.")
     else:
         self.logger.info("Loading Q-table from disk.")
         self.q = np.load(MODEL_FILE)
 
-        # A table left over from an older FEATURE_SIZES would not fail here but
-        # deep inside act(), as an IndexError in the middle of a round.
+        # A table from an older FEATURE_SIZES would otherwise only fail later
+        # in act(), as an IndexError in the middle of a round.
         expected = (N_STATES, len(ACTIONS))
         if self.q.shape != expected:
             raise ValueError(
@@ -595,41 +586,40 @@ def act(self, game_state: dict) -> str:
 
     state = state_to_features(game_state)
 
-    # E51. When every action the filter may veto is fatal the agent is doomed
-    # whatever it does -- BOMB leaves it standing where it is, so it dies too --
-    # and the filter stands aside so the unfiltered row decides, exactly as the
-    # shipped agent would. The test is over FILTERABLE and not over the whole
-    # mask; see the comment there for what the whole-mask version costs.
+    # E51. If every action the filter may veto is fatal, the agent dies whatever
+    # it does (BOMB leaves it standing where it is, so it dies too). The filter
+    # is then skipped and the unfiltered row decides, as in the agent without
+    # the filter. The test is over FILTERABLE and not the whole mask; the
+    # comment at FILTERABLE explains what the whole-mask version costs.
     veto = death_filter_mask(game_state) if DEATH_FILTER else None
     if veto is not None and veto[FILTERABLE].all():
         veto = None
 
     # self.eps and self.rng are set in train.py. Outside training the policy is
-    # greedy, so the tournament never reaches either -- which is what keeps the
-    # agent working when train.py is not imported at all. E51 evaluates a frozen
-    # table at eps = 0 and so never takes this branch; the filter is applied to
-    # it anyway, because "explore only among actions that are not suicide" is
-    # the semantics any later training run would want, and leaving the branch
-    # inconsistent with the greedy one is how that goes wrong unnoticed.
+    # greedy and neither is used, so the agent also works when train.py is not
+    # imported. E51 evaluates a frozen table at eps = 0 and never takes this
+    # branch. The filter is still applied here, because a later training run
+    # should only explore among actions that are not suicide, and keeping this
+    # branch consistent with the greedy one avoids an unnoticed mismatch.
     if self.train and self.rng.random() < self.eps:
         legal = np.arange(len(ACTIONS)) if veto is None else np.flatnonzero(~veto)
         return ACTIONS[int(self.rng.choice(legal))]
 
-    # Break ties at random rather than by action order. A converged table rarely
-    # ties, but an argmax that always resolves to the same action turns a
-    # near-tie into an absorbing loop -- an invalid move leaves the state
-    # unchanged, so the agent repeats it forever. Cheap insurance; it is not a
-    # substitute for the learning rate that stops the ties happening.
+    # Break ties at random instead of by action order. A converged table rarely
+    # has ties, but an argmax that always picks the same action can turn a tie
+    # into a loop: an invalid move leaves the state unchanged, so the agent
+    # repeats it forever. This is a cheap safeguard and does not replace the
+    # learning rate that prevents ties in the first place.
     #
-    # TIE_TOL widens "tied" from exact float equality to a band. At 0.0 -- the
-    # default -- this is byte-for-byte the behaviour every entry up to E22 was
-    # measured with. The audit of E19-E22 measured that the insurance above
-    # never fires in practice: the rows that absorb a collapsed policy sit at
-    # margins of 1e-4 to 1e-2, never at 0.
+    # TIE_TOL widens "tied" from exact float equality to a band. At the default
+    # of 0.0 the behaviour is identical to the one every entry up to E22 was
+    # measured with. The audit of E19-E22 found that the random tie-break never
+    # triggers in practice: the rows that absorb a collapsed policy have
+    # margins of 1e-4 to 1e-2, never 0.
     q_row = self.q[state]
     if veto is not None:
-        # -inf rather than a large negative: it survives the TIE_TOL band and
-        # can never be picked up by the tie-break below.
+        # -inf rather than a large negative value, so a vetoed action can never
+        # fall inside the TIE_TOL band and be picked by the tie-break below.
         q_row = np.where(veto, -np.inf, q_row)
     best = np.flatnonzero(q_row >= q_row.max() - TIE_TOL)
     return ACTIONS[int(best[0] if best.size == 1 else self.policy_rng.choice(best))]

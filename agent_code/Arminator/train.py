@@ -1,7 +1,8 @@
 """Q-learning updates for `Arminator`, the task-4 agent.
 
-Loaded only with `--train`, so nothing here runs in the tournament. That is why
-`tools/` may be imported (defensively) and why the exploration RNG lives here.
+Loaded only with `--train`, so nothing here runs in the tournament. This is why
+`tools/` may be imported here (inside a try block) and why the exploration RNG
+is defined here.
 
 Reproducing the shipped table:
 
@@ -9,29 +10,29 @@ Reproducing the shipped table:
         rule_based_agent rule_based_agent rule_based_agent \\
         --scenario classic --train 1 --n-rounds 20000 --no-gui --seed 810731
 
-Every default in this file is the shipped configuration, so that command needs
-no environment variables. It writes `q_table_trained.npy` beside the agent
-rather than over `q_table.npy`: the shipped table is an input to the tournament
-and a training run must never be able to destroy it. Promote a retrained table
-by copying it over `q_table.npy` deliberately.
+Every default in this file is the shipped configuration, so the command needs
+no environment variables. It writes `q_table_trained.npy` next to the agent
+instead of overwriting `q_table.npy`, so a training run cannot destroy the
+table used in the tournament. To use a retrained table, copy it over
+`q_table.npy` by hand.
 
-**That command will not reproduce it bit for bit, and cannot.** `main.py` does
-not seed the provided agents, and each reseeds the global RNG from OS entropy in
-its own `setup`, which runs after ours -- so two runs of the same command give
-different tables. The shipped table is one seed of a fifteen-seed sweep, chosen
-on a validation world seed and confirmed on a held-out one; the sweep, not the
-single run, is the unit of evidence. Compare arms across seeds, never on one
-run. `experiments/benedict_task4.md` has the full protocol.
+The command does not reproduce the table bit for bit. `main.py` does not seed
+the provided agents, and each of them reseeds the global RNG from OS entropy in
+its own `setup`, which runs after ours. Two runs of the same command therefore
+give different tables. The shipped table is one seed of a fifteen-seed sweep,
+chosen on a validation world seed and confirmed on a held-out one. Arms should
+be compared across the seeds of a sweep, never on a single run.
+`experiments/benedict_task4.md` has the full protocol.
 
-Evaluations are only *partly* reproducible for the same reason: `evaluate.py`
+For the same reason evaluations are only partly reproducible: `evaluate.py`
 seeds the opponents' `np.random`, but `rule_based_agent` also shuffles with the
-*stdlib* `random`, which that does not touch -- ~21 % of rounds repeat exactly.
-The means do **not** repeat: the same table evaluated twice over 1000 rounds
-differs by 0.121 in mean score, so any 1000-round evaluation carries a +/-0.12
-noise floor on `score` from the opponents alone. Pairing is on arenas.
+stdlib `random`, which is not seeded, and only ~21 % of rounds repeat exactly.
+The means do not repeat either. The same table evaluated twice over 1000 rounds
+differs by 0.121 in mean score, so a 1000-round evaluation has a +/-0.12 noise
+floor on `score` from the opponents alone. Pairing is on arenas.
 
-**The training world seed 810731 is not an evaluation seed.** Never train on
-20260731, 550731 or 990731; the agent would then be measured on arenas it
+The training world seed 810731 is not an evaluation seed. Never train on
+20260731, 550731 or 990731, otherwise the agent is evaluated on arenas it was
 trained on.
 
 Why these hyperparameters
@@ -39,62 +40,64 @@ Why these hyperparameters
 =================  ==========  ====================================================
 setting            value       why
 =================  ==========  ====================================================
-alpha              1/N^0.7     The largest single effect measured on this project:
-                               a constant alpha gave 20.78 +- 6.98 coins against
+alpha              1/N^0.7     The largest single effect on this project: a
+                               constant alpha gave 20.78 +- 6.98 coins against
                                49.15 +- 1.23 per-cell. Constant alpha satisfies
-                               neither Robbins-Monro condition, and an unsettled
-                               cell here is not a small error but an absorbing
-                               deadlock. Exponent 1.0 tripled the thin-margin
-                               fraction: the target is non-stationary, so
-                               sample-averaging is wrong.
+                               neither Robbins-Monro condition, and a cell that
+                               does not settle here causes an absorbing deadlock
+                               rather than a small error. Exponent 1.0 tripled the
+                               thin-margin fraction: the target is
+                               non-stationary, so sample-averaging does not fit.
 gamma              0.99        At 0.9 the horizon is ~10 steps, shorter than the
                                distance to most BFS targets. 0.99 cut the crate
                                standard deviation from 24.2 to 2.9.
-eps                0.2 -> 0.02 A floor of 0.10 halves performance; 0.005 is
-                               indistinguishable from 0.02; 0 stops learning
-                               outright. The residual deaths are the tuition that
-                               keeps rare rows alive.
-COIN_COLLECTED     +5          The game's own +1 costs 45 crates. The reward is not
-                               a claim about what coins are worth -- it is what
-                               keeps the value function separated, so that near
-                               ties are not settled by noise.
+eps                0.2 -> 0.02 A floor of 0.10 halves performance, 0.005 is
+                               indistinguishable from 0.02, and 0 stops learning.
+                               The remaining exploration deaths are the price for
+                               keeping rare rows updated.
+COIN_COLLECTED     +5          With the game's own +1 the agent destroys 45 fewer
+                               crates. The value is not meant as the true worth
+                               of a coin; it keeps the action values far enough
+                               apart that near ties are not decided by noise.
 CRATE_DESTROYED    +1.0        Solo, 1.0 halved the crate count by degrading bomb
-                               placement, and 0.3 was correct there. With three
-                               opponents it is the opposite: nine coins shared four
-                               ways cuts gross earnings ~4x while steps alive fall
-                               only 1.85x, so at 0.3 an action-independent step
-                               cost dominates the return and the fixed point
-                               becomes action-independent too. Worth +0.93 score
-                               and +11.5 crates, paired.
-STEP_COST           0          Same quantity from the other side. Shortest-path
-                               pressure is worth having solo, where the agent earns
-                               77.3 against 40.1 of it; in an opponent field the
-                               same table earns 18.3 against 26.1 and the decision
-                               margin collapses. Zero here, crate at 1.0.
-KILLED_SELF         0          `environment.py:264` adds GOT_KILLED to *every* agent
-GOT_KILLED         -5          killed by a blast and `:251` adds KILLED_SELF **on
-                               top** when the bomb was its own -- so a table
-                               carrying both prices a suicide at their sum, which
-                               is the opposite of the symmetry it looks like.
-                               Putting the whole penalty on GOT_KILLED prices death
-                               exactly once.
-KILLED_OPPONENT     0          Tested at 5 and at 25, the game's own 5:1 kill:coin
-                               ratio at this table's scale. Neither moved kills:
-                               digit 7 is one bit shared between "a bomb here opens
-                               a crate" and "a bomb here catches an opponent", and
-                               crates outnumber kills heavily, so the price cannot
-                               reach the decision. The answer would be a feature,
-                               not a price.
-WARM_N             100         alpha is exactly 1 on a cell's first update, so an
-                               untouched transfer is overwritten immediately.
-                               10 000 and 100 000 are both worse -- the table then
-                               cannot differentiate the rows a new digit created.
-episodes           20 000      Measured, not inherited. Training to 300 000 costs
-                               -0.770 score [-1.355, -0.185], 0 of 5 seeds
-                               improving, with the loss running through bomb
+                               placement, and 0.3 was better there. With three
+                               opponents it is the other way round: nine coins
+                               shared four ways cut gross earnings ~4x while
+                               steps alive fall only 1.85x, so at 0.3 an
+                               action-independent step cost dominates the return
+                               and the fixed point becomes action-independent
+                               too. Worth +0.93 score and +11.5 crates, paired.
+STEP_COST           0          The same trade-off from the other side. Solo, the
+                               shortest-path pressure helps (77.3 against 40.1);
+                               in an opponent field the same table earns 18.3
+                               against 26.1 and the decision margin collapses.
+                               Zero here, with the crate reward at 1.0.
+KILLED_SELF         0          `environment.py:264` adds GOT_KILLED to every agent
+GOT_KILLED         -5          killed by a blast, and `:251` adds KILLED_SELF in
+                               addition when the bomb was its own. A table with
+                               both therefore charges a suicide their sum, which
+                               is not the symmetric pricing it appears to be.
+                               Putting the whole penalty on GOT_KILLED charges a
+                               death once.
+KILLED_OPPONENT     0          Tested at 5 and at 25 (25 keeps the game's 5:1
+                               kill:coin ratio at this table's scale). Neither
+                               changed kills: digit 7 is one bit shared between
+                               "a bomb here opens a crate" and "a bomb here
+                               catches an opponent", and crates are far more
+                               common than kills, so the reward cannot change
+                               the decision. That would need a new feature.
+WARM_N             100         alpha is 1 on a cell's first update, so without a
+                               pseudo-count the transferred value is overwritten
+                               immediately. 10 000 and 100 000 are both worse,
+                               because the table then cannot separate the rows a
+                               new digit created.
+episodes           20 000      Chosen by measurement. Training to 300 000 costs
+                               -0.770 score [-1.355, -0.185], with 0 of 5 seeds
+                               improving, and the loss comes from bomb
                                placement: crates per bomb 1.182 -> 0.988. The
-                               decline is monotone from 20 000 on, so this is an
-                               optimum of the ones tested rather than a budget.
+                               decline is monotone from 20 000 on, so this is
+                               the best of the tested lengths and not a limit
+                               set by the compute budget.
 =================  ==========  ====================================================
 """
 
@@ -117,12 +120,12 @@ except ImportError:     # tools/ is not part of the submission
 
 AGENT_NAME = "benedict_task4"
 
-# E27: an action-independent per-step cost moves the fixed point without changing
+# E27: an action-independent per-step cost shifts the fixed point without changing
 # any decision. Shipped at 0; the rung-3 derivation is in benedict_task3.md.
 STEP_COST = float(os.environ.get("BM_STEP_COST", 0))
-# 0.99, not the 0.9 carried since E01: E15 measured the crate std falling from
-# 24.2 to 2.9 and the peak-then-decay of E12/E13/E14 disappearing. At gamma=0.9
-# the horizon is ~10 steps, shorter than the distance to most BFS targets.
+# 0.99 instead of the 0.9 used since E01: in E15 the crate std fell from 24.2 to
+# 2.9 and the peak-then-decay of E12/E13/E14 disappeared. At gamma=0.9 the
+# horizon is ~10 steps, shorter than the distance to most BFS targets.
 GAMMA = float(os.environ.get("BM_GAMMA", 0.99))
 
 ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP", 0.7))     # in (0.5, 1]
@@ -130,46 +133,46 @@ ALPHA_EXP = float(os.environ.get("BM_ALPHA_EXP", 0.7))     # in (0.5, 1]
 EPS_START = 0.2
 EPS_END = float(os.environ.get("BM_EPS_END", 0.02))
 
-# Rounds between model saves. The table is 2.9 MB since E20, so saving every
-# round is ~120 GB of writes over a 40 000-round run, with up to fifteen of them
-# running at once -- enough I/O to dominate the batch. A crash costs at most this
-# many rounds, and the atexit hook in setup_training covers every normal ending.
+# Rounds between model saves. Since E20 the table is 2.9 MB, so saving every
+# round means ~120 GB of writes over a 40 000-round run, with up to fifteen runs
+# in parallel. That much I/O would dominate the batch. A crash loses at most this
+# many rounds, and the atexit hook in setup_training handles every normal exit.
 SAVE_EVERY = 100
 
-# Episodes at which the table is also written to its own file, so the learning
-# curve can be measured at eps = 0 afterwards instead of read off the training
-# log. Learning is untouched -- these are extra writes, not extra updates, so
-# every checkpoint is exactly the table a run of that length would have left.
-# Overridable so a long run can sample its own horizon: BM_CHECKPOINTS=20000,40000,...
+# Episodes at which the table is also saved to a separate file, so the learning
+# curve can be measured at eps = 0 afterwards instead of read from the training
+# log. These are extra writes, not extra updates, so learning is unaffected and
+# each checkpoint is the table a run of that length would have produced.
+# Can be overridden so a long run samples its own horizon: BM_CHECKPOINTS=20000,40000,...
 CHECKPOINTS = tuple(int(c) for c in
                     os.environ.get("BM_CHECKPOINTS", "5000,10000,20000").split(","))
 
-# The two swept in E16. Both were guesses -- the coin in E01, the crate in E10 --
-# and E15's change of gamma rescaled every reward against the step cost by a
-# factor of ten, so the balance they struck at gamma=0.9 no longer holds.
+# The two rewards swept in E16. Both were first set by guess (the coin in E01,
+# the crate in E10), and E15's change of gamma rescaled every reward against the
+# step cost by a factor of ten, so their balance at gamma=0.9 no longer held.
 REWARDS = {
     e.COIN_COLLECTED: float(os.environ.get("BM_COIN", 5)),
     e.CRATE_DESTROYED: float(os.environ.get("BM_CRATE", 1.0)),
     e.INVALID_ACTION: -1,
     e.WAITED: -0.1,
-    # E26 correctness fix. `environment.py:264` adds GOT_KILLED to *every* agent
-    # killed by a blast and `:251` adds KILLED_SELF **on top** when the bomb was
-    # its own -- so a table carrying both prices a suicide at their sum. E25
-    # intended -5/-5 and actually paid -10 for a suicide and -5 for an opponent's
-    # kill, which voided its arm contrast. Putting the whole penalty on
-    # GOT_KILLED prices death exactly once, and is *identical* to the rung-2
-    # table on a board with no opponents, where a suicide fires both events too.
+    # E26 bug fix. `environment.py:264` adds GOT_KILLED to every agent killed by
+    # a blast, and `:251` adds KILLED_SELF in addition when the bomb was its own,
+    # so a table with both charges a suicide their sum. E25 intended -5/-5 but
+    # actually charged -10 for a suicide and -5 for a death by an opponent, which
+    # invalidated its arm comparison. With the whole penalty on GOT_KILLED a
+    # death is charged once, and the result is identical to the rung-2 table on
+    # a board with no opponents, where a suicide also fires both events.
     e.KILLED_SELF: float(os.environ.get("BM_KILLED_SELF", 0)),
     e.GOT_KILLED: float(os.environ.get("BM_GOT_KILLED", -5)),
-    # E26 arm H. Zero by default, which is what rung 2 and E25 both used.
-    # 25 rather than 5: the game pays 5:1 kill:coin, and E16 put the agent's coin
-    # at 5, so 25 preserves the game's own ratio at this table's scale. It is a
-    # rescaling of a real game event, not an invented one -- the reward table
-    # stays a map of events the tournament also generates.
+    # E26 arm H. Zero by default, as in rung 2 and E25.
+    # The tested value was 25 rather than 5: the game pays 5:1 kill:coin, and E16
+    # set the agent's coin reward to 5, so 25 keeps the game's ratio at this
+    # table's scale. It rescales a real game event, so every reward still
+    # corresponds to an event that also occurs in the tournament.
     #
-    # Why it matters on this rung: the 9 coins are shared four ways, a ~2.25 fair
-    # share, and the rung-2 table already banks 2.18 of it. score = coins + 5*kills,
-    # so every further point of score has to come from kills.
+    # Why this matters on this rung: the 9 coins are shared four ways, a fair
+    # share of ~2.25, and the rung-2 table already collects 2.18 of it. Since
+    # score = coins + 5*kills, any further score has to come from kills.
     e.KILLED_OPPONENT: float(os.environ.get("BM_KILL", 0)),
 }
 
@@ -177,43 +180,44 @@ REWARDS = {
 # Read from the environment so a shell loop can sweep seeds and arms without
 # editing this file. Every default is the shipped configuration.
 
-# Seeds the exploration RNG as TRAIN_SEED + RUN_INDEX. 106 is the seed the shipped
-# table came from: one of a fifteen-seed sweep (E37), selected on validation world
+# The exploration RNG is seeded with TRAIN_SEED + RUN_INDEX. The shipped table
+# came from 106, one of a fifteen-seed sweep (E37), selected on validation world
 # seed 550731 and confirmed on held-out 990731. It is the default so the shipped
 # configuration needs no environment variables; a sweep overrides it per run.
 RUN_INDEX = int(os.environ.get("BM_RUN_INDEX", 106))
 
 # `checkpoints/benedict_task4/q_table_parent.npy`: the previous shipped table,
-# broadcast across digit 8's four danger-row values. Same FEATURE_SIZES, so
-# `factor` is 1 and this is a row-for-row transfer rather than the coarse-to-fine
-# split `warm_start` was built for -- the divisibility and layout checks still
-# apply. Set BM_WARM="" to start from zero, which throws away everything earlier
-# rungs learnt about crates and escapes.
+# copied across digit 8's four danger-row values. It has the same FEATURE_SIZES,
+# so `factor` is 1 and this is a row-for-row transfer instead of the
+# coarse-to-fine split `warm_start` was written for; the divisibility and layout
+# checks still apply. Set BM_WARM="" to start from zero, which discards
+# everything earlier rungs learnt about crates and escapes.
 WARM_SUFFIX = os.environ.get("BM_WARM", "_parent")
 WARM_N = int(os.environ.get("BM_WARM_N", 100))
 
 EPS_DECAY = 0.9995
 TRAIN_SEED = 20260731
 
-# Change per experiment. The training log is *appended* to, so a stale value here
-# silently merges two runs into one file (cost half an hour to unpick in E05b).
+# Change per experiment. The training log is appended to, so a stale value here
+# merges two runs into one file without warning (took half an hour to separate
+# again in E05b).
 EXPERIMENT = "task4"
 RUN_NAME = f"q_{EXPERIMENT}_s{RUN_INDEX}"
 
-# Where THIS run writes. `MODEL_FILE` is the path callbacks.py *loads* for play,
-# and with no BM_MODEL_SUFFIX that is the shipped `q_table.npy` -- so training
-# with no environment variables would try to overwrite the tournament's own
-# input. It writes beside it instead, and promoting a retrained table is then a
-# deliberate copy rather than a side effect of passing --train.
+# Where this run writes. `MODEL_FILE` is the path callbacks.py loads for play,
+# and without BM_MODEL_SUFFIX that is the shipped `q_table.npy`, so training
+# with no environment variables would overwrite the tournament model. Training
+# writes next to it instead, and replacing the shipped table has to be done by
+# hand.
 OUTPUT_FILE = MODEL_FILE if os.environ.get("BM_MODEL_SUFFIX") else os.path.join(
     os.path.dirname(MODEL_FILE), "q_table_trained.npy")
 
-# Warm-start parents live in `checkpoints/<agent>/`, never beside this file --
-# the submission zip is this folder, and 700 MB of checkpoints next to
-# callbacks.py was a submission accident waiting to happen. Anchored here rather
-# than to `MODEL_FILE`'s directory, which is `checkpoints/` only when
-# BM_MODEL_SUFFIX happens to be set: without this, --train with no environment
-# variables looked for the parent inside the agent folder and died.
+# Warm-start parents are stored in `checkpoints/<agent>/`, never next to this
+# file: the submission zip is this folder, and 700 MB of checkpoints must not end
+# up in it. The path is fixed here and not derived from `MODEL_FILE`'s directory,
+# which is only `checkpoints/` when BM_MODEL_SUFFIX is set. Before this, --train
+# with no environment variables looked for the parent inside the agent folder
+# and crashed.
 CHECKPOINT_DIR = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir,
                               "checkpoints", AGENT_NAME)
 
@@ -228,23 +232,22 @@ def setup_training(self):
     if WARM_SUFFIX:
         warm_start(self)
 
-    # E20 post-mortem: a diagnostic that drives BombeRLeWorld with train=True
-    # while BM_MODEL_SUFFIX names a real checkpoint will overwrite it, because
-    # MODEL_FILE resolves to that path and the atexit hook below fires on any
-    # normal exit. It happened to q_table_e16_c5_k03_s2__ep100000.npy, and it
-    # was caught by an mtime rather than by anything in this file. Remember
-    # whether the table existed before this run started; save_table refuses if
-    # it did.
+    # E20: a diagnostic script that runs BombeRLeWorld with train=True while
+    # BM_MODEL_SUFFIX names a real checkpoint overwrites that checkpoint, because
+    # MODEL_FILE resolves to its path and the atexit hook below runs on every
+    # normal exit. This happened to q_table_e16_c5_k03_s2__ep100000.npy and was
+    # only noticed from the file's mtime. We record whether the table existed
+    # before this run started, and save_table refuses to write if it did.
     self.model_file_preexisted = os.path.isfile(OUTPUT_FILE)
 
     # Per-episode accumulators for the learning curve. evaluate.py measures the
-    # finished agent; this is what shows whether it converged, and when.
+    # finished agent; this log shows whether and when training converged.
     self.trainlog = TrainLogger(
         agent=AGENT_NAME,
         run=RUN_NAME,
-        # Rung-2 logs go beside the rung-2 evaluations; see AGENTS.md.
-        # TrainLogger anchors a relative out_dir to the repo root -- agents.py
-        # chdirs into this folder around every callback, so the cwd is not it.
+        # Task-4 training logs go next to the task-4 evaluations; see README.md.
+        # TrainLogger resolves a relative out_dir against the repo root, because
+        # agents.py changes into this folder around every callback.
         out_dir="results/train/task4_tournament",
         hyperparams={"alpha_exp": ALPHA_EXP,
                      "eps_start": EPS_START, "eps_end": EPS_END, "eps_decay": EPS_DECAY,
@@ -264,24 +267,23 @@ def setup_training(self):
     self.episode_td = []
 
     # environment.py:112 runs the agent in-process (SequentialAgentBackend), so
-    # this fires on any normal exit. Without it, a round count that is not a
-    # multiple of SAVE_EVERY would silently ship a table up to SAVE_EVERY
-    # rounds stale -- the kind of mismatch that is invisible until a run does
-    # not reproduce.
+    # this runs on any normal exit. Without it, a round count that is not a
+    # multiple of SAVE_EVERY would leave a table up to SAVE_EVERY rounds out of
+    # date, which is only noticed when a run fails to reproduce.
     atexit.register(save_table, self)
 
 
 def save_table(self) -> None:
-    """Write the table, unless that would clobber a checkpoint we did not create.
+    """Write the table, unless that would overwrite a checkpoint we did not create.
 
-    A training run legitimately overwrites its own file every SAVE_EVERY rounds
-    -- the guard is armed once, at setup, and disarmed by the first successful
-    write, so only the *first* write of a run can trip it. That is the write
-    that destroys somebody else's result.
+    A training run overwrites its own file every SAVE_EVERY rounds. The check is
+    set once at setup and cleared by the first successful write, so only the
+    first write of a run can trigger it, and that is the write that would
+    destroy another run's result.
 
-    Deliberately a hard failure. The alternative -- warn and continue -- is what
-    the E18 missing-table fallback did, and it produced ten evaluations of an
-    all-zero table before anyone noticed.
+    This raises an error instead of warning. The E18 missing-table fallback only
+    warned and continued, and it produced ten evaluations of an all-zero table
+    before anyone noticed.
     """
 
     if self.model_file_preexisted:
@@ -299,13 +301,14 @@ def save_table(self) -> None:
 
 
 def checkpoint_file(episode: int) -> str:
-    """`checkpoints/<agent>/q_table<suffix>__ep<N>.npy` -- exactly the path that
-    `BM_MODEL_SUFFIX=<suffix>__ep<N>` resolves to, so a checkpoint is evaluated
-    by setting that one variable and `callbacks.py` needs no special case.
+    """`checkpoints/<agent>/q_table<suffix>__ep<N>.npy`, the same path that
+    `BM_MODEL_SUFFIX=<suffix>__ep<N>` resolves to. A checkpoint can therefore be
+    evaluated by setting that one variable, and `callbacks.py` needs no special
+    case.
 
-    Always under `checkpoints/`, never beside this file: the submission zip is
-    this folder, and intermediate checkpoints landing in it is exactly the
-    accident the 700 MB of rung-2 tables were moved out of it to avoid.
+    Always under `checkpoints/`, never next to this file: the submission zip is
+    this folder, and the 700 MB of rung-2 tables were moved out of it for this
+    reason.
     """
 
     base, ext = os.path.splitext(os.path.join(CHECKPOINT_DIR,
@@ -384,10 +387,10 @@ LAYOUT_EXT = ".layout.json"
 def write_layout(table_file: str) -> None:
     """Record the feature layout beside a saved table.
 
-    A `.npy` says how many rows it has and nothing about what they mean. Two
-    different `FEATURE_SIZES` can produce the same row count, so a table alone
-    cannot tell a warm start whether it is a legitimate parent -- see the
-    append-only argument in `warm_start`. One line of JSON removes the guesswork.
+    A `.npy` stores how many rows it has but not what they mean. Two different
+    `FEATURE_SIZES` can give the same row count, so from the table alone a warm
+    start cannot tell whether it is a valid parent (see the append-only argument
+    in `warm_start`). The layout is stored as one line of JSON.
     """
 
     with open(table_file + LAYOUT_EXT, "w") as fh:
@@ -395,8 +398,9 @@ def write_layout(table_file: str) -> None:
 
 
 def read_layout(table_file: str) -> list | None:
-    """The layout a table was trained on, or None for tables written before this
-    existed -- including the E16 parent the shipped model starts from."""
+    """The layout a table was trained on, or None for tables written before
+    layouts were recorded, including the E16 parent the shipped model starts
+    from."""
 
     try:
         with open(table_file + LAYOUT_EXT) as fh:
@@ -408,24 +412,25 @@ def read_layout(table_file: str) -> list | None:
 def warm_start(self) -> None:
     """Initialise this table from a coarser one, each row from its parent.
 
-    E20 measured the deficit this addresses: the distance digit splits every old
-    row into five, and on two seeds of five the run filled only ~485 of its ~840
-    used rows -- a 64 000-row map carrying the information of a 12 800-row one.
-    The coarse table already knows what those states are worth up to the
-    distinction the new digit draws, so a child starts from its parent rather
-    than from zero.
+    E20 measured the problem this addresses: the distance digit splits every old
+    row into five, and on two of five seeds the run filled only ~485 of its ~840
+    used rows, so the 64 000-row map held the information of a 12 800-row one.
+    The coarse table already knows what those states are worth, apart from the
+    distinction the new digit adds, so each child row starts from its parent
+    instead of from zero.
 
-    **The new digits must be appended, never inserted.** `encode` is mixed radix,
-    so appending digits to `FEATURE_SIZES` multiplies every old index by the new
-    radices: parent row i becomes children `k*i .. k*i+k-1`, which is exactly
-    `np.repeat`. Insert a digit anywhere else and the row count is identical, the
-    divisibility check below still passes, and the mapping is silently wrong --
-    measured on 5 000 random states, an inserted digit mis-maps 39 % of them.
-    That is why the layout is written beside every table and checked here.
+    New digits must be appended, never inserted. `encode` is mixed radix, so
+    appending digits to `FEATURE_SIZES` multiplies every old index by the new
+    radices: parent row i becomes children `k*i .. k*i+k-1`, which is what
+    `np.repeat` produces. If a digit is inserted anywhere else, the row count
+    is the same and the divisibility check below still passes, but the mapping
+    is wrong without any error. On 5 000 random states an inserted digit
+    mis-maps 39 % of them. This is why the layout is saved next to every table
+    and checked here.
 
-    Only cells whose parent carried value get the pseudo-count: crediting the
-    rest would start genuinely new rows at a twenty-fifth of their learning rate
-    for nothing.
+    Only cells whose parent has a nonzero value get the pseudo-count. Giving it
+    to the others would start new rows at a twenty-fifth of their learning rate
+    with no benefit.
     """
 
     coarse_file = os.path.join(CHECKPOINT_DIR, f"q_table{WARM_SUFFIX}.npy")
