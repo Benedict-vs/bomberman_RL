@@ -83,7 +83,7 @@ FRAMEWORK_STATS = [
     "time",      # total think time this round, seconds
 ]
 
-# Preset opponent line-ups, matching the task ladder in AGENTS.md.
+# Preset opponent line-ups, matching the task ladder in README.md.
 OPPONENT_PRESETS = {
     "none": [],
     "peaceful": ["peaceful_agent"] * 3,

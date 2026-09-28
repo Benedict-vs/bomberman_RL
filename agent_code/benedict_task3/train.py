@@ -268,7 +268,7 @@ def setup_training(self):
     self.trainlog = TrainLogger(
         agent=AGENT_NAME,
         run=RUN_NAME,
-        # Rung-2 logs go beside the rung-2 evaluations; see AGENTS.md.
+        # Rung-2 logs go beside the rung-2 evaluations; see README.md.
         # TrainLogger anchors a relative out_dir to the repo root -- agents.py
         # chdirs into this folder around every callback, so the cwd is not it.
         out_dir="results/train/task3_opponents",

@@ -1,7 +1,0 @@
-shipped CSV header: round,seed,slot,agent,code,survived,round_steps,score,coins,kills,suicides,crates,bombs,moves,invalid,steps,time,think_mean_ms,think_max_ms,think_over_limit,died,killed_by_opponent,rank,won
-shipped codes: ['benedict_task4', 'rule_based_agent']
-shipped: n=1000 rounds, our mean score=3.7180
-shipped_e37: n=1000 rounds, our mean score=3.8280
-e40 ctl: n=8000 rounds, mean score=4.0086
-paired e40ctl - shipped on 1000 shared arenas: +0.4060 +/- 0.2422  (identical rounds 17.4%)
-paired e40ctl - shipped_e37 on 1000 shared arenas: +0.2960 +/- 0.2308  (identical rounds 20.7%)

@@ -1,12 +1,9 @@
 # Measurement — rationale, history and the evidence behind the rules
 
-`AGENTS.md` states the measurement *rules* in their shortest enforceable form. This file holds
+The top-level `README.md` states the measurement *rules* in short form. This file holds
 the reasoning and the measured evidence behind them: why each rule exists, what it cost to learn,
 and which experiment established it. Read it once when you join the measurement chain, or when
 you are tempted to break one of the rules.
-
-It is deliberately **not** loaded into an agent's context every session — `AGENTS.md` is, and a
-long file there dilutes the rules it contains. Point an agent at this file when the *why* matters.
 
 ---
 
@@ -73,7 +70,7 @@ reason arena variety is, and the only hook that runs before an opponent's first 
 `act()`, where seeding the global RNG would reach into other agents' behaviour — not something the
 submitted agent should ever do. Reproducibility is preserved where the numbers come from:
 `evaluate.py` seeds the opponents per round (below). The practical consequence is the rule in
-`AGENTS.md`: rung-3 arms must be compared **across several training seeds**, never on a single run.
+`README.md`: rung-3 arms must be compared **across several training seeds**, never on a single run.
 
 ## From task 3 on, the opponents are seeded in evaluation
 
@@ -102,7 +99,7 @@ with it on every step (`coin_collector_agent:44,116`, `rule_based_agent:45,140`)
 Measured: re-running arm F on the committed configuration reproduces the **mean** (score 4.1600
 vs 4.1600, crates 26.63 vs 26.66) but only **22.7 % of rounds are identical**. Every claim that
 a rung-3 evaluation is reproducible round-for-round is therefore **false** — that includes this
-section as first written, the sentence in `AGENTS.md`, and E24's write-up. Rung-3 "paired"
+section as first written, the sentence in the project rules at the time, and E24's write-up. Rung-3 "paired"
 CIs are paired on **arenas only**, so they are wider than a fully-paired CI would be. Directions
 and magnitudes stand — E26's +1.595 is far too large to be affected — but the pairing claim does
 not.
@@ -130,7 +127,7 @@ growth, it does not shrink an existing clone.
 **`results/eval/` stays committed in full** — it is small and it is what every number in the
 report is computed from.
 
-## Sweep hygiene (the numbers behind the `AGENTS.md` warnings)
+## Sweep hygiene (the numbers behind the README warnings)
 
 - **`BM_QUIET_LOGS=1`** drops all three log levels to WARNING. The engine logs per step, so a
   40 000-round `classic` run is ~10 M INFO lines; measured saving **25 % of wall clock**, and

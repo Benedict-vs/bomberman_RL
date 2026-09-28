@@ -137,28 +137,10 @@ final_project.pdf
 # stdout of parallel training sweeps; the training CSV is the record
 logs/*.out
 
-# scratchpad/<person>/ holds dev-only helper scripts (table dumps, policy replays).
-# Not part of the submission, but they produce numbers that end up in the report,
-# so they are versioned.
-#
-# Q-table snapshots are not: every trained table is already in the history as
-# agent_code/<agent>/q_table.npy at the commit that produced it. Recover one with
-#   git show <commit>:agent_code/<agent>/q_table.npy > scratchpad/<person>/models/q_vN.npy
-scratchpad/*/models/
-
-scratchpad/deaths/*.pkl
-
-# Third-party agents pulled from GitHub so the agent can be measured against a
-# field that is not rule_based_agent (final_project.pdf p.2 explicitly sanctions
-# downloading other teams' agents to test against). Never committed:
-#   - 1.8 GB across 25 clones, each carrying its own .git, so staging them makes
-#     broken gitlinks rather than files;
-#   - 21 of the 25 ship no LICENSE, so we have no right to redistribute them.
-# They are an *input* to a measurement, not evidence. What we commit is the URL
-# and commit hash of each in FINDINGS.md, plus the eval CSVs those runs produce.
-scratchpad/external/*/
-!scratchpad/external/FINDINGS.md
-!scratchpad/external/install/
+# Local working notes and one-off analysis scripts. Versioned during development
+# and removed from the tree before publishing; the ledgers' references to
+# scratchpad/ paths resolve in the history before that commit.
+scratchpad/
 
 # Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The real model is
 # q_table.npy and stays versioned; these are scratch and must never end up in
@@ -166,12 +148,9 @@ scratchpad/external/*/
 agent_code/*/q_table_*.npy
 
 # Third-party agents installed under agent_code/ so the framework's loader can find
-# them (agents.py:204 imports agent_code.<name>.callbacks). Never committed, for the
-# same two reasons as scratchpad/external/: 20 of the 24 source repos carry no LICENSE,
-# and the submission zip is built from agent_code/<ours>/ -- a third-party folder
-# sitting beside it is exactly the accident checkpoints/ was moved out of that
-# directory to avoid. Reproduce with the repo URL + commit hash recorded in
-# scratchpad/external/FINDINGS.md and scratchpad/external/install/INSTALL.md.
+# them (agents.py:204 imports agent_code.<name>.callbacks), used only as opponents.
+# Never committed: most of the source repos carry no LICENSE. The repo URLs and
+# commit hashes are listed in the report.
 agent_code/ext_*/
 
 # Where those per-run tables now live. The submission is a zip of
@@ -194,7 +173,7 @@ checkpoints/benedict_task2/*
 # Same exception for the rung-4 parent, and for a stronger reason: the claim
 # above that checkpoints are "reproducible from the commit plus the BM_*
 # variables" is FALSE from rung 3 on. main.py does not seed the provided
-# opponents (AGENTS.md), and audit 5 established that no E30-E33 run passed
+# opponents, and audit 5 established that no E30-E33 run passed
 # --seed either, so two runs of the same command give different tables -- E31's
 # suicide rate is bimodal across replications of an identical configuration.
 # This file is therefore an *input* to the submitted agent, not an output of a
@@ -219,17 +198,9 @@ checkpoints/benedict_task4/*
 !checkpoints/benedict_task4/q_table_parent.npy
 !checkpoints/benedict_task4/q_table_parent.npy.layout.json
 
-# Model B's local artifacts. Both are already ignored on `submit/benedict-cnn`
-# (that branch carries the full rule set); mirrored here so a `git add -A` on
-# main cannot pick them up while the CNN branch is checked out elsewhere.
-#
-# data/cnn_distill/: 134 MB of teacher-rollout shards, an *input* to the
-# distillation run and regenerable from it, so never versioned.
+# Local data and an unpublished test agent, not part of this repository.
 data/
-# agent_code/benedict_cnn/ppo_actor.pt: overwritten once per PPO iteration and
-# scratch by construction -- experiments/benedict_cnn.md records that an
-# evaluation naming it measured whichever replication wrote it last.
-agent_code/benedict_cnn/ppo_actor.pt
+agent_code/benedict_cnn/
 
 # macOS
 .DS_Store

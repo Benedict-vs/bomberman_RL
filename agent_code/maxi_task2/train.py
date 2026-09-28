@@ -39,7 +39,7 @@ AGENT_NAME = "maxi_task2"
 
 # `agents.py` chdirs into this agent's directory before calling us, so a plain
 # relative "results/train/..." lands in agent_code/maxi_task2/, not at the repo
-# root where AGENTS.md wants it. Derive the root from __file__ instead --
+# root where README.md wants it. Derive the root from __file__ instead --
 # still no absolute path in the source, which is the submission rule.
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TRAINLOG_DIR = os.path.join(REPO_ROOT, "results", "train", "task2_crates")
@@ -105,7 +105,7 @@ def setup_training(self):
                      "n_states": len(self.q),
                      "features": "4 wall bits + BFS target (direction x kind: coin | crate) "
                                  "+ danger level + escape direction"},
-        # Task-2 logs go beside the task-2 evaluations; see AGENTS.md.
+        # Task-2 logs go beside the task-2 evaluations; see README.md.
         out_dir=TRAINLOG_DIR,
         extra_columns=["td_error", "states_seen", "cell_coverage"],
     ) if TrainLogger else None

@@ -1,8 +1,0 @@
-n=4000  mean diff = +0.11575  sd = 3.7870  se = 0.05988
-analyze.py's own bootstrap (rng 12345, 10k):  [+0.0018, +0.2325]  -> EXCLUDES 0
-200 other bootstrap seeds: lower bound mean -0.00153, sd 0.00158, range [-0.00600, +0.00200]
-   fraction of bootstrap seeds where the CI excludes 0: 15.5%
-normal-theory 95% CI: [-0.0016, +0.2331]  t = 1.933
-two-sided p (normal approx): 0.0532
-sign-flip permutation p: 0.0543
-studentised bootstrap CI: [-0.0045, +0.2347]

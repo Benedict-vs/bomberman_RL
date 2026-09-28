@@ -376,7 +376,7 @@ def paired_effect(rows_a: list[dict], rows_b: list[dict], metric: str,
     improved = (mean_diff > 0) == higher_better
     verdict = "no effect shown" if not significant else ("BETTER" if improved else "WORSE")
 
-    # The CI still decides the verdict -- that is the rule in AGENTS.md and
+    # The CI still decides the verdict -- that is the rule in README.md and
     # changing it here would silently reclassify every number already reported.
     # These two only *flag* a verdict that rests on the boundary.
     standard_error = float(differences.std(ddof=1) / np.sqrt(len(differences))) \

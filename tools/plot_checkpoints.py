@@ -3,7 +3,7 @@
 
 ``trainlog.py`` plots what happened while the agent was learning: eps-greedy,
 against a table that changes under it. That curve answers "did it converge",
-and AGENTS.md is blunt that it is not a result -- E01 measured 48.2 coins at
+and the README is blunt that it is not a result -- E01 measured 48.2 coins at
 the end of training and 1.45 in the evaluation of the same model.
 
 This plots the other curve: each checkpoint evaluated at eps = 0 on the fixed

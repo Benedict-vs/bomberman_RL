@@ -1,5 +1,0 @@
-quantity                                   ctl         mix    ratio
-P(training episode reaches step 200)       0.322       0.253     0.79
-P(reaches step 300)                      0.186       0.145     0.78
-total steps                            3199158     2873742     0.90
-steps spent in episodes >=200          2066948     1629137     0.79

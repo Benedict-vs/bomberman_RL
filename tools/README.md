@@ -396,7 +396,7 @@ verrauscht, um etwas zu belegen.
 
 `trainlog.py` zeigt, was **während** des Trainings passiert ist: ε-greedy, gegen eine
 Tabelle, die sich unter dem Agenten noch ändert. Das beantwortet "ist es konvergiert" und
-ist laut `AGENTS.md` ausdrücklich **kein Ergebnis** — E01 hat am Trainingsende 48,2 Münzen
+ist laut `README.md` ausdrücklich **kein Ergebnis** — E01 hat am Trainingsende 48,2 Münzen
 gemessen und 1,45 in der Auswertung desselben Modells.
 
 Dieses Skript plottet die andere Kurve: **jeder Checkpoint mit `evaluate.py` bei ε = 0 auf
