@@ -72,7 +72,7 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# .python-version is committed on purpose — uv pins the team's interpreter with it
+# .python-version is committed: uv uses it to pin the team's interpreter
 
 # celery beat schedule file
 celerybeat-schedule
@@ -110,89 +110,85 @@ screenshots/*.webm
 
 replays/
 
-# Measurements are the evidence for the report's Experiments chapter and are
-# small text files -- they stay versioned. Training logs in particular cannot be
-# reproduced: --seed fixes the arenas, not the agent's exploration RNG.
-# Figures are pure functions of the CSVs, so they are not worth versioning.
+# Measurements are small text files and the evidence for the report's
+# Experiments chapter, so they stay versioned. Figures are generated from the
+# CSVs and are not versioned.
 results/figures/
 
 # Rung-2 training logs. Committed up to 29e56be, then removed: a 100 000-episode
-# sweep is ~140 MB and they are reproducible from the commit plus the BM_* arm
-# variables (E12 verified this by rerunning a sweep to identical results). The
-# evaluations -- 35 KB each, and the actual evidence -- stay versioned.
-# `results/train_local/` is the untracked archive of what was removed.
+# sweep is ~140 MB, and the logs can be reproduced from the commit plus the BM_*
+# arm variables (E12 reran a sweep and got identical results). The evaluations
+# (35 KB each) stay versioned. `results/train_local/` is the untracked archive of
+# the removed logs.
 results/train_local/
 results/train/task2_crates/*.csv
 results/train/task2_crates/*.meta.json
 results/train/task3_opponents/*.csv
 results/train/task3_opponents/*.meta.json
 
-# Local PyTorch resume snapshots contain replay/optimizer/RNG state and can be
-# larger than GitHub's per-file limit. They are only needed to continue an
-# interrupted local run; final models and compact training CSVs remain tracked.
+# PyTorch resume snapshots (replay buffer, optimizer and RNG state) can exceed
+# GitHub's file size limit. They are only needed to continue an interrupted local
+# run. Final models and training CSVs stay tracked.
 results/train/ben_task4/*__training_state.pt
 
 final_project.pdf
 
-# stdout of parallel training sweeps; the training CSV is the record
+# stdout of parallel training sweeps (the training CSV is the record)
 logs/*.out
 
-# Local working notes and one-off analysis scripts. Versioned during development
-# and removed from the tree before publishing; the ledgers' references to
-# scratchpad/ paths resolve in the history before that commit.
+# Working notes and one-off analysis scripts. Versioned during development and
+# removed before publishing. Ledger references to scratchpad/ paths can be found
+# in the history before that commit.
 scratchpad/
 
-# Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The real model is
-# q_table.npy and stays versioned; these are scratch and must never end up in
-# the submitted agent folder.
+# Per-run Q-tables from parallel training (BM_MODEL_SUFFIX). The model itself is
+# q_table.npy and stays versioned. These must not end up in the submitted agent
+# folder.
 agent_code/*/q_table_*.npy
 
-# Third-party agents installed under agent_code/ so the framework's loader can find
-# them (agents.py:204 imports agent_code.<name>.callbacks), used only as opponents.
-# Never committed: most of the source repos carry no LICENSE. The repo URLs and
-# commit hashes are listed in the report.
+# Third-party agents, used only as opponents. They sit under agent_code/ because
+# the framework loader imports agent_code.<name>.callbacks (agents.py:204). Not
+# committed because most of the source repos have no LICENSE. Repo URLs and commit
+# hashes are listed in the report.
 agent_code/ext_*/
 
-# Where those per-run tables now live. The submission is a zip of
-# agent_code/<agent>/, so 700 MB of checkpoints sitting beside callbacks.py was
-# a submission accident waiting to happen -- they are out of that folder
-# entirely rather than merely ignored. Reproducible from the commit plus the
-# BM_* variables in each run's .meta.json, so they are never versioned.
+# The per-run tables are stored here instead. The submission is a zip of
+# agent_code/<agent>/, and 700 MB of checkpoints next to callbacks.py could easily
+# have ended up in it, so they were moved out of that folder. They can be
+# reproduced from the commit plus the BM_* variables in each run's .meta.json
+# and are not versioned.
 checkpoints/*
 !checkpoints/benedict_task2/
 checkpoints/benedict_task2/*
-# ...with one exception. The shipped table is warm-started from this 12 800-row
-# parent, and the parent belongs to the *pre-E20* feature map, so it cannot be
-# retrained at HEAD -- without it in the repo, `q_table.npy` is not reproducible
-# from a clone at all. 614 KB, and it is an input to the submitted model.
+# Exception: the shipped table is warm-started from this 12 800-row parent. The
+# parent uses the pre-E20 feature map and cannot be retrained at HEAD, so without
+# it `q_table.npy` cannot be reproduced from a clone. 614 KB, and an input to the
+# submitted model.
 !checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy
-# ...and its layout sidecar, without which warm_start can only warn that the
-# append-only assumption is unchecked instead of enforcing it.
+# Its layout sidecar. Without it warm_start can only warn that the append-only
+# assumption is unchecked instead of enforcing it.
 !checkpoints/benedict_task2/q_table_e16_c5_k03_s0__ep100000.npy.layout.json
 
-# Same exception for the rung-4 parent, and for a stronger reason: the claim
-# above that checkpoints are "reproducible from the commit plus the BM_*
-# variables" is FALSE from rung 3 on. main.py does not seed the provided
-# opponents, and audit 5 established that no E30-E33 run passed
-# --seed either, so two runs of the same command give different tables -- E31's
-# suicide rate is bimodal across replications of an identical configuration.
-# This file is therefore an *input* to the submitted agent, not an output of a
-# recorded command: agent_code/benedict_task4/q_table.npy is a byte-identical
-# copy of it (E33 arm ctl, seed 104, 20 000 episodes; selected on validation
-# seed 550731 at won 0.382 and confirmed on ship seed 990731 at 0.372).
+# Same exception for the rung-4 parent. From rung 3 on, checkpoints are not
+# reproducible from the commit plus the BM_* variables: main.py does not seed the
+# provided opponents, and audit 5 found that no E30-E33 run passed --seed either.
+# Two runs of the same command give different tables (E31's suicide rate is
+# bimodal across replications of one configuration). This file is therefore an
+# input to the submitted agent: agent_code/benedict_task4/q_table.npy is a
+# byte-identical copy of it (E33 arm ctl, seed 104, 20 000 episodes; selected on
+# validation seed 550731 at won 0.382 and confirmed on ship seed 990731 at 0.372).
 !checkpoints/benedict_task4/
 checkpoints/benedict_task4/*
 !checkpoints/benedict_task4/q_table_e33_ctl_s104__ep20000.npy
 
-# E37 replaced the above as the shipped table, and needs two files for the same
-# reason. The checkpoint is what agent_code/benedict_task4/q_table.npy is a
-# byte-identical copy of (arm PLB2, seed 106, 20 000 episodes; selected on
-# validation seed 550731 and confirmed on ship seed 990731 at score 3.949 /
-# won 0.406, paired +0.255 [+0.039, +0.475] against the E33 table above).
-# The parent is the warm start train.py loads by default, so without it a
-# training run at the documented defaults starts from a different initial
-# condition than the shipped table did -- which is exactly the confound audit 8
-# found in E36.
+# E37 replaced the table above as the shipped one and needs two files for the
+# same reason. agent_code/benedict_task4/q_table.npy is a byte-identical copy of
+# the checkpoint (arm PLB2, seed 106, 20 000 episodes; selected on validation
+# seed 550731 and confirmed on ship seed 990731 at score 3.949 / won 0.406,
+# paired +0.255 [+0.039, +0.475] against the E33 table above). The parent is the
+# default warm start in train.py. Without it, a training run at the documented
+# defaults starts from a different initial condition than the shipped table,
+# which is the confound audit 8 found in E36.
 !checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy
 !checkpoints/benedict_task4/q_table_e37_PLB2_s106__ep20000.npy.layout.json
 !checkpoints/benedict_task4/q_table_parent.npy
@@ -205,7 +201,7 @@ agent_code/benedict_cnn/
 # macOS
 .DS_Store
 
-# The report (LaTeX source snapshot from Overleaf, section drafts, compiled
-# previews). final_project.pdf forbids uploading the report to the repo, so this
-# folder is never versioned; Overleaf is the source of truth.
+# The report (LaTeX snapshot from Overleaf, section drafts, compiled previews).
+# final_project.pdf does not allow uploading the report to the repo. Overleaf
+# holds the current version.
 report/

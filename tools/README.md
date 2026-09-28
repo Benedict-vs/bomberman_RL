@@ -1,29 +1,31 @@
-# tools/ — Messkette
+# Messkette (`tools/`)
 
 Kurzreferenz. Begründung und Details: `KONZEPT.md` §6.
 
-Einmalig für Abbildungen: `uv add matplotlib` (nur Analyse, **nicht** in die Abgabe).
+Für Abbildungen einmalig `uv add matplotlib` ausführen (nur für die Analyse, nicht Teil der Abgabe).
 
 ---
 
 ## Vorgehen beim Messen
 
-1. **Baseline messen, bevor ihr etwas ändert.** Ohne Vorher-Wert ist das Nachher wertlos.
-2. **Eine Sache ändern**, trainieren.
-3. **Nachher messen** — gleicher Seed, gleiche Rundenzahl, gleiche Gegner.
-4. **Gepaart vergleichen.** Kreuzt das Konfidenzintervall die Null, ist die Verbesserung
+1. Baseline messen, bevor ihr etwas ändert. Ohne Vorher-Wert lässt sich das Nachher nicht
+   einordnen.
+2. Eine Sache ändern, trainieren.
+3. Nachher messen, mit gleichem Seed, gleicher Rundenzahl und gleichen Gegnern.
+4. Gepaart vergleichen. Enthält das Konfidenzintervall die Null, ist die Verbesserung
    nicht gezeigt.
-5. **Ergebnis notieren, auch wenn es negativ ist.** Kommt so in den Bericht.
+5. Ergebnis notieren, auch wenn es negativ ist. Es kommt so in den Bericht.
 
-Feste Regeln, sonst sind unsere Zahlen nicht vergleichbar:
+Diese Regeln gelten für alle, sonst sind unsere Zahlen nicht vergleichbar:
 
-- `--seed` **nie ändern** (Standard `20260731`).
-- 100 Runden Schnellcheck · **300 Runden für jede berichtete Zahl** · 1000 zum Schluss.
-- Dateinamen: `<person>_<modell>_<version>__<stufe>` → `maxi_q_v3__task2`
+- `--seed` nie ändern (Standard `20260731`).
+- 100 Runden für einen Schnellcheck, **300 Runden für jede berichtete Zahl**, 1000 für die
+  Schlussmessung.
+- Dateinamen: `<person>_<modell>_<version>__<stufe>`, z. B. `maxi_q_v3__task2`
 
 ---
 
-# 1 · `evaluate.py` — messen
+# 1. Messen mit `evaluate.py`
 
 ## Allgemeine Form
 
@@ -74,7 +76,7 @@ uv run python tools/evaluate.py --agents <agent_a> <agent_b> --opponents none \
 
 ## Ausgabe
 
-`results/eval/<label>.csv` — eine Zeile pro **Runde und Agent**, Spalten:
+`results/eval/<label>.csv` enthält eine Zeile pro Runde und Agent mit folgenden Spalten:
 
 | Gruppe | Spalten |
 |---|---|
@@ -85,11 +87,11 @@ uv run python tools/evaluate.py --agents <agent_a> <agent_b> --opponents none \
 | Verhalten | `moves`, `invalid`, `steps`, `round_steps`, `time` |
 | Laufzeit | `think_mean_ms`, `think_max_ms`, `think_over_limit` |
 
-`results/eval/<label>.meta.json` — Git-Commit, Seed, Szenario, Abzug der `settings.py`.
+`results/eval/<label>.meta.json` enthält Git-Commit, Seed, Szenario und einen Abzug der `settings.py`.
 
 ---
 
-# 2 · `analyze.py` — auswerten
+# 2. Auswerten mit `analyze.py`
 
 ## Allgemeine Form
 
@@ -112,59 +114,59 @@ Zusätze, beliebig kombinierbar:
 |---|---|
 | `--markdown` | Tabelle zum Kopieren in den Bericht |
 | `--plot` | Abbildung nach `results/figures/`; `--plot pfad.png` für eigenen Ort |
-| | Im Balkendiagramm ist der **getestete Agent grün**, die Gegner gedämpft blau. Das ist standardmäßig der Agent auf Platz 0 (`--agents` zuerst genannt) oder der mit `--agent` gewählte. |
+| | Im Balkendiagramm ist der getestete Agent grün, die Gegner gedämpft blau. Standardmäßig ist das der Agent auf Platz 0 (bei `--agents` zuerst genannt) oder der mit `--agent` gewählte. |
 | `--preset task1…task4` | fertiger Metriksatz für die Stufe (siehe unten) |
 | `--metrics <a> <b> ...` | Auswahl der Metriken von Hand (Modus A und B) |
-| `--metric <a>` | die *eine* Metrik für die Ablation (Modus C) |
-| `--ablation-mode removal` | Standard: Baseline = voller Agent, Varianten = je eine Komponente **weg** |
-| `--ablation-mode addition` | Baseline = minimaler Agent, Varianten = je eine Komponente **dazu** |
+| `--metric <a>` | die eine Metrik für die Ablation (Modus C) |
+| `--ablation-mode removal` | Standard: Baseline = voller Agent, Varianten = je eine Komponente entfernt |
+| `--ablation-mode addition` | Baseline = minimaler Agent, Varianten = je eine Komponente hinzugefügt |
 | `--agent <name>` | falls nicht der Agent auf Platz 0 gemeint ist |
 | `--n-boot <zahl>` | Bootstrap-Ziehungen, Standard 10000 |
 
-## Wie die Abbildungen zu lesen sind
+## Lesart der Abbildungen
 
-**Übersicht** (Modus A) — ein Balken pro Agent je Metrik, Fehlerbalken = 95-%-KI.
-Der getestete Agent ist **grün**, die Gegner gedämpft blau. Ausgewählt wird der Agent
+Übersicht (Modus A): ein Balken pro Agent und Metrik, Fehlerbalken = 95-%-KI.
+Der getestete Agent ist grün, die Gegner gedämpft blau. Ausgewählt wird der Agent
 auf Platz 0 (bei `--agents` zuerst genannt) oder der mit `--agent` gewählte.
 
-**Vergleich** (Modus B) — **ein eigenes Feld pro Metrik**, jedes mit eigener Achse.
-Bewusst keine gemeinsame Achse: Score in Punkten, Überlebensrate als Anteil und
-Rechenzeit in Millisekunden lassen sich nicht sinnvoll nebeneinanderlegen.
+Vergleich (Modus B): ein eigenes Feld pro Metrik, jedes mit eigener Achse. Eine
+gemeinsame Achse gibt es nicht, weil sich Score in Punkten, Überlebensrate als Anteil
+und Rechenzeit in Millisekunden nicht sinnvoll nebeneinanderlegen lassen.
 
-Was dargestellt ist — der häufigste Lesefehler: **nicht** die Differenz der beiden
-Konfidenzintervalle, sondern das Konfidenzintervall *der* Differenz. Gerechnet wird
+Ein häufiger Lesefehler: Dargestellt ist nicht die Differenz der beiden
+Konfidenzintervalle, sondern das Konfidenzintervall der Differenz. Gerechnet wird
 
 ```
 pro Runde i:   dᵢ = B(Runde i) − A(Runde i)      # beide spielen dieselbe Arena
 dargestellt:   Mittelwert aller dᵢ, plus Bootstrap-KI über diese Differenzen
 ```
 
-Der Unterschied ist erheblich: Zöge man die beiden Einzel-KIs voneinander ab, wäre
-die Arena-Varianz wieder drin, die das Pairing gerade herauskürzt — das Intervall
-würde um ein Vielfaches breiter und wäre schlicht falsch.
+Der Unterschied ist erheblich. Zöge man die beiden Einzel-KIs voneinander ab, wäre
+die Arena-Varianz wieder enthalten, die das Pairing herauskürzt. Das Intervall wäre
+um ein Vielfaches breiter und damit falsch.
 
 Pro Feld:
 
 - Punkt = Mittelwert der Rundendifferenzen, Balken = dessen 95-%-KI
 - gestrichelte Linie = keine Änderung
-- **grün hinterlegte Hälfte = die Richtung, die für *diese* Metrik besser ist**
-  (bei `suicides` ist das links, bei `score` rechts)
+- grün hinterlegte Hälfte = die Richtung, die für die jeweilige Metrik besser ist
+  (bei `suicides` links, bei `score` rechts)
 - oben die Ausgangswerte `A … → B …`, unten Differenz, KI und Urteil
 
 Vorschlag für die Bildunterschrift im Bericht:
 
 > Gepaarter Vergleich über 300 Runden auf identischen Spielfeldern. Dargestellt ist
-> der Mittelwert der rundenweisen Differenz (B − A) mit 95-%-Bootstrap-Konfidenz-
-> intervall — nicht die Differenz der Einzelintervalle. Ein Intervall, das die Null
-> enthält, zeigt keinen nachgewiesenen Effekt.
+> der Mittelwert der rundenweisen Differenz (B − A) mit 95-%-Bootstrap-Konfidenzintervall
+> (nicht die Differenz der Einzelintervalle). Ein Intervall, das die Null enthält, zeigt
+> keinen nachgewiesenen Effekt.
 
-Probably useless, don use: **Ablation** (Modus C) — eine Zeile pro Komponente auf *einer gemeinsamen* Achse,
-weil hier alle Zeilen dieselbe Metrik zeigen.
+Ablation (Modus C, vermutlich nicht sinnvoll, bitte nicht verwenden): eine Zeile pro
+Komponente auf einer gemeinsamen Achse, weil hier alle Zeilen dieselbe Metrik zeigen.
 
-Dargestellt ist der **Beitrag der jeweiligen Komponente**, nicht die Leistung des
-verkrüppelten Agenten. Positiv heißt immer „die Komponente hilft" — auch bei
-Metriken, bei denen weniger besser ist. Bei `suicides` bedeutet `+0.16` also:
-Die Komponente senkt die Suizidrate um 0,16.
+Dargestellt ist der Beitrag der jeweiligen Komponente, nicht die Leistung des
+reduzierten Agenten. Positiv heißt immer, dass die Komponente hilft, auch bei
+Metriken, bei denen weniger besser ist. Bei `suicides` bedeutet `+0.16` also, dass
+die Komponente die Suizidrate um 0,16 senkt.
 
 Urteile: `MATTERS` (Weglassen hat geschadet, die Komponente verdient ihren Platz),
 `HARMFUL` (der Agent war ohne sie besser), `no effect shown` (KI enthält die Null).
@@ -176,52 +178,52 @@ Punktfarbe: grün = gut, rot = schlecht, grau = nicht gezeigt.
 
 | Name | Bedeutung | Richtung |
 |---|---|---|
-| `score` | **Primärmetrik** — Punkte der Runde (Münze 1, Kill 5) | hoch |
+| `score` | Primärmetrik: Punkte der Runde (Münze 1, Kill 5) | hoch |
 | `won` | Anteil Runden mit dem höchsten Score aller Agenten | hoch |
 | `rank` | Platzierung in der Runde, 1 = bester | niedrig |
 | `coins` | eingesammelte Münzen | hoch |
 | `kills` | gesprengte Gegner | hoch |
-| `suicides` | Tode durch **eigene** Bombe → Fluchtlogik kaputt | niedrig |
-| `killed_by` | Tode durch **gegnerische** Bombe → Positionierung/Gefahrenwahrnehmung | niedrig |
+| `suicides` | Tode durch eigene Bombe (Fehler in der Fluchtlogik) | niedrig |
+| `killed_by` | Tode durch gegnerische Bombe (Fehler in Positionierung/Gefahrenwahrnehmung) | niedrig |
 | `died` | Todesrate gesamt (`= suicides + killed_by`) | niedrig |
 | `crates` | zerstörte Kisten | hoch |
 | `bombs` | gelegte Bomben | hoch |
 | `survived` | Anteil überlebter Runden | hoch |
 | `steps` | Schritte, die der Agent gelebt hat | hoch |
 | `invalid` | ungültige Aktionen (gegen Wände laufen) | niedrig |
-| `think_ms` | maximale Rechenzeit pro Zug — 0,5-s-Limit im Turnier | niedrig |
+| `think_ms` | maximale Rechenzeit pro Zug (0,5-s-Limit im Turnier) | niedrig |
 
-Die Spalte `verdict` in der Ausgabe: `BETTER` · `WORSE` · `no effect shown`
+Die Spalte `verdict` in der Ausgabe ist `BETTER`, `WORSE` oder `no effect shown`
 (letzteres, wenn das Konfidenzintervall die Null enthält).
 
-## Welche Metriken pro Stufe — `--preset`
+## Metriken pro Stufe (`--preset`)
 
-Statt `--metrics` von Hand aufzuzählen:
+Statt die Metriken mit `--metrics` von Hand aufzuzählen:
 
 ```bash
 uv run python tools/analyze.py results/eval/<datei>.csv --preset task4
 ```
 
-| Stufe | `--preset` | Primär | Diagnose | Worauf ihr wirklich schaut |
+| Stufe | `--preset` | Primär | Diagnose | Worauf es ankommt |
 |---|---|---|---|---|
 | **1** | `task1` | `coins` | `steps`, `invalid` | Sammelt er alle Münzen, und wie schnell? |
-| **2** | `task2` | `score` | **`suicides`**, `crates`, `bombs`, `survived` | Suizidrate runter. Dazu `bombs` vs. `crates` — legt er nutzlose Bomben? |
-| **3** | `task3` | `score` | `kills`, **`suicides`**, `survived` | Neue Fähigkeit `kills` hoch, `suicides` darf nicht zurückkommen |
-| **4** | `task4` | `score`, `won` | `kills`, `suicides`, `killed_by`, `think_ms` | Schlägt er `rule_based`? Und *warum* stirbt er? |
+| **2** | `task2` | `score` | **`suicides`**, `crates`, `bombs`, `survived` | Suizidrate senken. Dazu `bombs` vs. `crates`: Legt er nutzlose Bomben? |
+| **3** | `task3` | `score` | `kills`, **`suicides`**, `survived` | `kills` als neue Fähigkeit steigt, `suicides` darf nicht wieder steigen |
+| **4** | `task4` | `score`, `won` | `kills`, `suicides`, `killed_by`, `think_ms` | Schlägt er `rule_based`? Woran stirbt er? |
 
-**`suicides` wechselt ab Stufe 3 die Rolle, es verschwindet nicht.** Auf Stufe 2 ist es
-das Fortschrittssignal (soll fallen), ab Stufe 3 der Regressionswächter (darf nicht
-wieder steigen). Genau beim Lernen von Aggression vergisst ein Agent, vor der eigenen
+`suicides` bleibt ab Stufe 3 wichtig, wechselt aber die Rolle. Auf Stufe 2 ist es das
+Fortschrittssignal (soll fallen), ab Stufe 3 dient es als Regressionstest (darf nicht
+wieder steigen). Beim Lernen von Aggression vergisst ein Agent leicht, vor der eigenen
 Bombe wegzulaufen.
 
-**Auf Stufe 4 die Todesart aufschlüsseln.** `suicides` und `killed_by` zeigen auf zwei
-völlig verschiedene Baustellen: eigene Bombe → `escape_dir`/`escape_after_bomb` stimmen
-nicht; fremde Bombe → der Agent stellt sich in fremde Explosionsradien. Ohne die Trennung
-seht ihr nur „stirbt oft".
+Auf Stufe 4 sollte die Todesart aufgeschlüsselt werden. `suicides` und `killed_by`
+weisen auf verschiedene Fehlerquellen hin. Stirbt der Agent durch die eigene Bombe,
+stimmen `escape_dir`/`escape_after_bomb` nicht. Stirbt er durch eine fremde Bombe, stellt
+er sich in fremde Explosionsradien. Ohne diese Trennung sieht man nur, dass er oft stirbt.
 
-**`won` ist auf Stufe 4 fast wichtiger als `score`.** Das Turnier entscheidet sich gegen
-die anderen Agenten: Ein Agent mit 5,0 Punkten, der 60 % der Runden anführt, ist
-turniertauglicher als einer mit 5,5, der zuverlässig Zweiter wird.
+`won` ist auf Stufe 4 fast wichtiger als `score`. Im Turnier tritt man gegen die anderen
+Agenten an: Ein Agent mit 5,0 Punkten, der 60 % der Runden anführt, ist für das Turnier
+geeigneter als einer mit 5,5, der regelmäßig Zweiter wird.
 
 ## Typische Aufrufe
 
@@ -253,14 +255,14 @@ uv run python tools/analyze.py results/eval/maxi_q_v3__task2.csv \
 
 ---
 
-# 3 · `trainlog.py` — Lernkurven
+# 3. Lernkurven mit `trainlog.py`
 
-Schreibt **eine Zeile pro Episode** während des Trainings. Beantwortet „wird der Agent
-über die Zeit besser", während `evaluate.py` nur den Endstand misst.
+Schreibt während des Trainings eine Zeile pro Episode. Damit lässt sich sehen, ob der
+Agent mit der Zeit besser wird, während `evaluate.py` nur den Endstand misst.
 
-## Wo genau was hin muss
+## Einbindung in `train.py`
 
-Vollständiges Gerüst — die vier markierten Blöcke sind alles, was ihr einfügt:
+Vollständiges Gerüst. Einzufügen sind nur die vier markierten Blöcke:
 
 ```python
 # agent_code/<euer_agent>/train.py
@@ -332,30 +334,30 @@ Woher die Werte kommen: `last_game_state["round"]` ist die Episodennummer,
 
 ## Was geloggt werden kann
 
-**Immer geschrieben** (Argumente von `log_episode`):
+Immer geschrieben werden die Argumente von `log_episode`:
 
 | Argument | Typ | Bedeutung |
 |---|---|---|
 | `episode` | int | Episodennummer |
 | `score` | float | Punkte der Episode |
 | `steps` | int | Schritte bis Rundenende oder Tod |
-| `events` | list[str] | Ereignisliste → wird automatisch zu Zählspalten |
+| `events` | list[str] | Ereignisliste, wird automatisch in Zählspalten umgewandelt |
 | `reward` | float | Summe eurer geshapten Belohnung |
 | `epsilon` | float | aktuelle Explorationsrate |
 
 Dazu automatisch `wall_clock_s` (Sekunden seit Trainingsstart).
 
-**Aus `events` werden diese zehn Zählspalten** (ihr müsst nichts tun, nur `events`
+Aus `events` entstehen diese zehn Zählspalten (dafür genügt es, `events` zu
 übergeben):
 
 `COIN_COLLECTED` · `CRATE_DESTROYED` · `COIN_FOUND` · `KILLED_OPPONENT` ·
 `KILLED_SELF` · `GOT_KILLED` · `SURVIVED_ROUND` · `INVALID_ACTION` ·
 `BOMB_DROPPED` · `WAITED`
 
-Eigene Ereignisse (z. B. `MOVED_OUT_OF_BLAST`) landen **nicht** automatisch in einer
-Spalte — dafür `TRACKED_EVENTS` oben in `trainlog.py` ergänzen.
+Eigene Ereignisse (z. B. `MOVED_OUT_OF_BLAST`) landen nicht automatisch in einer
+Spalte. Dafür `TRACKED_EVENTS` oben in `trainlog.py` ergänzen.
 
-**Freie Spalten** für alles Weitere: im Konstruktor `extra_columns=["td_error", "loss",
+Freie Spalten für alles Weitere: im Konstruktor `extra_columns=["td_error", "loss",
 "q_mean", "table_size"]` deklarieren, beim Loggen `extra={"td_error": 0.42, ...}`
 übergeben. Typische Kandidaten: mittlerer TD-Fehler, Netzwerk-Loss, mittlerer Q-Wert,
 Anzahl belegter Zustände in der Q-Tabelle, Lernrate.
@@ -377,37 +379,37 @@ uv run python tools/trainlog.py results/train/*v1*.csv results/train/*v2*.csv \
     --metric suicides --window 200 --labels "ohne Shaping" "mit Shaping"
 ```
 
-`--metric` akzeptiert **jede Spalte der CSV** — also auch `KILLED_SELF`, `INVALID_ACTION`,
+`--metric` akzeptiert jede Spalte der CSV, also auch `KILLED_SELF`, `INVALID_ACTION`,
 `reward`, `epsilon` oder eure eigenen. Für Stufe 2 ist `KILLED_SELF` über die Zeit
 aussagekräftiger als `score`.
 
 ## Zwei Fallstricke
 
-**Ein `run`-Name pro Experiment.** Die Datei wird angehängt, nicht überschrieben. Startet
-ihr dasselbe Training neu, beginnen die Episodennummern wieder bei 1 — dann besser einen
-neuen `run`-Namen wählen.
+Ein `run`-Name pro Experiment. Die Datei wird fortgeschrieben, nicht überschrieben.
+Startet ihr dasselbe Training neu, beginnen die Episodennummern wieder bei 1. In dem Fall
+besser einen neuen `run`-Namen wählen.
 
-**Pro Konfiguration 3–5 Läufe mit verschiedenen Seeds.** Eine einzelne Lernkurve ist zu
+Pro Konfiguration 3–5 Läufe mit verschiedenen Seeds. Eine einzelne Lernkurve ist zu
 verrauscht, um etwas zu belegen.
 
 ---
 
-# 4 · `plot_checkpoints.py` — die *andere* Lernkurve
+# 4. Checkpoint-Lernkurven mit `plot_checkpoints.py`
 
-`trainlog.py` zeigt, was **während** des Trainings passiert ist: ε-greedy, gegen eine
-Tabelle, die sich unter dem Agenten noch ändert. Das beantwortet "ist es konvergiert" und
-ist laut `README.md` ausdrücklich **kein Ergebnis** — E01 hat am Trainingsende 48,2 Münzen
-gemessen und 1,45 in der Auswertung desselben Modells.
+`trainlog.py` zeigt, was während des Trainings passiert ist: ε-greedy, gegen eine Tabelle,
+die sich noch ändert. Das beantwortet, ob das Training konvergiert ist, ist laut
+`README.md` aber kein Ergebnis. In E01 wurden am Trainingsende 48,2 Münzen gemessen und
+1,45 in der Auswertung desselben Modells.
 
-Dieses Skript plottet die andere Kurve: **jeder Checkpoint mit `evaluate.py` bei ε = 0 auf
-dem festen Arenensatz gemessen**, aufgetragen über die Trainingsepisoden. Das ist dieselbe
-Messung, aus der jede berichtete Zahl in `results/eval/` stammt — und damit die Kurve, die
-in den Bericht darf.
+Dieses Skript plottet eine andere Kurve: Jeder Checkpoint wird mit `evaluate.py` bei
+ε = 0 auf dem festen Arenensatz gemessen und über die Trainingsepisoden aufgetragen. Das
+ist dieselbe Messung, aus der jede berichtete Zahl in `results/eval/` stammt. Deshalb kann
+diese Kurve in den Bericht.
 
-Wozu man sie braucht: sie zeigt, ob ein Lauf beim Abbruch schon konvergiert *war*. In E20
-war genau das die ganze Frage — die alte Merkmalskarte lief nach 40 000 Episoden flach
-(+4,51 über die letzten 60 000), die feinere stieg noch (+15,05), und ein Vergleich bei
-gleicher Episodenzahl vergleicht dann zwei Punkte auf unterschiedlichen Kurvenabschnitten.
+Sie zeigt, ob ein Lauf beim Abbruch schon konvergiert war. In E20 war das die zentrale
+Frage: Die alte Merkmalskarte lief nach 40 000 Episoden flach (+4,51 über die letzten
+60 000), die feinere stieg noch (+15,05). Ein Vergleich bei gleicher Episodenzahl
+vergleicht dann zwei Punkte auf unterschiedlichen Abschnitten der Kurven.
 
 Voraussetzung ist die Namenskonvention, die `evaluate.py --label` schreibt:
 
@@ -439,10 +441,10 @@ uv run python tools/plot_checkpoints.py --metric crates \
 | `--table` | druckt die Zahlen zusätzlich als Markdown-Tabelle |
 | `--out` | Standard: `results/figures/curve_<metric>.png` |
 
-**Wie die Abbildung zu lesen ist.** Dicke Linie = Mittelwert über die Seeds, Band = ± 1
-Standardabweichung, dünne Linien = die einzelnen Seeds. Die Einzel-Seeds sind absichtlich
-sichtbar: auf diesem Projekt war die Streuung zwischen den Seeds mehrfach *das Ergebnis*
-und nicht das Rauschen (E15, E18, E20), und ein Mittelwert allein verdeckt genau das.
+Lesart der Abbildung: dicke Linie = Mittelwert über die Seeds, Band = ± 1
+Standardabweichung, dünne Linien = die einzelnen Seeds. Die einzelnen Seeds werden mit
+angezeigt, weil in diesem Projekt die Streuung zwischen den Seeds mehrfach selbst das
+Ergebnis war und kein Rauschen (E15, E18, E20). Ein Mittelwert allein würde das verdecken.
 
-Die Abbildungen landen in `results/figures/` und sind bewusst nicht eingecheckt — sie sind
-reine Funktionen der CSVs.
+Die Abbildungen landen in `results/figures/` und werden nicht eingecheckt, da sie aus den
+CSVs erzeugt werden.
